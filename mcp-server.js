@@ -11,6 +11,10 @@ import { z } from "zod";
 
 const PORT = Number(process.env.PORT) || 4321;
 const BASE = process.env.NOTE_SERVER_URL || `http://localhost:${PORT}`;
+// When this Claude Code instance is bound to ONE chat section (multi-instance
+// setup), the launcher sets CHAT_SECTION (a section id or name). say_to_user
+// then replies into that section, and get_inbox drains only that section.
+const SECTION = (process.env.CHAT_SECTION || "").trim() || null;
 
 async function api(pathname, method = "GET", body) {
   const res = await fetch(BASE + pathname, {
@@ -215,12 +219,18 @@ server.registerTool(
     title: "ส่งข้อความเข้าพาเนลแชทซ้าย",
     description:
       "Post a message into the app's left-hand chat panel so the user can read it. Use this to explain what you just did, ask a question, or give a summary in Thai.",
-    inputSchema: { text: z.string().describe("ข้อความ (ภาษาไทยได้)") },
+    inputSchema: {
+      text: z.string().describe("ข้อความ (ภาษาไทยได้)"),
+      section: z
+        .string()
+        .optional()
+        .describe("chat section id/ชื่อ ที่จะส่งเข้า (เว้นว่าง = ใช้ CHAT_SECTION ที่ผูกไว้ หรือ section ที่ active)"),
+    },
   },
-  async ({ text }) => {
+  async ({ text, section }) => {
     try {
-      await api("/api/chat", "POST", { role: "claude", text });
-      return ok("ส่งข้อความเข้าพาเนลแล้ว");
+      await api("/api/chat", "POST", { role: "claude", text, section: section || SECTION || undefined });
+      return ok("ส่งข้อความเข้าพาเนลแล้ว" + (section || SECTION ? ` (section: ${section || SECTION})` : ""));
     } catch (e) {
       return fail(e);
     }
@@ -257,8 +267,10 @@ server.registerTool(
   },
   async () => {
     try {
-      const { items } = await api("/api/inbox?drain=true");
-      if (!items || !items.length) return ok("ยังไม่มีข้อความใหม่ในกล่องเข้า");
+      const q = SECTION ? `/api/inbox?drain=true&section=${encodeURIComponent(SECTION)}` : "/api/inbox?drain=true";
+      const { items } = await api(q);
+      if (!items || !items.length)
+        return ok("ยังไม่มีข้อความใหม่ในกล่องเข้า" + (SECTION ? ` (section: ${SECTION})` : ""));
       const lines = items.map((m) => {
         const age = Math.round((Date.now() - m.ts) / 1000);
         return `• (${age}s ago) ${m.text}`;
@@ -412,4 +424,4 @@ server.registerTool(
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error("[powerfull-note mcp] connected, talking to", BASE);
+console.error("[powerfull-note mcp] connected, talking to", BASE, SECTION ? `| bound to chat section: ${SECTION}` : "| (all sections)");

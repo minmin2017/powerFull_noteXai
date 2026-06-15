@@ -37,6 +37,8 @@
   const imgEls = new Map();
   const boxEls = new Map();
   let boxInteract = null; // active box move/resize
+  let selectedBoxId = null;
+  const linkBadges = new Map(); // box-link id -> delete-badge element
   let selectedImgId = null;
   let imgInteract = null; // active image move/resize/rotate
 
@@ -534,6 +536,62 @@
       ectx.stroke();
       ectx.globalAlpha = 1;
     }
+    drawBoxLinks(r);
+  }
+
+  // Connections between boxes (dashed teal lines) + a "×" delete badge at each
+  // midpoint, plus the rubber-band line while dragging a new link.
+  function drawBoxLinks(r) {
+    const center = (id) => {
+      const el = boxEls.get(id);
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { x: b.left - r.left + b.width / 2, y: b.top - r.top + b.height / 2 };
+    };
+    const links = STATE.boxLinks || [];
+    const seen = new Set();
+    ectx.save();
+    ectx.setLineDash([7, 5]);
+    ectx.strokeStyle = "#14b8a6";
+    ectx.lineWidth = Math.max(1.5, 2 * view.scale);
+    for (const l of links) {
+      const a = center(l.from);
+      const b = center(l.to);
+      if (!a || !b) continue;
+      ectx.beginPath();
+      ectx.moveTo(a.x, a.y);
+      ectx.lineTo(b.x, b.y);
+      ectx.stroke();
+      // delete badge at midpoint
+      seen.add(l.id);
+      let badge = linkBadges.get(l.id);
+      if (!badge) {
+        badge = document.createElement("button");
+        badge.className = "box-link-badge";
+        badge.textContent = "×";
+        badge.title = "ลบเส้นโยง";
+        badge.addEventListener("pointerdown", (e) => e.stopPropagation());
+        badge.addEventListener("click", (e) => { e.stopPropagation(); api(`/api/box-links/${l.id}`, "DELETE"); });
+        canvas.appendChild(badge);
+        linkBadges.set(l.id, badge);
+      }
+      badge.style.left = (a.x + b.x) / 2 + "px";
+      badge.style.top = (a.y + b.y) / 2 + "px";
+    }
+    for (const [id, el] of linkBadges) {
+      if (!seen.has(id)) { el.remove(); linkBadges.delete(id); }
+    }
+    // rubber-band while dragging a new link
+    if (linkDrag) {
+      const a = center(linkDrag.from);
+      if (a) {
+        ectx.beginPath();
+        ectx.moveTo(a.x, a.y);
+        ectx.lineTo(linkDrag.pt.x, linkDrag.pt.y);
+        ectx.stroke();
+      }
+    }
+    ectx.restore();
   }
 
   // freehand drawings + active stroke (screen space, above nodes)
@@ -626,9 +684,10 @@
   });
 
   canvas.addEventListener("click", (e) => {
-    if (!e.target.closest(".node") && !e.target.closest(".img-obj")) {
+    if (!e.target.closest(".node") && !e.target.closest(".img-obj") && !e.target.closest(".hbox")) {
       selectedId = null;
       selectedImgId = null;
+      selectedBoxId = null;
       render();
     }
   });
@@ -870,12 +929,55 @@
   // ----------------------------------------------------------------------
   // Chat panel
   // ----------------------------------------------------------------------
+  function renderChatTabs() {
+    const list = $("#chat-tab-list");
+    if (!list) return;
+    const sections = STATE.chatSections && STATE.chatSections.length
+      ? STATE.chatSections
+      : [{ id: "main", name: "แชทหลัก" }];
+    const active = STATE.activeSection || sections[0].id;
+    list.innerHTML = "";
+    for (const sec of sections) {
+      const tab = document.createElement("div");
+      tab.className = "chat-tab" + (sec.id === active ? " active" : "");
+      tab.dataset.id = sec.id;
+      const label = document.createElement("span");
+      label.className = "chat-tab-name";
+      label.textContent = sec.name || "แชท";
+      tab.appendChild(label);
+      // switch section on click
+      tab.addEventListener("click", () => {
+        if (sec.id !== (STATE.activeSection || "main")) api(`/api/chat-sections/${sec.id}/activate`, "POST");
+      });
+      // double-click to rename
+      label.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        const name = prompt("เปลี่ยนชื่อแชท:", sec.name || "");
+        if (name && name.trim()) api(`/api/chat-sections/${sec.id}`, "PATCH", { name: name.trim() });
+      });
+      if (sections.length > 1) {
+        const del = document.createElement("button");
+        del.className = "chat-tab-del";
+        del.textContent = "×";
+        del.title = "ลบแชทนี้ (พร้อมข้อความข้างใน)";
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (confirm(`ลบแชท "${sec.name}" และข้อความทั้งหมดในนั้น?`)) api(`/api/chat-sections/${sec.id}`, "DELETE");
+        });
+        tab.appendChild(del);
+      }
+      list.appendChild(tab);
+    }
+  }
+
   function renderChat() {
+    renderChatTabs();
     const box = $("#chat");
-    const msgs = STATE.chat || [];
+    const active = STATE.activeSection || "main";
+    const msgs = (STATE.chat || []).filter((m) => (m.section || "main") === active);
     if (!msgs.length) {
       box.innerHTML =
-        '<div class="chat-empty">ยังไม่มีข้อความ<br>เมื่อ Claude ใช้เครื่องมือ <code>say_to_user</code><br>ข้อความจะมาโผล่ที่นี่ ✨</div>';
+        '<div class="chat-empty">ยังไม่มีข้อความในแชทนี้<br>เมื่อ Claude ใช้เครื่องมือ <code>say_to_user</code><br>ข้อความจะมาโผล่ที่นี่ ✨</div>';
       return;
     }
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
@@ -1032,6 +1134,13 @@
     if (e.key === "Enter") sendFromInput();
   });
   $("#send-btn").addEventListener("click", sendFromInput);
+
+  // New chat section (tab)
+  $("#chat-tab-add").addEventListener("click", async () => {
+    const name = prompt("ชื่อแชทใหม่:", "แชทใหม่");
+    if (name === null) return;
+    await api("/api/chat-sections", "POST", { name: name.trim() || "แชทใหม่" });
+  });
 
   async function submitUserInput(text) {
     // Show it in chat and queue it for Claude Code to drain via get_inbox.
@@ -1196,7 +1305,8 @@
     for (const b of boxes) {
       present.add(b.id);
       let el = boxEls.get(b.id);
-      if (!el) {
+      if (!el || el.dataset.kind !== (b.kind || "note")) {
+        if (el) { el.remove(); }
         el = createBoxEl(b);
         boxEls.set(b.id, el);
         boxesLayer.appendChild(el);
@@ -1204,10 +1314,17 @@
       el.style.left = b.x + "px";
       el.style.top = b.y + "px";
       el.style.width = b.w + "px";
-      el.querySelector(".box-title").textContent = b.title || "บันทึกลายมือ";
-      const prev = el.querySelector(".box-preview");
-      // only repaint preview if it's not the box currently open in the editor
-      if (modalState?.boxId !== b.id) paintBox(prev, b.strokes, b.w, b.h || Math.round(b.w * PAGE_ASPECT));
+      el.classList.toggle("selected", b.id === selectedBoxId);
+      el.querySelector(".box-title").textContent =
+        b.title || (b.kind === "image" ? "คลังรูปภาพ" : "บันทึกลายมือ");
+      if (b.kind === "image") {
+        el.style.height = (b.h || 240) + "px";
+        renderGallery(el, b);
+      } else {
+        const prev = el.querySelector(".box-preview");
+        // only repaint preview if it's not the box currently open in the editor
+        if (modalState?.boxId !== b.id) paintBox(prev, b.strokes, b.w, b.h || Math.round(b.w * PAGE_ASPECT));
+      }
     }
     for (const [id, el] of boxEls) {
       if (!present.has(id)) {
@@ -1217,17 +1334,65 @@
     }
   }
 
+  // Thumbnails + captions for an image box; each thumb links out to its URL.
+  function renderGallery(el, b) {
+    const grid = el.querySelector(".gallery-grid");
+    const items = b.items || [];
+    grid.innerHTML = "";
+    if (!items.length) {
+      grid.innerHTML = `<div class="gallery-empty">ยังไม่มีรูป — กด ＋ เพื่อเพิ่ม<br>หรือลากไฟล์รูปมาวางในกล่อง</div>`;
+      return;
+    }
+    items.forEach((it, i) => {
+      const cell = document.createElement("div");
+      cell.className = "gallery-cell";
+      const cap = it.caption ? escapeHtml(it.caption) : "";
+      const link = it.url
+        ? `<a class="gallery-link" href="${escapeHtml(it.url)}" target="_blank" rel="noopener" title="${escapeHtml(it.url)}">🔗 เปิดเว็บ</a>`
+        : "";
+      cell.innerHTML =
+        `<img src="${escapeHtml(it.src)}" alt="" draggable="false" />
+         <div class="gallery-cap">${cap}${link}</div>
+         <button class="gallery-del" title="ลบรูปนี้">×</button>`;
+      // clicking the image opens the linked page (if any)
+      cell.querySelector("img").addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (it.url) window.open(it.url, "_blank", "noopener");
+      });
+      cell.querySelector(".gallery-del").addEventListener("pointerdown", (e) => e.stopPropagation());
+      cell.querySelector(".gallery-del").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const next = (b.items || []).slice();
+        next.splice(i, 1);
+        api(`/api/boxes/${b.id}`, "PATCH", { items: next });
+      });
+      grid.appendChild(cell);
+    });
+  }
+
   function createBoxEl(b) {
     const el = document.createElement("div");
-    el.className = "hbox";
+    el.className = "hbox" + (b.kind === "image" ? " hbox-image" : "");
     el.dataset.id = b.id;
+    el.dataset.kind = b.kind || "note";
+    const tools =
+      b.kind === "image"
+        ? `<button class="box-btn b-link" title="โยงไปกล่องอื่น">🔗</button>
+           <button class="box-btn b-addimg" title="เพิ่มรูปเข้ากล่อง">＋</button>
+           <button class="box-btn b-del" title="ลบกล่อง">×</button>`
+        : `<button class="box-btn b-link" title="โยงไปกล่องอื่น">🔗</button>
+           <button class="box-btn b-edit" title="ขยาย/เขียน">✏️</button>
+           <button class="box-btn b-del" title="ลบกล่อง">×</button>`;
+    const bodyHtml =
+      b.kind === "image"
+        ? `<div class="gallery-grid"></div>`
+        : `<canvas class="box-preview"></canvas>`;
     el.innerHTML =
       `<div class="box-head">
          <span class="box-title"></span>
-         <button class="box-btn b-edit" title="ขยาย/เขียน">✏️</button>
-         <button class="box-btn b-del" title="ลบกล่อง">×</button>
+         ${tools}
        </div>
-       <canvas class="box-preview"></canvas>
+       ${bodyHtml}
        <div class="box-resize" title="ปรับขนาด"></div>`;
 
     const head = el.querySelector(".box-head");
@@ -1235,16 +1400,92 @@
       if (mode !== "select") return;
       if (e.target.closest(".box-btn")) return;
       e.stopPropagation();
+      selectedBoxId = b.id;
       startBoxMove(e, b.id);
     });
-    el.querySelector(".b-edit").addEventListener("click", (e) => { e.stopPropagation(); openBox(b.id); });
+    // 🔗 drag-to-connect this box to another box
+    el.querySelector(".b-link").addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      startLinkDrag(e, b.id);
+    });
     el.querySelector(".b-del").addEventListener("click", (e) => {
       e.stopPropagation();
       if (confirm("ลบกล่องนี้?")) api(`/api/boxes/${b.id}`, "DELETE");
     });
-    el.querySelector(".box-preview").addEventListener("dblclick", (e) => { e.stopPropagation(); openBox(b.id); });
+    if (b.kind === "image") {
+      el.querySelector(".b-addimg").addEventListener("click", (e) => { e.stopPropagation(); pickImageForBox(b.id); });
+      // drag-drop image files straight into the gallery
+      el.addEventListener("dragover", (e) => {
+        if (e.dataTransfer?.types?.includes("Files")) { e.preventDefault(); e.stopPropagation(); }
+      });
+      el.addEventListener("drop", (e) => {
+        if (!e.dataTransfer?.files?.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        for (const f of e.dataTransfer.files) addFileToBox(b.id, f);
+      });
+    } else {
+      el.querySelector(".b-edit").addEventListener("click", (e) => { e.stopPropagation(); openBox(b.id); });
+      el.querySelector(".box-preview").addEventListener("dblclick", (e) => { e.stopPropagation(); openBox(b.id); });
+    }
     el.querySelector(".box-resize").addEventListener("pointerdown", (e) => { e.stopPropagation(); startBoxResize(e, b.id); });
     return el;
+  }
+
+  // ----- Image-box helpers: add an image file/asset as a gallery item -----
+  function pickImageForBox(boxId) {
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = "image/*";
+    inp.multiple = true;
+    inp.onchange = () => { for (const f of inp.files) addFileToBox(boxId, f); };
+    inp.click();
+  }
+  async function addFileToBox(boxId, file) {
+    if (!file || !file.type.startsWith("image/")) return;
+    const dataUrl = await new Promise((res) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.readAsDataURL(file);
+    });
+    // upload to /assets so the gallery holds a stable URL, not a huge data URL
+    const img = await api("/api/images", "POST", { dataUrl, x: -9999, y: -9999, w: 1, h: 1 });
+    if (!img) return;
+    await api(`/api/images/${img.id}`, "DELETE"); // we only wanted the saved asset, not a canvas image
+    addItemToBox(boxId, { src: img.src, url: "", caption: file.name.replace(/\.[^.]+$/, "") });
+  }
+  function addItemToBox(boxId, item) {
+    const b = (STATE.boxes || []).find((x) => x.id === boxId);
+    const items = (b?.items || []).concat([item]);
+    return api(`/api/boxes/${boxId}`, "PATCH", { items });
+  }
+
+  // ----- Box linking (drag from 🔗 to another box) -----
+  let linkDrag = null; // { from, pt:{x,y} screen }
+  function startLinkDrag(e, fromId) {
+    selectedBoxId = fromId;
+    linkDrag = { from: fromId, pt: eventCanvasPos(e) };
+    window.addEventListener("pointermove", onLinkDragMove);
+    window.addEventListener("pointerup", onLinkDragUp, { once: true });
+  }
+  function onLinkDragMove(e) {
+    if (!linkDrag) return;
+    linkDrag.pt = eventCanvasPos(e);
+    drawEdges(computeHidden());
+  }
+  function onLinkDragUp(e) {
+    window.removeEventListener("pointermove", onLinkDragMove);
+    const ld = linkDrag;
+    linkDrag = null;
+    if (!ld) return;
+    const tgt = document.elementFromPoint(e.clientX, e.clientY)?.closest(".hbox");
+    const toId = tgt?.dataset.id;
+    if (toId && toId !== ld.from) {
+      api("/api/box-links", "POST", { from: ld.from, to: toId });
+      toast("โยงกล่องแล้ว 🔗");
+    }
+    render();
   }
 
   function startBoxMove(e, id) {
@@ -1429,6 +1670,14 @@
     const c = screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2);
     const box = await api("/api/boxes", "POST", { x: Math.round(c.x - 160), y: Math.round(c.y - 100), w: 320 });
     if (box) setTimeout(() => openBox(box.id), 80);
+  });
+
+  $("#btn-add-gallery").addEventListener("click", async () => {
+    const c = screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2);
+    const box = await api("/api/boxes", "POST", {
+      kind: "image", x: Math.round(c.x - 170), y: Math.round(c.y - 130), w: 340, h: 280, title: "คลังรูปภาพ",
+    });
+    if (box) { selectedBoxId = box.id; toast("สร้างกล่องรูปภาพแล้ว 🖼️ — กด ＋ เพื่อเพิ่มรูป"); }
   });
 
   // ----------------------------------------------------------------------

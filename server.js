@@ -37,8 +37,11 @@ function emptyState(title = "My Mind Map") {
     nodes: [],
     drawings: [],
     images: [], // pasted/dropped/fetched images: {id, src, x, y, w, h, rotation}
-    boxes: [], // handwriting boxes: {id, x, y, w, title, strokes:[{color,width,points:[{x,y}]}]}
-    chat: [],
+    boxes: [], // boxes: handwriting {kind:"note",strokes:[...]} OR gallery {kind:"image",items:[{src,url,caption}]}
+    boxLinks: [], // connections between boxes: {id, from, to}
+    chat: [], // chat messages, each tagged with a `section` id
+    chatSections: [{ id: "main", name: "แชทหลัก" }], // chat tabs/threads
+    activeSection: "main", // which section new messages land in + is shown
     voice: { latest: null, history: [] },
     inbox: [], // typed/spoken messages queued for Claude Code to drain
     imageInbox: [], // image refs the user sent for Claude to LOOK at: {id, src, note, ts}
@@ -388,12 +391,55 @@ function deleteImage(id) {
   return before - state.images.length;
 }
 
-function addChat({ role = "claude", text }) {
-  const msg = { id: uid("c"), role, text: String(text ?? ""), ts: Date.now() };
+function addChat({ role = "claude", text, section }) {
+  let sec = state.activeSection || "main";
+  if (section) sec = resolveSectionKey(section) || sec;
+  const msg = { id: uid("c"), role, text: String(text ?? ""), ts: Date.now(), section: sec };
   state.chat.push(msg);
   if (state.chat.length > 500) state.chat = state.chat.slice(-500);
   changed();
   return msg;
+}
+
+// ----- Chat sections (multiple chat threads/tabs) -----
+function ensureSections() {
+  if (!Array.isArray(state.chatSections) || !state.chatSections.length)
+    state.chatSections = [{ id: "main", name: "แชทหลัก" }];
+  if (!state.chatSections.some((s) => s.id === state.activeSection))
+    state.activeSection = state.chatSections[0].id;
+}
+function addSection(name) {
+  ensureSections();
+  const sec = { id: uid("sec"), name: String(name || "แชทใหม่").slice(0, 40) };
+  state.chatSections.push(sec);
+  state.activeSection = sec.id;
+  changed();
+  return sec;
+}
+function activateSection(id) {
+  ensureSections();
+  if (!state.chatSections.some((s) => s.id === id)) return false;
+  state.activeSection = id;
+  changed();
+  return true;
+}
+function renameSection(id, name) {
+  ensureSections();
+  const sec = state.chatSections.find((s) => s.id === id);
+  if (!sec) return null;
+  sec.name = String(name || sec.name).slice(0, 40);
+  changed();
+  return sec;
+}
+function deleteSection(id) {
+  ensureSections();
+  if (state.chatSections.length <= 1) return false; // keep at least one
+  if (!state.chatSections.some((s) => s.id === id)) return false;
+  state.chatSections = state.chatSections.filter((s) => s.id !== id);
+  state.chat = state.chat.filter((m) => (m.section || "main") !== id); // drop its messages
+  if (state.activeSection === id) state.activeSection = state.chatSections[0].id;
+  changed();
+  return true;
 }
 
 function setVoice(text) {
@@ -412,9 +458,24 @@ function consumeVoice() {
   return v;
 }
 
+// Resolve a chat-section "key" (its id OR its display name) to the canonical id.
+// Lets launchers/tools address a section by a human-friendly name.
+function resolveSectionKey(key) {
+  if (!key) return null;
+  ensureSections();
+  const k = String(key).trim();
+  let s = state.chatSections.find((x) => x.id === k);
+  if (s) return s.id;
+  s = state.chatSections.find((x) => (x.name || "").toLowerCase() === k.toLowerCase());
+  return s ? s.id : null;
+}
+
 // Inbox: a queue of messages the user typed/spoke for Claude Code to pick up.
-function addInbox(text) {
-  const entry = { id: uid("in"), text: String(text ?? ""), ts: Date.now() };
+// Each entry is tagged with the chat section it belongs to so multiple Claude
+// Code instances (one per section) can each drain only their own messages.
+function addInbox(text, section) {
+  const sec = (section && resolveSectionKey(section)) || state.activeSection || "main";
+  const entry = { id: uid("in"), text: String(text ?? ""), ts: Date.now(), section: sec };
   state.inbox.push(entry);
   if (state.inbox.length > 200) state.inbox = state.inbox.slice(-200);
   changed();
@@ -499,6 +560,7 @@ function snapMap() {
       drawings: state.drawings,
       images: state.images,
       boxes: state.boxes,
+      boxLinks: state.boxLinks,
     })
   );
 }
@@ -508,6 +570,7 @@ function applyMapSnap(s) {
   state.drawings = s.drawings;
   state.images = s.images;
   state.boxes = s.boxes || [];
+  state.boxLinks = s.boxLinks || [];
 }
 function historyOf() {
   let h = histories.get(activeId);
@@ -646,14 +709,17 @@ app.delete("/api/images/:id", (req, res) => res.json({ removed: deleteImage(req.
 // ---- Handwriting boxes ----
 app.post("/api/boxes", (req, res) => {
   const b = req.body || {};
+  const kind = b.kind === "image" ? "image" : "note";
   const box = {
     id: uid("box"),
+    kind,
     x: Number.isFinite(b.x) ? b.x : 160,
     y: Number.isFinite(b.y) ? b.y : 160,
     w: Number.isFinite(b.w) ? b.w : 320,
     h: Number.isFinite(b.h) ? b.h : 240,
-    title: typeof b.title === "string" ? b.title : "บันทึกลายมือ",
+    title: typeof b.title === "string" ? b.title : kind === "image" ? "คลังรูปภาพ" : "บันทึกลายมือ",
     strokes: Array.isArray(b.strokes) ? b.strokes : [],
+    items: Array.isArray(b.items) ? b.items : [], // image box: [{src, url, caption}]
     createdAt: Date.now(),
   };
   if (!Array.isArray(state.boxes)) state.boxes = [];
@@ -665,7 +731,7 @@ app.patch("/api/boxes/:id", (req, res) => {
   const box = (state.boxes || []).find((b) => b.id === req.params.id);
   if (!box) return res.status(404).json({ error: "box not found" });
   const u = req.body || {};
-  for (const k of ["x", "y", "w", "h", "title", "strokes"]) {
+  for (const k of ["x", "y", "w", "h", "title", "strokes", "items"]) {
     if (u[k] !== undefined) box[k] = u[k];
   }
   changed();
@@ -674,8 +740,37 @@ app.patch("/api/boxes/:id", (req, res) => {
 app.delete("/api/boxes/:id", (req, res) => {
   const before = (state.boxes || []).length;
   state.boxes = (state.boxes || []).filter((b) => b.id !== req.params.id);
+  // drop any links touching this box
+  state.boxLinks = (state.boxLinks || []).filter(
+    (l) => l.from !== req.params.id && l.to !== req.params.id
+  );
   changed();
   res.json({ removed: before !== state.boxes.length });
+});
+
+// ---- Box links (connect two boxes with a line) ----
+app.post("/api/box-links", (req, res) => {
+  const { from, to } = req.body || {};
+  if (!from || !to || from === to) return res.status(400).json({ error: "need distinct from/to" });
+  if (!Array.isArray(state.boxLinks)) state.boxLinks = [];
+  const boxes = state.boxes || [];
+  if (!boxes.some((b) => b.id === from) || !boxes.some((b) => b.id === to))
+    return res.status(404).json({ error: "box not found" });
+  // ignore duplicates (either direction)
+  const exists = state.boxLinks.some(
+    (l) => (l.from === from && l.to === to) || (l.from === to && l.to === from)
+  );
+  if (exists) return res.json({ ok: true, duplicate: true });
+  const link = { id: uid("bl"), from, to };
+  state.boxLinks.push(link);
+  changed();
+  res.json(link);
+});
+app.delete("/api/box-links/:id", (req, res) => {
+  const before = (state.boxLinks || []).length;
+  state.boxLinks = (state.boxLinks || []).filter((l) => l.id !== req.params.id);
+  changed();
+  res.json({ removed: before !== (state.boxLinks || []).length });
 });
 // Rasterized handwriting → save as asset, queue for Claude to LOOK at, and
 // drop an inbox marker so the listening Monitor wakes Claude.
@@ -693,6 +788,22 @@ app.post("/api/boxes/:id/to-claude", (req, res) => {
 
 app.post("/api/chat", (req, res) => res.json(addChat(req.body || {})));
 
+// Chat sections (tabs)
+app.post("/api/chat-sections", (req, res) => res.json(addSection((req.body || {}).name)));
+app.post("/api/chat-sections/:id/activate", (req, res) => {
+  if (!activateSection(req.params.id)) return res.status(404).json({ error: "section not found" });
+  res.json({ activeSection: state.activeSection, chatSections: state.chatSections });
+});
+app.patch("/api/chat-sections/:id", (req, res) => {
+  const sec = renameSection(req.params.id, (req.body || {}).name);
+  if (!sec) return res.status(404).json({ error: "section not found" });
+  res.json(sec);
+});
+app.delete("/api/chat-sections/:id", (req, res) => {
+  if (!deleteSection(req.params.id)) return res.status(400).json({ error: "cannot delete (not found or last)" });
+  res.json({ activeSection: state.activeSection, chatSections: state.chatSections });
+});
+
 app.post("/api/voice", (req, res) => res.json(setVoice((req.body || {}).text)));
 app.get("/api/voice/latest", (req, res) => {
   const consume = req.query.consume === "true" || req.query.consume === "1";
@@ -702,11 +813,26 @@ app.get("/api/voice/latest", (req, res) => {
 });
 
 // Inbox: queue a message for Claude Code, or drain the queue.
-app.post("/api/inbox", (req, res) => res.json(addInbox((req.body || {}).text)));
+// Optional ?section=<id|name> scopes the drain to one chat section so multiple
+// Claude Code instances don't steal each other's messages.
+app.post("/api/inbox", (req, res) => {
+  const b = req.body || {};
+  res.json(addInbox(b.text, b.section));
+});
 app.get("/api/inbox", (req, res) => {
   const drain = req.query.drain === "true" || req.query.drain === "1";
-  const items = state.inbox.slice();
-  if (drain) drainInbox();
+  const secKey = req.query.section;
+  let secId = null;
+  if (secKey !== undefined && secKey !== "") {
+    secId = resolveSectionKey(secKey);
+    if (!secId) return res.json({ items: [] }); // unknown section → nothing, never drain all
+  }
+  const match = (m) => secId === null || (m.section || "main") === secId;
+  const items = state.inbox.filter(match);
+  if (drain) {
+    state.inbox = secId === null ? [] : state.inbox.filter((m) => !match(m));
+    changed();
+  }
   res.json({ items });
 });
 

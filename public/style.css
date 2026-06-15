@@ -100,6 +100,81 @@ body.col-resizing {
   }
 }
 
+/* ----- Chat section tabs ----- */
+.chat-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 6px 8px 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.chat-tab-list {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.chat-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  max-width: 160px;
+}
+.chat-tab:hover {
+  color: var(--text);
+}
+.chat-tab.active {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.chat-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+.chat-tab-del {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 1px;
+  border-radius: 4px;
+}
+.chat-tab-del:hover {
+  color: var(--danger);
+  background: rgba(255, 255, 255, 0.08);
+}
+.chat-tab-add {
+  flex: 0 0 auto;
+  width: 26px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.chat-tab-add:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
 .chat {
   flex: 1;
   overflow-y: auto;
@@ -829,6 +904,106 @@ body.col-resizing {
   height: 16px;
   cursor: nwse-resize;
   background: linear-gradient(135deg, transparent 50%, var(--accent) 50%);
+}
+.hbox.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.box-btn.b-link:hover {
+  color: #14b8a6;
+}
+
+/* ----- Image (gallery) box ----- */
+.hbox-image .gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 8px;
+  height: calc(100% - 30px);
+  overflow-y: auto;
+  background: var(--panel);
+  align-content: start;
+}
+.gallery-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 24px 8px;
+  line-height: 1.6;
+}
+.gallery-cell {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.gallery-cell img {
+  display: block;
+  width: 100%;
+  height: 84px;
+  object-fit: cover;
+  cursor: pointer;
+}
+.gallery-cap {
+  font-size: 10.5px;
+  color: var(--text);
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  word-break: break-word;
+}
+.gallery-link {
+  color: #7dd3fc;
+  text-decoration: none;
+  font-size: 10px;
+}
+.gallery-link:hover {
+  text-decoration: underline;
+}
+.gallery-del {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.gallery-del:hover {
+  background: var(--danger);
+}
+
+/* ----- Box-link delete badge (screen space, over the canvas) ----- */
+.box-link-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: #14b8a6;
+  color: #04201c;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.box-link-badge:hover {
+  background: var(--danger);
+  color: #fff;
 }
 
 /* Fullscreen handwriting editor */
