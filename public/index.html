@@ -76,8 +76,13 @@
           <input id="map-title" class="map-title" value="My Mind Map" />
           <div class="tb-group">
             <button id="btn-add" class="tb-btn primary">+ หัวข้อ</button>
+            <button id="btn-add-box" class="tb-btn" title="เพิ่มกล่องเขียนลายมือ">📦 กล่อง</button>
             <button id="btn-select" class="tb-btn active" data-mode="select">🖱 เลือก/ย้าย</button>
             <button id="btn-draw" class="tb-btn" data-mode="draw">✏️ วาด</button>
+          </div>
+          <div class="tb-group">
+            <button id="btn-undo" class="tb-btn" title="ย้อนกลับ (Ctrl+Z)" disabled>↶ ย้อน</button>
+            <button id="btn-redo" class="tb-btn" title="ไปข้างหน้า (Ctrl+Shift+Z)" disabled>↷ ถัดไป</button>
           </div>
           <div class="tb-group right">
             <button id="btn-fit" class="tb-btn">🔭 ภาพรวม</button>
@@ -124,6 +129,7 @@
           <canvas id="edges"></canvas>
           <div id="world">
             <div id="images"></div>
+            <div id="boxes"></div>
             <div id="nodes"></div>
           </div>
           <canvas id="fx"></canvas>
@@ -137,6 +143,31 @@
 
     <div id="toast" class="toast"></div>
 
+    <!-- Fullscreen handwriting editor for a Box -->
+    <div id="box-modal" class="box-modal" hidden>
+      <div class="box-modal-bar">
+        <input id="box-modal-title" class="box-modal-title" />
+        <div class="box-modal-tools">
+          <input type="color" id="box-pen-color" value="#111827" title="สีปากกา" />
+          <input type="range" id="box-pen-size" min="1" max="30" value="4" title="ขนาดหัวปากกา" />
+          <span id="box-pen-size-val" class="box-size-val">4</span>
+          <button id="box-eraser" class="tb-btn" title="ยางลบ">🧽</button>
+          <button id="box-undo" class="tb-btn" title="ย้อนเส้น">↶</button>
+          <button id="box-clear" class="tb-btn danger" title="ล้างหน้า">ล้าง</button>
+          <span class="box-modal-sep"></span>
+          <button id="box-send-claude" class="tb-btn primary" title="ส่งให้ Claude อ่าน">👁 ส่งให้ Claude</button>
+          <button id="box-ocr" class="tb-btn" title="อ่านลายมือด้วย Tesseract (ไทย+อังกฤษ)">🔤 OCR</button>
+          <span class="box-modal-sep"></span>
+          <button id="box-close" class="tb-btn" title="ปิด (บันทึกอัตโนมัติ)">✕ ปิด</button>
+        </div>
+      </div>
+      <div class="box-modal-stage">
+        <canvas id="box-canvas"></canvas>
+      </div>
+      <div id="box-ocr-result" class="box-ocr-result" hidden></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

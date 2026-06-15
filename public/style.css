@@ -672,6 +672,14 @@ body.col-resizing {
   line-height: 1.35;
   min-width: 30px;
 }
+.node-link {
+  color: #7dd3fc;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.node-link:hover {
+  color: #38bdf8;
+}
 .node-text:focus {
   cursor: text;
 }
@@ -756,4 +764,162 @@ body.col-resizing {
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* ===================== Handwriting boxes ===================== */
+.hbox {
+  position: absolute;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  user-select: none;
+}
+.box-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--line);
+  cursor: grab;
+}
+.box-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.box-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.box-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.box-btn.b-del:hover {
+  color: var(--danger);
+}
+.box-preview {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  background: #fff;
+}
+.box-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--accent) 50%);
+}
+
+/* Fullscreen handwriting editor */
+.box-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10, 12, 18, 0.92);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+}
+.box-modal[hidden],
+.draw-dock[hidden],
+.box-ocr-result[hidden] {
+  display: none;
+}
+.box-modal-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(22, 26, 35, 0.95);
+  border-bottom: 1px solid var(--line);
+}
+.box-modal-title {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  outline: none;
+  width: 220px;
+}
+.box-modal-title:focus {
+  border-bottom-color: var(--accent);
+}
+.box-modal-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.box-modal-tools input[type="color"] {
+  width: 32px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  cursor: pointer;
+  padding: 2px;
+}
+.box-modal-tools input[type="range"] {
+  width: 80px;
+  accent-color: var(--accent);
+}
+.box-modal-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--line);
+}
+.box-size-val {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 20px;
+  text-align: center;
+}
+.box-modal-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+#box-canvas {
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  cursor: crosshair;
+}
+.box-ocr-result {
+  max-height: 22vh;
+  overflow: auto;
+  padding: 12px 18px;
+  background: rgba(22, 26, 35, 0.97);
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-size: 14px;
+  white-space: pre-wrap;
+  line-height: 1.6;
 }

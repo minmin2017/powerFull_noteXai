@@ -19,6 +19,7 @@
   let pan = null; // canvas pan
   let stroke = null; // active freehand stroke
   let spaceDown = false;
+  let serverBootId = null; // detect server restarts for live reload
   let eraseDelete = new Set(); // server ids of strokes touched during an erase drag
   let tmpCounter = 0; // temp ids for stroke pieces created while erasing
 
@@ -27,12 +28,15 @@
   const world = $("#world");
   const nodesLayer = $("#nodes");
   const imagesLayer = $("#images");
+  const boxesLayer = $("#boxes");
   const edgesCanvas = $("#edges");
   const fxCanvas = $("#fx");
   const ectx = edgesCanvas.getContext("2d");
   const fctx = fxCanvas.getContext("2d");
   const nodeEls = new Map();
   const imgEls = new Map();
+  const boxEls = new Map();
+  let boxInteract = null; // active box move/resize
   let selectedImgId = null;
   let imgInteract = null; // active image move/resize/rotate
 
@@ -62,9 +66,16 @@
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data);
+        if (msg.type === "reload") { location.reload(); return; }
         if (msg.type === "state") {
+          // Server restarted with new code → refresh to pick it up.
+          if (msg.bootId) {
+            if (serverBootId && serverBootId !== msg.bootId) { location.reload(); return; }
+            serverBootId = msg.bootId;
+          }
           if (msg.projects) applyProjects(msg.projects, msg.activeId);
           applyState(msg.state);
+          if (msg.history) updateHistoryButtons(msg.history);
         }
       } catch {}
     };
@@ -80,10 +91,45 @@
         incoming.y = local.y;
       }
     }
+    maybeNotifyClaude(s);
     STATE = s;
     renderChat();
     syncTitle();
     render();
+  }
+
+  // ----------------------------------------------------------------------
+  // Desktop notification when Claude replies (say_to_user)
+  // ----------------------------------------------------------------------
+  let lastNotifiedTs = 0;
+  let notifyReady = false;
+  function initNotifications() {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") { notifyReady = true; return; }
+    if (Notification.permission !== "denied") {
+      // Some browsers require a user gesture; ask on first interaction too.
+      Notification.requestPermission().then((p) => { notifyReady = p === "granted"; });
+      window.addEventListener("pointerdown", function once() {
+        if (Notification.permission === "default") Notification.requestPermission().then((p) => { notifyReady = p === "granted"; });
+        window.removeEventListener("pointerdown", once);
+      }, { once: true });
+    }
+  }
+  function maybeNotifyClaude(s) {
+    const chat = s.chat || [];
+    const lastClaude = [...chat].reverse().find((m) => m.role === "claude");
+    if (!lastClaude) return;
+    if (lastNotifiedTs === 0) { lastNotifiedTs = lastClaude.ts; return; } // skip backlog on first load
+    if (lastClaude.ts <= lastNotifiedTs) return;
+    lastNotifiedTs = lastClaude.ts;
+    if (document.hasFocus()) return; // already looking at the app
+    if ("Notification" in window && Notification.permission === "granted") {
+      const n = new Notification("Claude ตอบกลับแล้ว 🧠", {
+        body: lastClaude.text.slice(0, 180),
+        tag: "powerfull-note-claude",
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    }
   }
 
   // ----------------------------------------------------------------------
@@ -127,6 +173,7 @@
     if (typeof updateEraserCursor === "function") updateEraserCursor();
 
     renderImages();
+    renderBoxes();
 
     const hidden = computeHidden();
     const present = new Set();
@@ -146,9 +193,9 @@
       el.classList.toggle("root", !n.parentId);
       el.classList.toggle("selected", n.id === selectedId);
       el.style.borderColor = n.color || "var(--accent)";
-      // text (skip while editing to avoid caret jumps)
+      // text (skip while editing to avoid caret jumps); URLs become links
       const txt = el.querySelector(".node-text");
-      if (document.activeElement !== txt && txt.textContent !== n.text) txt.textContent = n.text;
+      if (document.activeElement !== txt) setNodeText(txt, n.text);
       // collapse toggle
       let tog = el.querySelector(".collapse-toggle");
       if (hasChildren(n.id)) {
@@ -182,6 +229,32 @@
     drawFx();
   }
 
+  // Linkify URLs in node text. While editing we show the raw text so the user
+  // can edit the URL; otherwise URLs render as clickable links.
+  const URL_RE = /(https?:\/\/[^\s<]+)/g;
+  function escapeHtml(s) {
+    return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+  function linkifyHtml(text) {
+    return escapeHtml(text).replace(URL_RE, '<a href="$1" target="_blank" rel="noopener" class="node-link">$1</a>');
+  }
+  function setNodeText(txt, text) {
+    const key = (/https?:\/\//.test(text) ? "L:" : "T:") + text;
+    if (txt.dataset.rendered === key) return;
+    if (key[0] === "L") txt.innerHTML = linkifyHtml(text);
+    else txt.textContent = text;
+    txt.dataset.rendered = key;
+  }
+  function beginEditNode(txt) {
+    const id = txt.closest(".node")?.dataset.id;
+    const node = STATE.nodes.find((x) => x.id === id);
+    txt.textContent = node ? node.text : txt.textContent; // raw text for editing
+    txt.dataset.rendered = "";
+    txt.setAttribute("contenteditable", "true");
+    txt.focus();
+    document.getSelection().selectAllChildren(txt);
+  }
+
   function createNodeEl(n) {
     const el = document.createElement("div");
     el.className = "node";
@@ -191,16 +264,19 @@
 
     el.addEventListener("pointerdown", (e) => onNodePointerDown(e, n.id));
     el.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return; // let link clicks open
       e.stopPropagation();
       selectedId = n.id;
       render();
     });
+    el.addEventListener("dblclick", (e) => {
+      e.stopPropagation();
+      beginEditNode(txt);
+    });
 
     txt.addEventListener("dblclick", (e) => {
       e.stopPropagation();
-      txt.setAttribute("contenteditable", "true");
-      txt.focus();
-      document.getSelection().selectAllChildren(txt);
+      beginEditNode(txt);
     });
     txt.addEventListener("blur", () => {
       txt.removeAttribute("contenteditable");
@@ -210,6 +286,8 @@
         node.text = val;
         api(`/api/nodes/${n.id}`, "PATCH", { text: val });
       }
+      txt.dataset.rendered = "";
+      setNodeText(txt, node ? node.text : val); // restore link rendering
     });
     txt.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -227,11 +305,7 @@
         // focus once the element exists
         setTimeout(() => {
           const cel = nodeEls.get(child.id);
-          if (cel) {
-            const t = cel.querySelector(".node-text");
-            t.setAttribute("contenteditable", "true");
-            t.focus();
-          }
+          if (cel) beginEditNode(cel.querySelector(".node-text"));
         }, 60);
       }
     });
@@ -516,6 +590,8 @@
   // Node drag
   // ----------------------------------------------------------------------
   function onNodePointerDown(e, id) {
+    if (e.button === 2) return; // right-click is reserved for the edit context menu
+    if (e.target.closest("a")) return; // let link clicks through
     const txt = e.target.closest(".node-text");
     if (txt && txt.getAttribute("contenteditable") === "true") return; // editing
     if (e.target.closest(".handle")) return;
@@ -591,8 +667,14 @@
   });
 
   canvas.addEventListener("dblclick", async (e) => {
-    if (e.target.closest(".node")) return;
     if (mode !== "select") return;
+    // Double-click on existing node → edit it.
+    const nodeEl = e.target.closest(".node");
+    if (nodeEl) {
+      beginEditNode(nodeEl.querySelector(".node-text"));
+      return;
+    }
+    // Double-click on empty canvas → create new node.
     const p = eventCanvasPos(e);
     const w = screenToWorld(p.x, p.y);
     const node = await api("/api/nodes", "POST", { text: "", x: Math.round(w.x), y: Math.round(w.y) });
@@ -600,11 +682,7 @@
       selectedId = node.id;
       setTimeout(() => {
         const el = nodeEls.get(node.id);
-        if (el) {
-          const t = el.querySelector(".node-text");
-          t.setAttribute("contenteditable", "true");
-          t.focus();
-        }
+        if (el) beginEditNode(el.querySelector(".node-text"));
       }, 60);
     }
   });
@@ -673,7 +751,12 @@
     { passive: false }
   );
 
-  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    // Right-click an existing node → edit its text inline.
+    const nodeEl = e.target.closest(".node");
+    if (nodeEl) beginEditNode(nodeEl.querySelector(".node-text"));
+  });
 
   // ----------------------------------------------------------------------
   // Freehand stroke
@@ -1001,6 +1084,10 @@
   }
   $("#btn-select").addEventListener("click", () => setMode("select"));
   $("#btn-draw").addEventListener("click", () => setMode("draw"));
+  // Dock buttons: stop pointerdown so the canvas draw handler doesn't intercept.
+  document.querySelectorAll(".dock-tool, .dock-swatch").forEach(el => {
+    el.addEventListener("pointerdown", (e) => e.stopPropagation());
+  });
   $("#tool-pen").addEventListener("click", () => setEraser(false));
   $("#btn-eraser").addEventListener("click", () => setEraser(!eraser));
   $("#pen-size").addEventListener("input", (e) => {
@@ -1015,6 +1102,14 @@
     if (last) api(`/api/drawings/${last.id}`, "DELETE");
   });
 
+  // Undo / redo (whole-map history, served by the backend)
+  function updateHistoryButtons(h) {
+    $("#btn-undo").disabled = !h.canUndo;
+    $("#btn-redo").disabled = !h.canRedo;
+  }
+  $("#btn-undo").addEventListener("click", () => api("/api/undo", "POST"));
+  $("#btn-redo").addEventListener("click", () => api("/api/redo", "POST"));
+
   $("#btn-add").addEventListener("click", async () => {
     const c = screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2);
     const node = await api("/api/nodes", "POST", { text: "", x: Math.round(c.x), y: Math.round(c.y) });
@@ -1022,11 +1117,7 @@
       selectedId = node.id;
       setTimeout(() => {
         const el = nodeEls.get(node.id);
-        if (el) {
-          const t = el.querySelector(".node-text");
-          t.setAttribute("contenteditable", "true");
-          t.focus();
-        }
+        if (el) beginEditNode(el.querySelector(".node-text"));
       }, 60);
     }
   });
@@ -1062,15 +1153,307 @@
     if (confirm("ล้างมายด์แมปและลายเส้นทั้งหมด?")) api("/api/clear", "POST");
   });
 
+  // ======================================================================
+  // Handwriting boxes — a paper-like node you draw inside with a pen.
+  // Stroke points are stored NORMALIZED (px / page-width) so they stay
+  // correct at any box size or in the fullscreen editor. Page is portrait
+  // A4-ish: height = width * PAGE_ASPECT.
+  // ======================================================================
+  const PAGE_ASPECT = 1.414;
+  const BOX_HEADER = 30;
+  const RASTER_W = 1200; // resolution used for OCR / sending to Claude
+
+  // Points are normalized: x = fraction of width (0..1), y = fraction of height
+  // (0..1). Width and height scale independently so boxes can be any size.
+  function strokeToPath(ctx, stroke, sx, sy) {
+    const pts = stroke.points || [];
+    if (!pts.length) return;
+    ctx.strokeStyle = stroke.color || "#111827";
+    ctx.lineWidth = Math.max(0.5, (stroke.width || 3) * (sx / 320)); // width ~ relative to a 320px page
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x * sx, pts[0].y * sy);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * sx, pts[i].y * sy);
+    if (pts.length === 1) ctx.lineTo(pts[0].x * sx + 0.1, pts[0].y * sy + 0.1);
+    ctx.stroke();
+  }
+
+  // Draw all strokes of a box onto a canvas of the given pixel size (white page).
+  function paintBox(canvasEl, strokes, pxW, pxH) {
+    canvasEl.width = pxW;
+    canvasEl.height = pxH;
+    const ctx = canvasEl.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, pxW, pxH);
+    for (const s of strokes || []) strokeToPath(ctx, s, pxW, pxH);
+    return ctx;
+  }
+
+  function renderBoxes() {
+    const boxes = STATE.boxes || [];
+    const present = new Set();
+    for (const b of boxes) {
+      present.add(b.id);
+      let el = boxEls.get(b.id);
+      if (!el) {
+        el = createBoxEl(b);
+        boxEls.set(b.id, el);
+        boxesLayer.appendChild(el);
+      }
+      el.style.left = b.x + "px";
+      el.style.top = b.y + "px";
+      el.style.width = b.w + "px";
+      el.querySelector(".box-title").textContent = b.title || "บันทึกลายมือ";
+      const prev = el.querySelector(".box-preview");
+      // only repaint preview if it's not the box currently open in the editor
+      if (modalState?.boxId !== b.id) paintBox(prev, b.strokes, b.w, b.h || Math.round(b.w * PAGE_ASPECT));
+    }
+    for (const [id, el] of boxEls) {
+      if (!present.has(id)) {
+        el.remove();
+        boxEls.delete(id);
+      }
+    }
+  }
+
+  function createBoxEl(b) {
+    const el = document.createElement("div");
+    el.className = "hbox";
+    el.dataset.id = b.id;
+    el.innerHTML =
+      `<div class="box-head">
+         <span class="box-title"></span>
+         <button class="box-btn b-edit" title="ขยาย/เขียน">✏️</button>
+         <button class="box-btn b-del" title="ลบกล่อง">×</button>
+       </div>
+       <canvas class="box-preview"></canvas>
+       <div class="box-resize" title="ปรับขนาด"></div>`;
+
+    const head = el.querySelector(".box-head");
+    head.addEventListener("pointerdown", (e) => {
+      if (mode !== "select") return;
+      if (e.target.closest(".box-btn")) return;
+      e.stopPropagation();
+      startBoxMove(e, b.id);
+    });
+    el.querySelector(".b-edit").addEventListener("click", (e) => { e.stopPropagation(); openBox(b.id); });
+    el.querySelector(".b-del").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (confirm("ลบกล่องนี้?")) api(`/api/boxes/${b.id}`, "DELETE");
+    });
+    el.querySelector(".box-preview").addEventListener("dblclick", (e) => { e.stopPropagation(); openBox(b.id); });
+    el.querySelector(".box-resize").addEventListener("pointerdown", (e) => { e.stopPropagation(); startBoxResize(e, b.id); });
+    return el;
+  }
+
+  function startBoxMove(e, id) {
+    const b = STATE.boxes.find((x) => x.id === id);
+    if (!b) return;
+    const start = eventCanvasPos(e);
+    boxInteract = { id, mode: "move", sx: start.x, sy: start.y, ox: b.x, oy: b.y };
+    window.addEventListener("pointermove", onBoxInteract);
+    window.addEventListener("pointerup", endBoxInteract, { once: true });
+  }
+  function startBoxResize(e, id) {
+    const b = STATE.boxes.find((x) => x.id === id);
+    if (!b) return;
+    const start = eventCanvasPos(e);
+    boxInteract = { id, mode: "resize", sx: start.x, sy: start.y, ow: b.w, oh: b.h || Math.round(b.w * PAGE_ASPECT) };
+    window.addEventListener("pointermove", onBoxInteract);
+    window.addEventListener("pointerup", endBoxInteract, { once: true });
+  }
+  function onBoxInteract(e) {
+    if (!boxInteract) return;
+    const b = STATE.boxes.find((x) => x.id === boxInteract.id);
+    if (!b) return;
+    const p = eventCanvasPos(e);
+    if (boxInteract.mode === "move") {
+      b.x = boxInteract.ox + (p.x - boxInteract.sx) / view.scale;
+      b.y = boxInteract.oy + (p.y - boxInteract.sy) / view.scale;
+    } else {
+      // free resize: width and height independent
+      b.w = Math.max(120, boxInteract.ow + (p.x - boxInteract.sx) / view.scale);
+      b.h = Math.max(120, boxInteract.oh + (p.y - boxInteract.sy) / view.scale);
+    }
+    render();
+  }
+  function endBoxInteract() {
+    window.removeEventListener("pointermove", onBoxInteract);
+    if (!boxInteract) return;
+    const b = STATE.boxes.find((x) => x.id === boxInteract.id);
+    if (b) api(`/api/boxes/${boxInteract.id}`, "PATCH", { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
+    boxInteract = null;
+  }
+
+  // ---------------- Fullscreen handwriting editor ----------------
+  let modalState = null; // { boxId, strokes, eraser, cur, dirty }
+  const bmodal = $("#box-modal");
+  const bcanvas = $("#box-canvas");
+  const bctx = bcanvas.getContext("2d");
+
+  function openBox(id) {
+    const b = STATE.boxes.find((x) => x.id === id);
+    if (!b) return;
+    modalState = { boxId: id, strokes: JSON.parse(JSON.stringify(b.strokes || [])), eraser: false, cur: null, dirty: false };
+    $("#box-modal-title").value = b.title || "";
+    $("#box-ocr-result").hidden = true;
+    $("#box-eraser").classList.remove("active");
+    bmodal.hidden = false; // show first so the stage has a real height
+    bmodalSizeCanvas();
+    bmodalRedraw();
+  }
+  function bmodalSizeCanvas() {
+    const b = STATE.boxes.find((x) => x.id === modalState.boxId);
+    const bw = b ? b.w : 320;
+    const bh = b ? (b.h || Math.round(b.w * PAGE_ASPECT)) : 452;
+    const aspect = bh / bw; // height / width of THIS box
+    const stage = $(".box-modal-stage");
+    const availW = stage.clientWidth - 40;
+    const availH = stage.clientHeight - 20;
+    // fit the box's own aspect ratio inside the stage
+    let pxW = availW;
+    let pxH = pxW * aspect;
+    if (pxH > availH) { pxH = availH; pxW = pxH / aspect; }
+    bcanvas.style.width = pxW + "px";
+    bcanvas.style.height = pxH + "px";
+    bcanvas.width = Math.round(pxW * 2); // crisp on hi-dpi
+    bcanvas.height = Math.round(pxH * 2);
+  }
+  function bmodalRedraw() {
+    bctx.fillStyle = "#ffffff";
+    bctx.fillRect(0, 0, bcanvas.width, bcanvas.height);
+    for (const s of modalState.strokes) strokeToPath(bctx, s, bcanvas.width, bcanvas.height);
+  }
+  // page-normalized coords from a pointer event over the modal canvas
+  function bmodalPt(e) {
+    const r = bcanvas.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / r.width;  // 0..1 across width
+    const ny = (e.clientY - r.top) / r.height;  // 0..1 across height
+    return { x: nx, y: ny };
+  }
+  bcanvas.addEventListener("pointerdown", (e) => {
+    bcanvas.setPointerCapture?.(e.pointerId);
+    const pt = bmodalPt(e);
+    if (modalState.eraser) {
+      eraseBoxAt(pt);
+      bcanvas.addEventListener("pointermove", onBoxErase);
+      window.addEventListener("pointerup", () => bcanvas.removeEventListener("pointermove", onBoxErase), { once: true });
+      return;
+    }
+    modalState.cur = {
+      color: $("#box-pen-color").value,
+      width: Number($("#box-pen-size").value),
+      points: [pt],
+    };
+    modalState.strokes.push(modalState.cur);
+    bcanvas.addEventListener("pointermove", onBoxDraw);
+    window.addEventListener("pointerup", onBoxDrawEnd, { once: true });
+  });
+  function onBoxDraw(e) {
+    if (!modalState?.cur) return;
+    modalState.cur.points.push(bmodalPt(e));
+    bmodalRedraw();
+  }
+  function onBoxDrawEnd() {
+    bcanvas.removeEventListener("pointermove", onBoxDraw);
+    if (modalState) { modalState.cur = null; modalState.dirty = true; }
+  }
+  function eraseBoxAt(pt) {
+    const thr = 0.015 + Number($("#box-pen-size").value) / 500; // normalized radius
+    const before = modalState.strokes.length;
+    modalState.strokes = modalState.strokes.filter((s) =>
+      !(s.points || []).some((p) => Math.hypot(p.x - pt.x, p.y - pt.y) < thr)
+    );
+    if (modalState.strokes.length !== before) { modalState.dirty = true; bmodalRedraw(); }
+  }
+  function onBoxErase(e) { eraseBoxAt(bmodalPt(e)); }
+
+  $("#box-pen-size").addEventListener("input", (e) => {
+    $("#box-pen-size-val").textContent = e.target.value;
+  });
+  $("#box-eraser").addEventListener("click", () => {
+    modalState.eraser = !modalState.eraser;
+    $("#box-eraser").classList.toggle("active", modalState.eraser);
+  });
+  $("#box-undo").addEventListener("click", () => {
+    if (modalState.strokes.length) { modalState.strokes.pop(); modalState.dirty = true; bmodalRedraw(); }
+  });
+  $("#box-clear").addEventListener("click", () => {
+    if (modalState.strokes.length && confirm("ล้างลายมือทั้งหน้า?")) { modalState.strokes = []; modalState.dirty = true; bmodalRedraw(); }
+  });
+  async function saveModalBox() {
+    if (!modalState) return;
+    const title = $("#box-modal-title").value;
+    await api(`/api/boxes/${modalState.boxId}`, "PATCH", { strokes: modalState.strokes, title });
+    modalState.dirty = false;
+  }
+  $("#box-close").addEventListener("click", async () => {
+    await saveModalBox();
+    const id = modalState.boxId;
+    modalState = null;
+    bmodal.hidden = true;
+    const el = boxEls.get(id);
+    if (el) { const b = STATE.boxes.find(x => x.id === id); if (b) paintBox(el.querySelector(".box-preview"), b.strokes, b.w); }
+  });
+
+  // Render the current page to a white PNG at OCR resolution (box aspect).
+  function rasterizeModal() {
+    const b = STATE.boxes.find((x) => x.id === modalState.boxId);
+    const aspect = b ? (b.h || Math.round(b.w * PAGE_ASPECT)) / b.w : PAGE_ASPECT;
+    const tmp = document.createElement("canvas");
+    paintBox(tmp, modalState.strokes, RASTER_W, Math.round(RASTER_W * aspect));
+    return tmp.toDataURL("image/png");
+  }
+  $("#box-send-claude").addEventListener("click", async () => {
+    await saveModalBox();
+    const dataUrl = rasterizeModal();
+    await api(`/api/boxes/${modalState.boxId}/to-claude`, "POST", { dataUrl, note: $("#box-modal-title").value });
+    toast("ส่งลายมือให้ Claude แล้ว ✓ — เดี๋ยว Claude อ่านให้");
+  });
+  $("#box-ocr").addEventListener("click", async () => {
+    const out = $("#box-ocr-result");
+    out.hidden = false;
+    out.textContent = "⏳ กำลังอ่านลายมือ (ไทย+อังกฤษ)… ครั้งแรกอาจโหลดโมเดลสักครู่";
+    try {
+      const dataUrl = rasterizeModal();
+      const { data } = await Tesseract.recognize(dataUrl, "tha+eng");
+      const text = (data.text || "").trim();
+      out.textContent = text ? "📄 อ่านได้: " + text : "ไม่พบข้อความที่อ่านได้ ลองเขียนให้ชัดขึ้น";
+    } catch (err) {
+      out.textContent = "OCR ผิดพลาด: " + err.message;
+    }
+  });
+
+  $("#btn-add-box").addEventListener("click", async () => {
+    const c = screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2);
+    const box = await api("/api/boxes", "POST", { x: Math.round(c.x - 160), y: Math.round(c.y - 100), w: 320 });
+    if (box) setTimeout(() => openBox(box.id), 80);
+  });
+
   // ----------------------------------------------------------------------
   // Keyboard
   // ----------------------------------------------------------------------
   window.addEventListener("keydown", (e) => {
-    if (e.code === "Space" && !isTyping(e)) {
-      spaceDown = true;
-      canvas.classList.add("panning");
+    // Undo / redo (work even when not typing in a node)
+    if ((e.ctrlKey || e.metaKey) && !isTyping(e)) {
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); api("/api/undo", "POST"); return; }
+      if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); api("/api/redo", "POST"); return; }
     }
-    if ((e.key === "Delete" || e.key === "Backspace") && !isTyping(e)) {
+    if (isTyping(e)) return;
+    // Tool shortcuts: W = pen (draw), Space = select/move
+    if (e.code === "KeyW") {
+      e.preventDefault();
+      setMode("draw");
+      return;
+    }
+    if (e.code === "Space") {
+      e.preventDefault();
+      setMode("select");
+      return;
+    }
+    if (e.key === "Delete" || e.key === "Backspace") {
       if (selectedId) {
         api(`/api/nodes/${selectedId}`, "DELETE");
         selectedId = null;
@@ -1078,12 +1461,6 @@
         api(`/api/images/${selectedImgId}`, "DELETE");
         selectedImgId = null;
       }
-    }
-  });
-  window.addEventListener("keyup", (e) => {
-    if (e.code === "Space") {
-      spaceDown = false;
-      if (!pan) canvas.classList.remove("panning");
     }
   });
   function isTyping(e) {
@@ -1176,6 +1553,7 @@
   // Boot
   // ----------------------------------------------------------------------
   setupVoice();
+  initNotifications();
   connectWS();
   api("/api/state").then((s) => {
     if (s) {

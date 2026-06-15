@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 4321;
+const BOOT_ID = "boot_" + Date.now().toString(36); // changes every server (re)start
 const DATA_DIR = path.join(__dirname, "data");
 const PROJECTS_DIR = path.join(DATA_DIR, "projects");
 const INDEX_FILE = path.join(DATA_DIR, "projects.json");
@@ -36,6 +37,7 @@ function emptyState(title = "My Mind Map") {
     nodes: [],
     drawings: [],
     images: [], // pasted/dropped/fetched images: {id, src, x, y, w, h, rotation}
+    boxes: [], // handwriting boxes: {id, x, y, w, title, strokes:[{color,width,points:[{x,y}]}]}
     chat: [],
     voice: { latest: null, history: [] },
     inbox: [], // typed/spoken messages queued for Claude Code to drain
@@ -458,14 +460,103 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 
 function broadcast() {
-  const payload = JSON.stringify({ type: "state", state, projects, activeId });
+  const payload = JSON.stringify({ type: "state", state, projects, activeId, history: historyCounts(), bootId: BOOT_ID });
   for (const client of wss.clients) {
     if (client.readyState === 1) client.send(payload);
   }
 }
 
+// Live reload: when frontend files change, tell every open page to refresh.
+function sendReload() {
+  const payload = JSON.stringify({ type: "reload" });
+  for (const client of wss.clients) {
+    if (client.readyState === 1) client.send(payload);
+  }
+}
+let reloadTimer = null;
+try {
+  fs.watch(path.join(__dirname, "public"), { recursive: true }, () => {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(sendReload, 200);
+  });
+} catch (err) {
+  console.warn("[watch] live-reload disabled:", err.message);
+}
+
+// ---------------------------------------------------------------------------
+// Undo / redo history (per project). Snapshots only the mind-map content
+// (meta, nodes, drawings, images) — chat/voice/inbox are left untouched.
+// ---------------------------------------------------------------------------
+const HISTORY_CAP = 100;
+const histories = new Map(); // projectId -> { past:[], future:[], last }
+let applyingHistory = false;
+
+function snapMap() {
+  return JSON.parse(
+    JSON.stringify({
+      meta: state.meta,
+      nodes: state.nodes,
+      drawings: state.drawings,
+      images: state.images,
+      boxes: state.boxes,
+    })
+  );
+}
+function applyMapSnap(s) {
+  state.meta = s.meta;
+  state.nodes = s.nodes;
+  state.drawings = s.drawings;
+  state.images = s.images;
+  state.boxes = s.boxes || [];
+}
+function historyOf() {
+  let h = histories.get(activeId);
+  if (!h) {
+    h = { past: [], future: [], last: snapMap() };
+    histories.set(activeId, h);
+  }
+  return h;
+}
+function recordHistory() {
+  const h = historyOf();
+  if (h.last) {
+    h.past.push(h.last);
+    if (h.past.length > HISTORY_CAP) h.past.shift();
+  }
+  h.future = [];
+  h.last = snapMap();
+}
+function historyCounts() {
+  const h = histories.get(activeId);
+  return { canUndo: !!(h && h.past.length), canRedo: !!(h && h.future.length),
+           past: h ? h.past.length : 0, future: h ? h.future.length : 0 };
+}
+function undo() {
+  const h = historyOf();
+  if (!h.past.length) return false;
+  h.future.unshift(snapMap());
+  applyMapSnap(h.past.pop());
+  h.last = snapMap();
+  applyingHistory = true;
+  changed();
+  applyingHistory = false;
+  return true;
+}
+function redo() {
+  const h = historyOf();
+  if (!h.future.length) return false;
+  h.past.push(snapMap());
+  applyMapSnap(h.future.shift());
+  h.last = snapMap();
+  applyingHistory = true;
+  changed();
+  applyingHistory = false;
+  return true;
+}
+
 let broadcastTimer = null;
 function changed() {
+  if (!applyingHistory) recordHistory();
   persist();
   if (broadcastTimer) return;
   broadcastTimer = setTimeout(() => {
@@ -475,13 +566,16 @@ function changed() {
 }
 
 wss.on("connection", (ws) => {
-  ws.send(JSON.stringify({ type: "state", state, projects, activeId }));
+  ws.send(JSON.stringify({ type: "state", state, projects, activeId, history: historyCounts(), bootId: BOOT_ID }));
 });
 
 // ---------------------------------------------------------------------------
 // REST API
 // ---------------------------------------------------------------------------
-app.get("/api/state", (_req, res) => res.json({ ...state, projects, activeId }));
+app.get("/api/state", (_req, res) => res.json({ ...state, projects, activeId, history: historyCounts() }));
+
+app.post("/api/undo", (_req, res) => res.json({ ok: undo(), history: historyCounts() }));
+app.post("/api/redo", (_req, res) => res.json({ ok: redo(), history: historyCounts() }));
 
 // ----- Projects --------------------------------------------------------------
 app.get("/api/projects", (_req, res) => res.json({ activeId, projects }));
@@ -548,6 +642,54 @@ app.patch("/api/images/:id", (req, res) => {
 });
 
 app.delete("/api/images/:id", (req, res) => res.json({ removed: deleteImage(req.params.id) }));
+
+// ---- Handwriting boxes ----
+app.post("/api/boxes", (req, res) => {
+  const b = req.body || {};
+  const box = {
+    id: uid("box"),
+    x: Number.isFinite(b.x) ? b.x : 160,
+    y: Number.isFinite(b.y) ? b.y : 160,
+    w: Number.isFinite(b.w) ? b.w : 320,
+    h: Number.isFinite(b.h) ? b.h : 240,
+    title: typeof b.title === "string" ? b.title : "บันทึกลายมือ",
+    strokes: Array.isArray(b.strokes) ? b.strokes : [],
+    createdAt: Date.now(),
+  };
+  if (!Array.isArray(state.boxes)) state.boxes = [];
+  state.boxes.push(box);
+  changed();
+  res.json(box);
+});
+app.patch("/api/boxes/:id", (req, res) => {
+  const box = (state.boxes || []).find((b) => b.id === req.params.id);
+  if (!box) return res.status(404).json({ error: "box not found" });
+  const u = req.body || {};
+  for (const k of ["x", "y", "w", "h", "title", "strokes"]) {
+    if (u[k] !== undefined) box[k] = u[k];
+  }
+  changed();
+  res.json(box);
+});
+app.delete("/api/boxes/:id", (req, res) => {
+  const before = (state.boxes || []).length;
+  state.boxes = (state.boxes || []).filter((b) => b.id !== req.params.id);
+  changed();
+  res.json({ removed: before !== state.boxes.length });
+});
+// Rasterized handwriting → save as asset, queue for Claude to LOOK at, and
+// drop an inbox marker so the listening Monitor wakes Claude.
+app.post("/api/boxes/:id/to-claude", (req, res) => {
+  const { dataUrl, note } = req.body || {};
+  const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl || "");
+  if (!m) return res.status(400).json({ error: "invalid image data" });
+  const mime = m[1] || "image/png";
+  const buffer = Buffer.from(decodeURIComponent(m[3]), m[2] ? "base64" : "utf8");
+  const src = saveAsset(buffer, mime);
+  const entry = addImageInbox({ src, note: note || "ลายมือจาก Box" });
+  addInbox(`[ลายมือ] ผู้ใช้ส่งบันทึกลายมือมาให้ดู — เรียก get_user_images เพื่ออ่าน`);
+  res.json({ ok: true, entry });
+});
 
 app.post("/api/chat", (req, res) => res.json(addChat(req.body || {})));
 
