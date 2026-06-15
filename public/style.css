@@ -1,0 +1,707 @@
+:root {
+  --bg: #0f1117;
+  --panel: #161a23;
+  --panel-2: #1d222e;
+  --line: #2a3140;
+  --text: #e7ecf3;
+  --muted: #8b94a7;
+  --accent: #6366f1;
+  --accent-2: #8b5cf6;
+  --danger: #ef4444;
+  --grid: rgba(255, 255, 255, 0.035);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Sarabun", system-ui, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ===================== Sidebar / chat ===================== */
+#sidebar {
+  width: 340px;
+  min-width: 220px;
+  max-width: 75vw;
+  flex: 0 0 auto;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Draggable divider to resize the chat panel */
+#sidebar-resizer {
+  flex: 0 0 auto;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 20;
+  transition: background 0.15s;
+}
+#sidebar-resizer:hover,
+#sidebar-resizer.dragging {
+  background: var(--accent);
+}
+body.col-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+.sb-head {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.sb-title {
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.sb-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #555;
+  box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5);
+}
+.dot.on {
+  background: #22c55e;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+.chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.msg {
+  max-width: 92%;
+  padding: 9px 12px;
+  border-radius: 13px;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.claude {
+  align-self: flex-start;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-top-left-radius: 4px;
+}
+.msg.user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white;
+  border-top-right-radius: 4px;
+}
+.msg.system {
+  align-self: center;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 2px 8px;
+}
+.msg .ts {
+  display: block;
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 3px;
+}
+.chat-empty {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  margin: auto;
+  padding: 20px;
+  line-height: 1.6;
+}
+
+/* ===================== Voice area ===================== */
+.voice-area {
+  border-top: 1px solid var(--line);
+  padding: 12px 14px 14px;
+  background: var(--panel);
+}
+.voice-status {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.voice-interim {
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--accent-2);
+  font-style: italic;
+  margin-bottom: 8px;
+}
+.voice-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.mic-btn {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s, background 0.2s;
+}
+.mic-btn:hover {
+  transform: scale(1.05);
+}
+.mic-btn.listening {
+  background: var(--danger);
+  animation: pulse-red 1.2s infinite;
+}
+@keyframes pulse-red {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+.text-input {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 12px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.text-input:focus {
+  border-color: var(--accent);
+}
+.send-btn {
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: none;
+  color: white;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.1s, opacity 0.2s;
+}
+.send-btn:hover {
+  transform: scale(1.04);
+}
+.send-btn:active {
+  transform: scale(0.97);
+}
+.voice-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.voice-hint code {
+  background: var(--panel-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* ===================== Stage / toolbar ===================== */
+#stage {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+.toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+  background: rgba(22, 26, 35, 0.85);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.project-group {
+  gap: 6px;
+}
+.project-select {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  max-width: 170px;
+  cursor: pointer;
+  outline: none;
+}
+.project-select:hover {
+  border-color: var(--accent);
+}
+.map-title {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  width: 190px;
+  border-bottom: 1px solid transparent;
+}
+.map-title:focus {
+  border-bottom-color: var(--accent);
+}
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tb-group.right {
+  margin-left: auto;
+}
+.tb-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 7px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.tb-btn:hover {
+  border-color: var(--accent);
+}
+.tb-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.tb-btn.primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: none;
+  color: white;
+  font-weight: 600;
+}
+.tb-btn.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+/* ===================== Photoshop-style draw dock ===================== */
+.draw-dock {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 7px;
+  background: rgba(22, 26, 35, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.dock-tool {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+.dock-tool:hover {
+  border-color: var(--accent);
+}
+.dock-tool.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.dock-sep {
+  width: 28px;
+  height: 1px;
+  background: var(--line);
+  margin: 2px 0;
+}
+.dock-swatch {
+  width: 40px;
+  height: 34px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  display: block;
+}
+.dock-swatch input[type="color"] {
+  width: 150%;
+  height: 150%;
+  margin: -25%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+.dock-slider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+.dock-cap {
+  font-size: 13px;
+  opacity: 0.85;
+}
+.dock-slider input[type="range"] {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 22px;
+  height: 84px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.dock-val {
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 18px;
+  text-align: center;
+}
+.zoom-label {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 42px;
+  text-align: center;
+}
+
+/* ===================== Canvas / world ===================== */
+#canvas {
+  position: absolute;
+  inset: 52px 0 0 0;
+  overflow: hidden;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--grid) 1.4px, transparent 1.4px);
+  background-size: 26px 26px;
+  cursor: grab;
+  /* Stop the browser from hijacking pen/touch drags as scroll/pan gestures
+     (those fire pointercancel and break freehand drawing with a stylus). */
+  touch-action: none;
+}
+#canvas.panning {
+  cursor: grabbing;
+}
+#canvas.mode-draw {
+  cursor: crosshair;
+}
+#canvas.mode-eraser {
+  cursor: cell;
+}
+#world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+#nodes {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+#images {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* ===================== Image objects ===================== */
+.img-obj {
+  position: absolute;
+  transform-origin: center center;
+  cursor: grab;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.img-obj img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 4px;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+.img-obj.dragging {
+  cursor: grabbing;
+}
+.img-obj.selected {
+  border-color: var(--accent);
+}
+/* handles only show when selected */
+.img-obj .img-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: none;
+  z-index: 2;
+}
+.img-obj.selected .img-handle {
+  display: block;
+}
+.img-obj .h-se {
+  right: -8px;
+  bottom: -8px;
+  cursor: nwse-resize;
+}
+.img-obj .h-rot {
+  left: 50%;
+  top: -30px;
+  transform: translateX(-50%);
+  background: var(--accent-2);
+  cursor: grab;
+}
+.img-obj .h-del {
+  right: -10px;
+  top: -10px;
+  width: 20px;
+  height: 20px;
+  background: var(--danger);
+  color: #fff;
+  display: none;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 2px solid var(--panel);
+}
+.img-obj.selected .h-del {
+  display: grid;
+}
+.img-obj .h-send {
+  left: -10px;
+  top: -10px;
+  width: 22px;
+  height: 22px;
+  background: var(--accent-2);
+  color: #fff;
+  display: none;
+  place-items: center;
+  font-size: 12px;
+  cursor: pointer;
+  border: 2px solid var(--panel);
+}
+.img-obj.selected .h-send {
+  display: grid;
+}
+#edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+#world {
+  z-index: 2;
+}
+#fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+#fx.draw-active {
+  pointer-events: auto;
+}
+
+/* ===================== Nodes ===================== */
+.node {
+  position: absolute;
+  width: max-content;
+  min-width: 70px;
+  max-width: 280px;
+  background: var(--panel-2);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 9px 13px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  cursor: grab;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.node:hover {
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+}
+.node.dragging {
+  cursor: grabbing;
+  z-index: 50;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6);
+}
+.node.selected {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45), 0 8px 26px rgba(0, 0, 0, 0.5);
+}
+.node.root {
+  font-weight: 700;
+  font-size: 16px;
+  padding: 12px 18px;
+}
+.node-text {
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.35;
+  min-width: 30px;
+}
+.node-text:focus {
+  cursor: text;
+}
+.node .handle {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  border: 2px solid var(--panel);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.node:hover .handle {
+  opacity: 1;
+}
+.node .add-child {
+  right: -11px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.node .add-child:hover {
+  transform: translateY(-50%) scale(1.15);
+}
+.node .collapse-toggle {
+  left: -11px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--panel);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 1;
+}
+.node .del-node {
+  right: -11px;
+  top: -11px;
+  background: var(--danger);
+  font-size: 14px;
+  font-weight: 700;
+}
+.node .del-node:hover {
+  transform: scale(1.15);
+}
+
+.empty-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.9;
+  pointer-events: none;
+}
+
+/* ===================== Toast ===================== */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #111827;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s;
+  z-index: 100;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Powerfull Note — Mind Map + Claude</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- ========== Left: Claude chat panel ========== -->
+      <aside id="sidebar">
+        <header class="sb-head">
+          <div class="sb-title">
+            <span class="dot" id="conn-dot" title="สถานะการเชื่อมต่อ"></span>
+            Claude
+          </div>
+          <div class="sb-sub">พาเนลแชท — อ่านสิ่งที่ Claude บอก</div>
+        </header>
+
+        <div id="chat" class="chat"></div>
+
+        <div class="voice-area">
+          <div id="voice-status" class="voice-status">กดไมค์เพื่อพูดภาษาไทย</div>
+          <div id="voice-interim" class="voice-interim"></div>
+          <div class="voice-row">
+            <button id="mic-btn" class="mic-btn" title="พูดภาษาไทย (th-TH)">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
+                />
+              </svg>
+            </button>
+            <input
+              id="text-input"
+              class="text-input"
+              type="text"
+              placeholder="พิมพ์ข้อความถึง Claude แล้วกด Enter / ส่ง…"
+            />
+            <button id="send-btn" class="send-btn" title="ส่งเข้า Claude Code">ส่ง ➤</button>
+          </div>
+          <div class="voice-hint">
+            พิมพ์หรือพูดแล้วกด <b>ส่ง</b> ข้อความจะเข้าคิวให้ Claude Code โดยตรง —
+            ให้ Claude เรียกเครื่องมือ <code>get_inbox</code> เพื่อรับ (ไม่ต้องก็อปวางแล้ว)
+          </div>
+        </div>
+      </aside>
+
+      <!-- Drag this divider to resize the chat panel -->
+      <div id="sidebar-resizer" title="ลากเพื่อปรับขนาดพาเนลแชท"></div>
+
+      <!-- ========== Right: Mind map stage ========== -->
+      <main id="stage">
+        <div class="toolbar">
+          <div class="tb-group project-group">
+            <select id="project-select" class="project-select" title="เลือกโปรเจกต์"></select>
+            <button id="btn-new-project" class="tb-btn" title="สร้างโปรเจกต์ใหม่">＋ โปรเจกต์</button>
+            <button id="btn-del-project" class="tb-btn danger" title="ลบโปรเจกต์นี้">🗑</button>
+          </div>
+          <input id="map-title" class="map-title" value="My Mind Map" />
+          <div class="tb-group">
+            <button id="btn-add" class="tb-btn primary">+ หัวข้อ</button>
+            <button id="btn-select" class="tb-btn active" data-mode="select">🖱 เลือก/ย้าย</button>
+            <button id="btn-draw" class="tb-btn" data-mode="draw">✏️ วาด</button>
+          </div>
+          <div class="tb-group right">
+            <button id="btn-fit" class="tb-btn">🔭 ภาพรวม</button>
+            <span id="zoom-label" class="zoom-label">100%</span>
+            <button id="btn-clear" class="tb-btn danger" title="ล้างทั้งกระดาน">🗑</button>
+          </div>
+        </div>
+
+        <div id="canvas">
+          <!-- Photoshop-style vertical tool dock (shown only in draw mode) -->
+          <div id="draw-dock" class="draw-dock" hidden>
+            <button id="tool-pen" class="dock-tool active" title="ปากกา — วาดเส้น">
+              <span class="dock-emoji">✏️</span>
+            </button>
+            <button id="btn-eraser" class="dock-tool" title="ยางลบ — ลากเพื่อลบเฉพาะส่วน">
+              <span class="dock-emoji">🧽</span>
+            </button>
+
+            <div class="dock-sep"></div>
+
+            <label class="dock-swatch" title="สีปากกา">
+              <input type="color" id="pen-color" value="#ffffff" />
+            </label>
+
+            <div class="dock-slider" title="ขนาดเส้นปากกา">
+              <span class="dock-cap">✏️</span>
+              <input type="range" id="pen-size" min="1" max="18" value="3" />
+              <span class="dock-val" id="pen-size-val">3</span>
+            </div>
+
+            <div class="dock-slider" title="ขนาดยางลบ">
+              <span class="dock-cap">⭕</span>
+              <input type="range" id="eraser-size" min="6" max="120" value="24" />
+              <span class="dock-val" id="eraser-size-val">24</span>
+            </div>
+
+            <div class="dock-sep"></div>
+
+            <button id="btn-undo-draw" class="dock-tool" title="ย้อนเส้นล่าสุด">
+              <span class="dock-emoji">↶</span>
+            </button>
+          </div>
+
+          <canvas id="edges"></canvas>
+          <div id="world">
+            <div id="images"></div>
+            <div id="nodes"></div>
+          </div>
+          <canvas id="fx"></canvas>
+          <div id="empty-hint" class="empty-hint">
+            ดับเบิลคลิกที่ว่าง ๆ เพื่อเพิ่มหัวข้อ • ลากเพื่อเลื่อน • สกอลล์เพื่อซูม<br />
+            หรือสั่ง Claude Code ให้สร้างหัวข้อให้ผ่าน MCP
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
