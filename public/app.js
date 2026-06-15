@@ -22,6 +22,7 @@
   let serverBootId = null; // detect server restarts for live reload
   let eraseDelete = new Set(); // server ids of strokes touched during an erase drag
   let tmpCounter = 0; // temp ids for stroke pieces created while erasing
+  let localActiveSection = "main"; // mirrors activeSection but updates immediately on tab click
 
   const $ = (s) => document.querySelector(s);
   const canvas = $("#canvas");
@@ -936,6 +937,7 @@
       ? STATE.chatSections
       : [{ id: "main", name: "แชทหลัก" }];
     const active = STATE.activeSection || sections[0].id;
+    localActiveSection = active;
     list.innerHTML = "";
     for (const sec of sections) {
       const tab = document.createElement("div");
@@ -947,6 +949,7 @@
       tab.appendChild(label);
       // switch section on click
       tab.addEventListener("click", () => {
+        localActiveSection = sec.id; // update immediately so next submit uses correct section
         if (sec.id !== (STATE.activeSection || "main")) api(`/api/chat-sections/${sec.id}/activate`, "POST");
       });
       // double-click to rename
@@ -1065,6 +1068,27 @@
   let listening = false;
   let finalBuf = "";
 
+  // Mic language: a two-state toggle (ไทย ↔ EN), persisted.
+  const langToggle = $("#voice-lang");
+  let currentLang = localStorage.getItem("pn.voiceLang") || "th-TH";
+  function voiceLang() { return currentLang; }
+  function isThai() { return currentLang.startsWith("th"); }
+  function applyLang() {
+    const th = isThai();
+    if (langToggle) langToggle.classList.toggle("en", !th);
+    if (recog) recog.lang = currentLang;
+    $("#mic-btn").title = th ? "พูดภาษาไทย (th-TH)" : "Speak English (en-US)";
+    if (!listening) $("#voice-status").textContent = th ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English";
+  }
+  if (langToggle) {
+    applyLang();
+    langToggle.addEventListener("click", () => {
+      currentLang = isThai() ? "en-US" : "th-TH";
+      localStorage.setItem("pn.voiceLang", currentLang);
+      applyLang();
+    });
+  }
+
   function setupVoice() {
     if (!SR) {
       $("#voice-status").textContent = "เบราว์เซอร์นี้ไม่รองรับการพูด — ใช้ Chrome หรือ Edge";
@@ -1073,7 +1097,7 @@
       return;
     }
     recog = new SR();
-    recog.lang = "th-TH";
+    recog.lang = voiceLang();
     recog.continuous = true;
     recog.interimResults = true;
     recog.onresult = (e) => {
@@ -1102,11 +1126,14 @@
     if (!recog) return;
     finalBuf = "";
     listening = true;
+    recog.lang = voiceLang(); // honor the latest language choice
     try {
       recog.start();
     } catch {}
     $("#mic-btn").classList.add("listening");
-    $("#voice-status").textContent = "กำลังฟัง… พูดได้เลย (กดอีกครั้งเพื่อหยุด)";
+    $("#voice-status").textContent = isThai()
+      ? "กำลังฟัง… พูดได้เลย (กดอีกครั้งเพื่อหยุด)"
+      : "Listening… speak now (tap again to stop)";
   }
 
   function stopListening() {
@@ -1115,7 +1142,7 @@
       recog.stop();
     } catch {}
     $("#mic-btn").classList.remove("listening");
-    $("#voice-status").textContent = "กดไมค์เพื่อพูดภาษาไทย";
+    $("#voice-status").textContent = isThai() ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English";
     const text = (finalBuf + " " + $("#voice-interim").textContent).trim();
     $("#voice-interim").textContent = "";
     if (text) submitUserInput(text);
@@ -1143,10 +1170,10 @@
   });
 
   async function submitUserInput(text) {
-    // Show it in chat and queue it for Claude Code to drain via get_inbox.
-    await api("/api/chat", "POST", { role: "user", text });
-    await api("/api/inbox", "POST", { text });
-    await api("/api/voice", "POST", { text }); // keep legacy get_voice_input working
+    const section = localActiveSection || "main";
+    await api("/api/chat", "POST", { role: "user", text, section });
+    await api("/api/inbox", "POST", { text, section });
+    await api("/api/voice", "POST", { text });
     toast("ส่งเข้า Claude แล้ว ✓ — ให้ Claude เรียก get_inbox เพื่อรับ");
   }
 

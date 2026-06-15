@@ -302,6 +302,36 @@ body.col-resizing {
   gap: 8px;
   align-items: center;
 }
+/* Mic language toggle — a segmented pill: [ ไทย | EN ], active side highlighted */
+.voice-lang-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: stretch;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  cursor: pointer;
+  font-family: inherit;
+  user-select: none;
+}
+.voice-lang-toggle .vl-opt {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  border-radius: 999px;
+  transition: background 0.12s, color 0.12s;
+}
+/* default = Thai active; .en class flips the highlight to the EN side */
+.voice-lang-toggle .vl-th { background: var(--accent); color: #fff; }
+.voice-lang-toggle .vl-en { background: transparent; color: var(--muted); }
+.voice-lang-toggle.en .vl-th { background: transparent; color: var(--muted); }
+.voice-lang-toggle.en .vl-en { background: var(--accent); color: #fff; }
+.voice-lang-toggle:hover { border-color: var(--accent); }
 .mic-btn {
   width: 46px;
   height: 46px;

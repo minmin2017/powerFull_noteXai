@@ -19,8 +19,12 @@
 
 ## เปิดเร็ว: `claude-listen.cmd`
 ดับเบิลคลิก `claude-listen.cmd` = เปิด Claude Code แบบ `--dangerously-skip-permissions`
-(ไม่ต้องกดอนุญาตทุกครั้ง) แล้วส่ง prompt เริ่มต้นให้ผมอ่าน CLAUDE.md + arm Monitor ฟัง inbox
-ทันที — เปิดมาพร้อมฟัง event เลย ไม่ต้องพิมพ์อะไร
+(ไม่ต้องกดอนุญาตทุกครั้ง) + เช็ค/สตาร์ท note server ให้ + arm Monitor ฟัง inbox ทันที
+- **ไม่ใส่ args = ฟังเฉพาะ "แชทหลัก" (main)** ไม่ใช่ทุกข้อความ
+- ใส่ชื่อ section = ผูกตัวนั้น เช่น `claude-listen.cmd "chat2"`
+
+**Auto-start ตอนเปิด Windows:** รัน `install-autostart.cmd` ครั้งเดียว → วาง shortcut ใน
+Startup folder → ทุกครั้งที่ล็อกอิน Claude เปิดมาฟังแชทหลักเอง (ยกเลิก: `uninstall-autostart.cmd`)
 
 ## 🧵 หลาย Claude พร้อมกัน — แชทแยก section ↔ Claude คนละตัว
 แต่ละ chat section (แท็บในพาเนลซ้าย) ผูกกับ Claude Code instance ได้ 1 ตัว → ทำงานขนานกันจริง
