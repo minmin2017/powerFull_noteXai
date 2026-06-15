@@ -601,6 +601,16 @@ const CLAUDE_SETTINGS = path.join(
   "settings.json"
 );
 const VALID_MODELS = ["opus", "sonnet", "haiku"];
+app.get("/api/current-model", (_req, res) => {
+  try {
+    const cfg = fs.existsSync(CLAUDE_SETTINGS)
+      ? JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8"))
+      : {};
+    res.json({ model: cfg.model || "sonnet" });
+  } catch {
+    res.json({ model: "sonnet" });
+  }
+});
 app.post("/api/set-model", (req, res) => {
   const { model } = req.body || {};
   if (!VALID_MODELS.includes(model))

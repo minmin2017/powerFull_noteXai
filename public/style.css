@@ -129,6 +129,13 @@ body.col-resizing {
   color: white;
   border-top-right-radius: 4px;
 }
+.msg.gemini {
+  align-self: flex-start;
+  background: linear-gradient(135deg, #4285f4, #9b72cb);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-top-left-radius: 4px;
+}
 .msg.system {
   align-self: center;
   background: transparent;
@@ -153,6 +160,51 @@ body.col-resizing {
 }
 
 /* ===================== Voice area ===================== */
+.model-switcher {
+  border-top: 1px solid var(--line);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--panel);
+}
+.model-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.model-btns {
+  display: flex;
+  gap: 6px;
+}
+.model-btn {
+  flex: 1;
+  padding: 6px 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.model-btn:hover {
+  border-color: var(--accent);
+}
+.model-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.model-note {
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.7;
+}
 .voice-area {
   border-top: 1px solid var(--line);
   padding: 12px 14px 14px;

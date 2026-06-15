@@ -1145,6 +1145,34 @@
   })();
 
   // ----------------------------------------------------------------------
+  // Model switcher
+  // ----------------------------------------------------------------------
+  (function setupModelSwitcher() {
+    const btns = document.querySelectorAll(".model-btn");
+    // Fetch current model from settings and mark active button.
+    fetch("/api/current-model").then(r => r.json()).then(({ model }) => {
+      btns.forEach(b => b.classList.toggle("active", b.dataset.model === model));
+    }).catch(() => {});
+
+    btns.forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const model = btn.dataset.model;
+        const res = await fetch("/api/set-model", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model }),
+        });
+        if (res.ok) {
+          btns.forEach(b => b.classList.toggle("active", b === btn));
+          toast(`เปลี่ยนเป็น ${model} แล้ว — มีผลครั้งถัดไปที่เปิด Claude Code ✓`);
+        } else {
+          toast("เปลี่ยนโมเดลไม่สำเร็จ");
+        }
+      });
+    });
+  })();
+
+  // ----------------------------------------------------------------------
   // Boot
   // ----------------------------------------------------------------------
   setupVoice();
