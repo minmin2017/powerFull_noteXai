@@ -10,6 +10,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 4321;
@@ -233,7 +234,7 @@ function createNode({ text, parentId = null, x, y, color }) {
 function updateNode(id, patch) {
   const node = state.nodes.find((n) => n.id === id);
   if (!node) return null;
-  for (const k of ["text", "x", "y", "color", "collapsed", "parentId"]) {
+  for (const k of ["text", "x", "y", "color", "collapsed", "parentId", "tags"]) {
     if (patch[k] !== undefined) node[k] = patch[k];
   }
   changed();
@@ -680,6 +681,15 @@ app.post("/api/layout", (req, res) => {
 });
 
 app.post("/api/drawings", (req, res) => res.json(addDrawing(req.body || {})));
+app.patch("/api/drawings/:id", (req, res) => {
+  const d = state.drawings.find((x) => x.id === req.params.id);
+  if (!d) return res.status(404).json({ error: "drawing not found" });
+  const u = req.body || {};
+  if (Array.isArray(u.points)) d.points = u.points;
+  if (Number.isFinite(u.width)) d.width = u.width;
+  changed();
+  res.json(d);
+});
 app.delete("/api/drawings/:id", (req, res) => res.json({ removed: deleteDrawing(req.params.id) }));
 
 // ----- Images ----------------------------------------------------------------
@@ -709,17 +719,18 @@ app.delete("/api/images/:id", (req, res) => res.json({ removed: deleteImage(req.
 // ---- Handwriting boxes ----
 app.post("/api/boxes", (req, res) => {
   const b = req.body || {};
-  const kind = b.kind === "image" ? "image" : "note";
+  const kind = b.kind === "image" ? "image" : b.kind === "portal" ? "portal" : "note";
   const box = {
     id: uid("box"),
     kind,
     x: Number.isFinite(b.x) ? b.x : 160,
     y: Number.isFinite(b.y) ? b.y : 160,
-    w: Number.isFinite(b.w) ? b.w : 320,
-    h: Number.isFinite(b.h) ? b.h : 240,
-    title: typeof b.title === "string" ? b.title : kind === "image" ? "คลังรูปภาพ" : "บันทึกลายมือ",
-    strokes: Array.isArray(b.strokes) ? b.strokes : [],
-    items: Array.isArray(b.items) ? b.items : [], // image box: [{src, url, caption}]
+    w: Number.isFinite(b.w) ? b.w : 200,
+    h: Number.isFinite(b.h) ? b.h : 80,
+    title: typeof b.title === "string" ? b.title : kind === "image" ? "คลังรูปภาพ" : kind === "portal" ? "Portal" : "บันทึกลายมือ",
+    strokes: kind === "portal" ? [] : Array.isArray(b.strokes) ? b.strokes : [],
+    items: kind === "portal" ? [] : Array.isArray(b.items) ? b.items : [],
+    targetProjectId: kind === "portal" ? (b.targetProjectId || null) : undefined,
     createdAt: Date.now(),
   };
   if (!Array.isArray(state.boxes)) state.boxes = [];
@@ -731,7 +742,7 @@ app.patch("/api/boxes/:id", (req, res) => {
   const box = (state.boxes || []).find((b) => b.id === req.params.id);
   if (!box) return res.status(404).json({ error: "box not found" });
   const u = req.body || {};
-  for (const k of ["x", "y", "w", "h", "title", "strokes", "items"]) {
+  for (const k of ["x", "y", "w", "h", "title", "strokes", "items", "targetProjectId"]) {
     if (u[k] !== undefined) box[k] = u[k];
   }
   changed();
@@ -754,8 +765,10 @@ app.post("/api/box-links", (req, res) => {
   if (!from || !to || from === to) return res.status(400).json({ error: "need distinct from/to" });
   if (!Array.isArray(state.boxLinks)) state.boxLinks = [];
   const boxes = state.boxes || [];
-  if (!boxes.some((b) => b.id === from) || !boxes.some((b) => b.id === to))
-    return res.status(404).json({ error: "box not found" });
+  const nodes = state.nodes || [];
+  const validId = (id) => boxes.some((b) => b.id === id) || nodes.some((n) => n.id === id);
+  if (!validId(from) || !validId(to))
+    return res.status(404).json({ error: "box or node not found" });
   // ignore duplicates (either direction)
   const exists = state.boxLinks.some(
     (l) => (l.from === from && l.to === to) || (l.from === to && l.to === from)
@@ -804,6 +817,23 @@ app.delete("/api/chat-sections/:id", (req, res) => {
   res.json({ activeSection: state.activeSection, chatSections: state.chatSections });
 });
 
+app.post("/api/launch-claude", (req, res) => {
+  const { section } = req.body || {};
+  if (!section) return res.status(400).json({ error: "section name required" });
+  const cmd = path.join(__dirname, "claude-listen.cmd");
+  try {
+    spawn("cmd.exe", ["/c", "start", `Claude — ${section}`, "cmd", "/k", cmd, section], {
+      detached: true,
+      stdio: "ignore",
+      cwd: __dirname,
+      windowsHide: false,
+    }).unref();
+    res.json({ ok: true, section });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/voice", (req, res) => res.json(setVoice((req.body || {}).text)));
 app.get("/api/voice/latest", (req, res) => {
   const consume = req.query.consume === "true" || req.query.consume === "1";
@@ -847,6 +877,16 @@ app.get("/api/image-inbox", (req, res) => {
   const items = state.imageInbox.slice();
   if (drain) drainImageInbox();
   res.json({ items });
+});
+
+// ----- Calendar cache (Claude fetches via MCP and stores here) ---------------
+let calendarCache = { events: [], fetchedAt: null };
+app.get("/api/calendar", (_req, res) => res.json(calendarCache));
+app.post("/api/calendar", (req, res) => {
+  const { events } = req.body || {};
+  calendarCache = { events: Array.isArray(events) ? events : [], fetchedAt: Date.now() };
+  broadcast({ type: "calendar", ...calendarCache });
+  res.json({ ok: true, count: calendarCache.events.length });
 });
 
 app.patch("/api/meta", (req, res) => {

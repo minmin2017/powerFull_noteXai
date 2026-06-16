@@ -56,6 +56,7 @@
                 />
               </svg>
             </button>
+            <button id="mic-cancel" class="mic-cancel" title="ยกเลิกเสียง (ไม่ส่ง)" hidden>✕</button>
             <input
               id="text-input"
               class="text-input"
@@ -74,6 +75,19 @@
       <!-- Drag this divider to resize the chat panel -->
       <div id="sidebar-resizer" title="ลากเพื่อปรับขนาดพาเนลแชท"></div>
 
+      <!-- ========== Right: Calendar panel (collapsible) ========== -->
+      <aside id="cal-panel" class="cal-panel" aria-hidden="true">
+        <div class="cal-head">
+          <span class="cal-title">🗓️ ตารางเวลา</span>
+          <button id="cal-refresh" class="cal-btn-refresh" title="ดึงข้อมูลจาก Google Calendar">🔄 Refresh</button>
+          <button id="cal-close" class="cal-btn-close" title="ปิด">✕</button>
+        </div>
+        <div id="cal-fetched-at" class="cal-fetched"></div>
+        <div id="cal-body" class="cal-body">
+          <div class="cal-empty">กด 🔄 Refresh เพื่อโหลดตาราง 2 สัปดาห์จาก Google Calendar</div>
+        </div>
+      </aside>
+
       <!-- ========== Right: Mind map stage ========== -->
       <main id="stage">
         <div class="toolbar">
@@ -88,6 +102,7 @@
             <button id="btn-add-box" class="tb-btn" title="เพิ่มกล่องเขียนลายมือ">📦 กล่อง</button>
             <button id="btn-add-gallery" class="tb-btn" title="เพิ่มกล่องเก็บรูปภาพ">🖼️ กล่องรูป</button>
             <button id="btn-select" class="tb-btn active" data-mode="select">🖱 เลือก/ย้าย</button>
+            <button id="btn-sel-target" class="tb-btn" title="สลับเป้าหมายของกรอบเลือก: หัวข้อ ↔ เส้นที่วาด">🎯 หัวข้อ</button>
             <button id="btn-draw" class="tb-btn" data-mode="draw">✏️ วาด</button>
           </div>
           <div class="tb-group">
@@ -97,7 +112,10 @@
           <div class="tb-group right">
             <button id="btn-fit" class="tb-btn">🔭 ภาพรวม</button>
             <span id="zoom-label" class="zoom-label">100%</span>
+            <button id="btn-export-md" class="tb-btn" title="ส่งออกเป็น Markdown (.md)">⬇ MD</button>
+            <button id="btn-export-png" class="tb-btn" title="ส่งออกเป็นภาพ PNG">⬇ PNG</button>
             <button id="btn-clear" class="tb-btn danger" title="ล้างทั้งกระดาน">🗑</button>
+            <button id="btn-toggle-cal" class="tb-btn" title="เปิด/ปิดแถบตารางเวลา">🗓️</button>
           </div>
         </div>
 
@@ -143,6 +161,13 @@
             <div id="nodes"></div>
           </div>
           <canvas id="fx"></canvas>
+          <div id="marquee-box"></div>
+          <div id="resize-box" hidden>
+            <div class="rz-handle rz-nw" data-corner="nw"></div>
+            <div class="rz-handle rz-ne" data-corner="ne"></div>
+            <div class="rz-handle rz-sw" data-corner="sw"></div>
+            <div class="rz-handle rz-se" data-corner="se"></div>
+          </div>
           <div id="empty-hint" class="empty-hint">
             ดับเบิลคลิกที่ว่าง ๆ เพื่อเพิ่มหัวข้อ • ลากเพื่อเลื่อน • สกอลล์เพื่อซูม<br />
             หรือสั่ง Claude Code ให้สร้างหัวข้อให้ผ่าน MCP
@@ -178,6 +203,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

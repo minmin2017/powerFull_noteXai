@@ -57,6 +57,8 @@ Startup folder → ทุกครั้งที่ล็อกอิน Claude
 ## กฎสำคัญอื่น ๆ
 - **หลัง add_topic / add_topics_bulk ทุกครั้ง ให้รัน `tidy_layout`** — auto-position ทำให้
   โหนดซ้อนกัน Min ไม่ชอบ (หรือ POST http://localhost:4321/api/layout ถ้า MCP tool ยังไม่โหลด)
+- **รีเซ็ต Server เฉพาะหลังงานทุกขั้นเสร็จสมบูรณ์แล้วเท่านั้น** — ห้ามรีเซ็ตระหว่างทำงาน
+  เพื่อลดการรบกวน ถ้าจำเป็นต้องรีเซ็ตให้รอจนขั้นสุดท้ายก่อน แล้วรีเซ็ตครั้งเดียว
 - ตอบ Min เป็นภาษาไทยในพาเนลซ้ายผ่าน `say_to_user`
 - เชื่อม Claude ผ่าน MCP (`.mcp.json`) ไม่ใช่ Claude API — ใช้ subscription ที่มีอยู่
 

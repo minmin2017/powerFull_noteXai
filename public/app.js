@@ -15,13 +15,27 @@
   let mode = "select"; // 'select' | 'draw'
   let eraser = false;
   let selectedId = null;
-  let drag = null; // node drag
+  let selectedIds = new Set(); // multi-select (marquee)
+  let selectedStrokeIds = new Set(); // marquee-selected drawing strokes
+  let strokeDragOffset = null; // {dx,dy} world coords applied to selectedStrokeIds while dragging
+  let marquee = null; // (legacy) rectangular rubber-band — replaced by lasso
+  let lasso = null; // freeform selection path: { pts:[{x,y}] } in canvas/screen coords
+  let justMarqueed = false; // skip next canvas click after a marquee/lasso drag
+  let selectTarget = "nodes"; // 'nodes' | 'strokes' — marquee grabs only this kind
+  let resizing = null; // active scale gesture (see startResize)
+  let strokeResize = null; // { pivot:{x,y world}, s } live preview for selected strokes
+  let reparentDrag = null; // { fromId, sx, sy, ex, ey, targetId }
+  let drag = null; // node drag (may include strokeOnly:true and origStrokePoints)
   let pan = null; // canvas pan
   let stroke = null; // active freehand stroke
   let spaceDown = false;
   let serverBootId = null; // detect server restarts for live reload
   let eraseDelete = new Set(); // server ids of strokes touched during an erase drag
   let tmpCounter = 0; // temp ids for stroke pieces created while erasing
+  let drawBusy = false; // a pen/erase/stroke-resize/stroke-move gesture is mid-flight
+  let pendingState = null; // newest server broadcast deferred while drawBusy
+  let lastEraseW = null; // last eraser position (world) for motion interpolation
+  let lastBoxEraseW = null; // last box-eraser position (normalized) for interpolation
   let localActiveSection = "main"; // mirrors activeSection but updates immediately on tab click
 
   const $ = (s) => document.querySelector(s);
@@ -32,6 +46,7 @@
   const boxesLayer = $("#boxes");
   const edgesCanvas = $("#edges");
   const fxCanvas = $("#fx");
+  const marqueeEl = $("#marquee-box");
   const ectx = edgesCanvas.getContext("2d");
   const fctx = fxCanvas.getContext("2d");
   const nodeEls = new Map();
@@ -70,6 +85,7 @@
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === "reload") { location.reload(); return; }
+        if (msg.type === "calendar") { if (window.__wsOnCalendar) window.__wsOnCalendar(msg); return; }
         if (msg.type === "state") {
           // Server restarted with new code → refresh to pick it up.
           if (msg.bootId) {
@@ -85,6 +101,10 @@
   }
 
   function applyState(s) {
+    // A pen/erase/resize gesture holds optimistic local edits that aren't saved
+    // yet. Defer the broadcast (keep the newest) so it can't wipe them mid-stroke
+    // — that was the "erased bits vanish then come back / letters disappear" bug.
+    if (drawBusy) { pendingState = s; return; }
     // Preserve a node we're actively dragging so the broadcast doesn't snap it.
     if (drag) {
       const local = STATE.nodes.find((n) => n.id === drag.id);
@@ -99,6 +119,13 @@
     renderChat();
     syncTitle();
     render();
+  }
+
+  // Call when a drawing gesture has fully persisted: stop deferring and flush the
+  // newest broadcast so we reconcile to the canonical server state (real ids).
+  function endDrawBusy() {
+    drawBusy = false;
+    if (pendingState) { const s = pendingState; pendingState = null; applyState(s); }
   }
 
   // ----------------------------------------------------------------------
@@ -143,6 +170,17 @@
   function eventCanvasPos(e) {
     const r = canvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  // Ray-casting point-in-polygon test (poly = [{x,y}], same coord space as px,py).
+  function pointInPolygon(px, py, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+      const intersect = (yi > py) !== (yj > py) &&
+        px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
   }
 
   // ----------------------------------------------------------------------
@@ -194,11 +232,22 @@
       el.style.top = n.y + "px";
       el.style.display = hidden.has(n.id) ? "none" : "";
       el.classList.toggle("root", !n.parentId);
-      el.classList.toggle("selected", n.id === selectedId);
+      el.classList.toggle("selected", n.id === selectedId || selectedIds.has(n.id));
       el.style.borderColor = n.color || "var(--accent)";
       // text (skip while editing to avoid caret jumps); URLs become links
       const txt = el.querySelector(".node-text");
       if (document.activeElement !== txt) setNodeText(txt, n.text);
+      // tag chips
+      const tagsEl = el.querySelector(".node-tags");
+      const nodeTags = n.tags || [];
+      const tagKey = nodeTags.join(",");
+      if (tagsEl.dataset.key !== tagKey) {
+        tagsEl.dataset.key = tagKey;
+        tagsEl.innerHTML = nodeTags.map((t) => {
+          const def = TAGS.find((x) => x.name === t);
+          return `<span class="node-tag" style="background:${def?.color || "#6366f1"}">${def?.emoji || "🏷"} ${t}</span>`;
+        }).join("");
+      }
       // collapse toggle
       let tog = el.querySelector(".collapse-toggle");
       if (hasChildren(n.id)) {
@@ -230,6 +279,7 @@
     $("#empty-hint").style.display = STATE.nodes.length ? "none" : "";
     drawEdges(hidden);
     drawFx();
+    renderResizeBox();
   }
 
   // Linkify URLs in node text. While editing we show the raw text so the user
@@ -262,7 +312,7 @@
     const el = document.createElement("div");
     el.className = "node";
     el.dataset.id = n.id;
-    el.innerHTML = `<div class="node-text"></div><button class="handle add-child" title="เพิ่มหัวข้อย่อย">+</button><button class="handle del-node" title="ลบหัวข้อนี้ (และหัวข้อย่อย)">×</button>`;
+    el.innerHTML = `<div class="node-text"></div><div class="node-tags"></div><button class="handle tag-btn" title="แท็ก">🏷</button><button class="handle add-child" title="เพิ่มหัวข้อย่อย">+</button><button class="handle reparent-btn" title="ลากไปวางบนโหนดอื่นเพื่อเปลี่ยน parent">⛓</button><button class="handle del-node" title="ลบหัวข้อนี้ (และหัวข้อย่อย)">×</button>`;
     const txt = el.querySelector(".node-text");
 
     el.addEventListener("pointerdown", (e) => onNodePointerDown(e, n.id));
@@ -323,6 +373,21 @@
       if (selectedId === n.id) selectedId = null;
       api(`/api/nodes/${n.id}`, "DELETE");
     });
+
+    el.querySelector(".tag-btn").addEventListener("pointerdown", (e) => e.stopPropagation());
+    el.querySelector(".tag-btn").addEventListener("click", (e) => openTagPicker(e, n.id));
+
+    const reparentBtn = el.querySelector(".reparent-btn");
+    reparentBtn.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      const r = canvas.getBoundingClientRect();
+      const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+      reparentDrag = { fromId: n.id, sx: p.x, sy: p.y, ex: p.x, ey: p.y, targetId: null };
+      reparentBtn.setPointerCapture?.(e.pointerId);
+      window.addEventListener("pointermove", onReparentMove);
+      window.addEventListener("pointerup", onReparentUp, { once: true });
+    });
+
     return el;
   }
 
@@ -450,6 +515,19 @@
     if (imgInteract.kind === "move") {
       im.x = imgInteract.ox + (w.x - imgInteract.sx);
       im.y = imgInteract.oy + (w.y - imgInteract.sy);
+      // Highlight the image box the floating image is hovering over.
+      const imgEl = imgEls.get(imgInteract.id);
+      if (imgEl) {
+        const ir = imgEl.getBoundingClientRect();
+        const icx = ir.left + ir.width / 2;
+        const icy = ir.top + ir.height / 2;
+        for (const [, boxEl] of boxEls) {
+          if (boxEl.dataset.kind !== "image") continue;
+          const br = boxEl.getBoundingClientRect();
+          const over = icx >= br.left && icx <= br.right && icy >= br.top && icy <= br.bottom;
+          boxEl.classList.toggle("drop-target", over);
+        }
+      }
     } else if (imgInteract.kind === "resize") {
       let nw = Math.max(24, imgInteract.ow + (w.x - imgInteract.sx));
       let nh = nw / imgInteract.ratio; // keep aspect ratio
@@ -465,11 +543,32 @@
     window.removeEventListener("pointermove", onImgInteractMove);
     const it = imgInteract;
     imgInteract = null;
+    for (const [, boxEl] of boxEls) boxEl.classList.remove("drop-target");
     if (!it) return;
     const im = imgById(it.id);
-    if (im) {
-      api(`/api/images/${it.id}`, "PATCH", { x: im.x, y: im.y, w: im.w, h: im.h, rotation: im.rotation });
+    if (!im) return;
+
+    // If a floating image is moved over an image-box, drop it into that box's gallery.
+    if (it.kind === "move") {
+      const imgEl = imgEls.get(it.id);
+      if (imgEl) {
+        const ir = imgEl.getBoundingClientRect();
+        const icx = ir.left + ir.width / 2;
+        const icy = ir.top + ir.height / 2;
+        for (const [boxId, boxEl] of boxEls) {
+          if (boxEl.dataset.kind !== "image") continue;
+          const br = boxEl.getBoundingClientRect();
+          if (icx >= br.left && icx <= br.right && icy >= br.top && icy <= br.bottom) {
+            addItemToBox(boxId, { src: im.src, url: "", caption: "" });
+            api(`/api/images/${it.id}`, "DELETE");
+            toast("เพิ่มรูปเข้ากล่องแล้ว 🖼️");
+            return;
+          }
+        }
+      }
     }
+
+    api(`/api/images/${it.id}`, "PATCH", { x: im.x, y: im.y, w: im.w, h: im.h, rotation: im.rotation });
   }
 
   // Add an image from a data URL, dropped at a given screen point (or view center).
@@ -544,7 +643,7 @@
   // midpoint, plus the rubber-band line while dragging a new link.
   function drawBoxLinks(r) {
     const center = (id) => {
-      const el = boxEls.get(id);
+      const el = boxEls.get(id) || nodeEls.get(id);
       if (!el) return null;
       const b = el.getBoundingClientRect();
       return { x: b.left - r.left + b.width / 2, y: b.top - r.top + b.height / 2 };
@@ -603,20 +702,63 @@
     const all = STATE.drawings.slice();
     if (stroke) all.push(stroke);
     for (const d of all) drawStroke(d);
+    if (reparentDrag) {
+      fctx.save();
+      fctx.strokeStyle = reparentDrag.targetId ? "rgba(99,241,130,0.9)" : "rgba(99,102,241,0.9)";
+      fctx.lineWidth = 2;
+      fctx.setLineDash([6, 4]);
+      fctx.beginPath();
+      fctx.moveTo(reparentDrag.sx, reparentDrag.sy);
+      fctx.lineTo(reparentDrag.ex, reparentDrag.ey);
+      fctx.stroke();
+      fctx.restore();
+    }
+    if (lasso && lasso.pts.length > 1) {
+      fctx.save();
+      fctx.strokeStyle = "rgba(99,102,241,0.9)";
+      fctx.fillStyle = "rgba(99,102,241,0.10)";
+      fctx.lineWidth = 1.5;
+      fctx.lineJoin = "round";
+      fctx.setLineDash([5, 4]);
+      fctx.beginPath();
+      fctx.moveTo(lasso.pts[0].x, lasso.pts[0].y);
+      for (const p of lasso.pts.slice(1)) fctx.lineTo(p.x, p.y);
+      fctx.closePath();
+      fctx.fill();
+      fctx.stroke();
+      fctx.restore();
+    }
   }
 
   function drawStroke(d) {
     if (!d.points || d.points.length < 1) return;
-    fctx.strokeStyle = d.color;
+    const isSel = selectedStrokeIds.has(d.id);
+    const off = (isSel && strokeDragOffset) ? strokeDragOffset : null;
+    const rs = (isSel && strokeResize) ? strokeResize : null; // live scale preview
+    const wmul = rs ? rs.s : 1; // stroke width scales with the drawing
     fctx.lineCap = "round";
     fctx.lineJoin = "round";
     const pts = d.points.map((p) => {
-      const s = worldToScreen(p.x, p.y);
+      let wx = p.x, wy = p.y;
+      if (off) { wx += off.dx; wy += off.dy; }
+      else if (rs) { wx = rs.pivot.x + (wx - rs.pivot.x) * rs.s; wy = rs.pivot.y + (wy - rs.pivot.y) * rs.s; }
+      const s = worldToScreen(wx, wy);
       return { x: s.x, y: s.y, p: p.p ?? 0.5 };
     });
+    // selection highlight pass
+    if (isSel && !off) {
+      fctx.save();
+      fctx.strokeStyle = "rgba(99,102,241,0.45)";
+      fctx.lineWidth = (d.width * wmul + 8) * view.scale;
+      fctx.beginPath();
+      if (pts.length === 1) { fctx.arc(pts[0].x, pts[0].y, (d.width * wmul + 8) * view.scale / 2, 0, Math.PI * 2); fctx.fillStyle = "rgba(99,102,241,0.45)"; fctx.fill(); }
+      else { fctx.moveTo(pts[0].x, pts[0].y); for (const pt of pts.slice(1)) fctx.lineTo(pt.x, pt.y); fctx.stroke(); }
+      fctx.restore();
+    }
+    fctx.strokeStyle = d.color;
     if (pts.length === 1) {
       fctx.beginPath();
-      fctx.arc(pts[0].x, pts[0].y, (d.width * view.scale) / 2, 0, Math.PI * 2);
+      fctx.arc(pts[0].x, pts[0].y, (d.width * wmul * view.scale) / 2, 0, Math.PI * 2);
       fctx.fillStyle = d.color;
       fctx.fill();
       return;
@@ -627,7 +769,7 @@
       fctx.beginPath();
       fctx.moveTo(a.x, a.y);
       fctx.lineTo(b.x, b.y);
-      fctx.lineWidth = Math.max(0.6, d.width * view.scale * (0.35 + 1.3 * b.p));
+      fctx.lineWidth = Math.max(0.6, d.width * wmul * view.scale * (0.35 + 1.3 * b.p));
       fctx.stroke();
     }
   }
@@ -648,6 +790,177 @@
   // ----------------------------------------------------------------------
   // Node drag
   // ----------------------------------------------------------------------
+  function captureStrokePoints() {
+    const map = new Map();
+    for (const id of selectedStrokeIds) {
+      const d = STATE.drawings.find((x) => x.id === id);
+      if (d) map.set(id, d.points.map((p) => ({ ...p })));
+    }
+    return map;
+  }
+
+  async function commitStrokeMove(origMap, dx, dy) {
+    drawBusy = true; // keep the moved strokes from snapping back on a mid-save broadcast
+    try {
+      for (const [id, origPts] of origMap) {
+        const newPts = origPts.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy }));
+        const d = STATE.drawings.find((x) => x.id === id);
+        if (d) d.points = newPts; // update local state too
+        await api(`/api/drawings/${id}`, "PATCH", { points: newPts });
+      }
+      strokeDragOffset = null;
+      drawFx();
+    } finally {
+      endDrawBusy();
+    }
+  }
+
+  // ----------------------------------------------------------------------
+  // Resize / scale the current selection (strokes OR nodes)
+  // ----------------------------------------------------------------------
+  // Screen-space bounding box of the active selection (accounts for a live
+  // stroke-resize preview), or null when nothing is selected.
+  function selectionScreenBBox() {
+    const canvasRect = canvas.getBoundingClientRect();
+    const rs = strokeResize;
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity, any = false;
+    if (selectTarget === "nodes" && selectedIds.size) {
+      for (const id of selectedIds) {
+        const el = nodeEls.get(id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const ax1 = r.left - canvasRect.left, ay1 = r.top - canvasRect.top;
+        const ax2 = r.right - canvasRect.left, ay2 = r.bottom - canvasRect.top;
+        if (ax1 < x1) x1 = ax1; if (ay1 < y1) y1 = ay1;
+        if (ax2 > x2) x2 = ax2; if (ay2 > y2) y2 = ay2;
+        any = true;
+      }
+    } else if (selectTarget === "strokes" && selectedStrokeIds.size) {
+      for (const id of selectedStrokeIds) {
+        const d = STATE.drawings.find((x) => x.id === id);
+        if (!d || !d.points || !d.points.length) continue;
+        const pad = ((d.width || 2) * (rs ? rs.s : 1) * view.scale) / 2 + 2;
+        for (const p of d.points) {
+          let wx = p.x, wy = p.y;
+          if (rs) { wx = rs.pivot.x + (wx - rs.pivot.x) * rs.s; wy = rs.pivot.y + (wy - rs.pivot.y) * rs.s; }
+          const s = worldToScreen(wx, wy);
+          if (s.x - pad < x1) x1 = s.x - pad; if (s.y - pad < y1) y1 = s.y - pad;
+          if (s.x + pad > x2) x2 = s.x + pad; if (s.y + pad > y2) y2 = s.y + pad;
+          any = true;
+        }
+      }
+    }
+    if (!any) return null;
+    return { x1, y1, x2, y2 };
+  }
+
+  // Position the resize box + handles over the selection (hidden while busy).
+  function renderResizeBox() {
+    const box = $("#resize-box");
+    if (!box) return;
+    const busy = lasso || drag || pan || stroke || reparentDrag;
+    const bb = (mode === "select" && !busy) ? selectionScreenBBox() : null;
+    if (!bb || (bb.x2 - bb.x1 < 6 && bb.y2 - bb.y1 < 6)) { box.hidden = true; return; }
+    box.hidden = false;
+    box.style.left = bb.x1 + "px";
+    box.style.top = bb.y1 + "px";
+    box.style.width = (bb.x2 - bb.x1) + "px";
+    box.style.height = (bb.y2 - bb.y1) + "px";
+  }
+
+  function startResize(corner, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const bb = selectionScreenBBox();
+    if (!bb) return;
+    const corners = {
+      nw: { x: bb.x1, y: bb.y1 }, ne: { x: bb.x2, y: bb.y1 },
+      sw: { x: bb.x1, y: bb.y2 }, se: { x: bb.x2, y: bb.y2 },
+    };
+    const oppOf = { nw: "se", ne: "sw", sw: "ne", se: "nw" };
+    const pivotS = corners[oppOf[corner]];
+    const grabS = corners[corner];
+    const pivotW = screenToWorld(pivotS.x, pivotS.y);
+    const grabDist = Math.hypot(grabS.x - pivotS.x, grabS.y - pivotS.y) || 1;
+    const origStrokes = new Map();
+    const origNodes = new Map();
+    if (selectTarget === "strokes") {
+      for (const id of selectedStrokeIds) {
+        const d = STATE.drawings.find((x) => x.id === id);
+        if (d) origStrokes.set(id, { points: d.points.map((p) => ({ ...p })), width: d.width || 2 });
+      }
+    } else {
+      for (const id of selectedIds) {
+        const n = STATE.nodes.find((x) => x.id === id);
+        if (n) origNodes.set(id, { x: n.x, y: n.y });
+      }
+    }
+    resizing = { corner, pivotS, pivotW, grabDist, origStrokes, origNodes, s: 1 };
+    canvas.setPointerCapture?.(e.pointerId);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+  }
+
+  function onResizeMove(e) {
+    if (!resizing) return;
+    const p = eventCanvasPos(e);
+    let s = Math.hypot(p.x - resizing.pivotS.x, p.y - resizing.pivotS.y) / resizing.grabDist;
+    s = Math.max(0.05, Math.min(s, 20)); // clamp to sane range
+    resizing.s = s;
+    if (selectTarget === "strokes") {
+      strokeResize = { pivot: resizing.pivotW, s };
+      drawFx();
+    } else {
+      for (const [id, orig] of resizing.origNodes) {
+        const n = STATE.nodes.find((x) => x.id === id);
+        if (!n) continue;
+        n.x = Math.round(resizing.pivotW.x + (orig.x - resizing.pivotW.x) * s);
+        n.y = Math.round(resizing.pivotW.y + (orig.y - resizing.pivotW.y) * s);
+        const el = nodeEls.get(id);
+        if (el) { el.style.left = n.x + "px"; el.style.top = n.y + "px"; }
+      }
+      drawEdges(computeHidden());
+    }
+    renderResizeBox();
+  }
+
+  async function onResizeUp() {
+    const rz = resizing;
+    resizing = null;
+    if (!rz) return;
+    drawBusy = true; // hold broadcasts until the scaled geometry is saved
+    justMarqueed = true; // keep the selection: skip the click that follows pointerup
+    const s = rz.s || 1;
+    const changedScale = Math.abs(s - 1) > 0.002;
+    try {
+      if (selectTarget === "strokes") {
+        strokeResize = null;
+        if (changedScale) {
+          for (const [id, orig] of rz.origStrokes) {
+            const newPts = orig.points.map((p) => ({
+              ...p,
+              x: rz.pivotW.x + (p.x - rz.pivotW.x) * s,
+              y: rz.pivotW.y + (p.y - rz.pivotW.y) * s,
+            }));
+            const newWidth = Math.max(0.5, orig.width * s);
+            const d = STATE.drawings.find((x) => x.id === id);
+            if (d) { d.points = newPts; d.width = newWidth; }
+            await api(`/api/drawings/${id}`, "PATCH", { points: newPts, width: newWidth });
+          }
+        }
+        drawFx();
+      } else if (changedScale) {
+        for (const [id] of rz.origNodes) {
+          const n = STATE.nodes.find((x) => x.id === id);
+          if (n) await api(`/api/nodes/${id}`, "PATCH", { x: n.x, y: n.y });
+        }
+      }
+      render(); drawFx();
+    } finally {
+      endDrawBusy();
+    }
+  }
+
   function onNodePointerDown(e, id) {
     if (e.button === 2) return; // right-click is reserved for the edit context menu
     if (e.target.closest("a")) return; // let link clicks through
@@ -659,7 +972,12 @@
     const n = STATE.nodes.find((x) => x.id === id);
     if (!n) return;
     const start = eventCanvasPos(e);
-    drag = { id, startX: start.x, startY: start.y, origX: n.x, origY: n.y, moved: false };
+    const isMulti = selectedIds.has(id) && selectedIds.size > 1;
+    const origPositions = isMulti
+      ? [...selectedIds].map((nid) => { const mn = STATE.nodes.find((x) => x.id === nid); return mn ? { id: nid, x: mn.x, y: mn.y } : null; }).filter(Boolean)
+      : [];
+    // Node drags move ONLY nodes — strokes are a separate select target now.
+    drag = { id, startX: start.x, startY: start.y, origX: n.x, origY: n.y, moved: false, multi: isMulti, origPositions };
     canvas.setPointerCapture?.(e.pointerId);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp, { once: true });
@@ -670,26 +988,43 @@
   // ----------------------------------------------------------------------
   canvas.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".node")) return;
-    const wantPan = e.button === 1 || e.button === 2 || spaceDown || (mode === "select" && e.button === 0);
     if (mode === "draw" && e.button === 0 && !spaceDown) {
       startStroke(e);
       return;
     }
+    const wantPan = e.button === 1 || e.button === 2 || spaceDown;
     if (wantPan) {
       const p = eventCanvasPos(e);
       pan = { x: p.x, y: p.y, vx: view.x, vy: view.y };
       canvas.classList.add("panning");
       window.addEventListener("pointermove", onPointerMove);
       window.addEventListener("pointerup", onPointerUp, { once: true });
+    } else if (mode === "select" && e.button === 0) {
+      const p = eventCanvasPos(e);
+      if (selectedStrokeIds.size > 0 && selectedIds.size === 0) {
+        // stroke-only drag: move selected strokes
+        drag = { strokeOnly: true, startX: p.x, startY: p.y, moved: false,
+          origStrokePoints: captureStrokePoints() };
+      } else {
+        // Topics use a rectangle marquee (เหมือนเดิม); strokes keep the freeform
+        // lasso. Both store screen-space points so pointInPolygon works for either.
+        lasso = { pts: [{ x: p.x, y: p.y }], anchor: { x: p.x, y: p.y }, rect: selectTarget === "nodes" };
+      }
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp, { once: true });
     }
   });
 
   canvas.addEventListener("click", (e) => {
+    if (justMarqueed) { justMarqueed = false; return; }
     if (!e.target.closest(".node") && !e.target.closest(".img-obj") && !e.target.closest(".hbox")) {
       selectedId = null;
+      selectedIds = new Set();
+      selectedStrokeIds = new Set();
       selectedImgId = null;
       selectedBoxId = null;
       render();
+      drawFx();
     }
   });
 
@@ -753,19 +1088,54 @@
       const dx = (p.x - drag.startX) / view.scale;
       const dy = (p.y - drag.startY) / view.scale;
       if (Math.abs(p.x - drag.startX) + Math.abs(p.y - drag.startY) > 3) drag.moved = true;
-      const n = STATE.nodes.find((x) => x.id === drag.id);
-      if (n) {
-        n.x = Math.round(drag.origX + dx);
-        n.y = Math.round(drag.origY + dy);
-        const el = nodeEls.get(n.id);
-        if (el) {
-          el.style.left = n.x + "px";
-          el.style.top = n.y + "px";
-          el.classList.add("dragging");
+      if (drag.strokeOnly) {
+        strokeDragOffset = { dx, dy };
+        drawFx();
+      } else if (drag.multi) {
+        for (const orig of drag.origPositions) {
+          const mn = STATE.nodes.find((x) => x.id === orig.id);
+          if (!mn) continue;
+          mn.x = Math.round(orig.x + dx);
+          mn.y = Math.round(orig.y + dy);
+          const mel = nodeEls.get(mn.id);
+          if (mel) { mel.style.left = mn.x + "px"; mel.style.top = mn.y + "px"; mel.classList.add("dragging"); }
         }
+        if (drag.origStrokePoints) strokeDragOffset = { dx, dy };
         drawEdges(computeHidden());
         drawFx();
+      } else {
+        const n = STATE.nodes.find((x) => x.id === drag.id);
+        if (n) {
+          n.x = Math.round(drag.origX + dx);
+          n.y = Math.round(drag.origY + dy);
+          const el = nodeEls.get(n.id);
+          if (el) {
+            el.style.left = n.x + "px";
+            el.style.top = n.y + "px";
+            el.classList.add("dragging");
+          }
+          if (drag.origStrokePoints) strokeDragOffset = { dx, dy };
+          drawEdges(computeHidden());
+          drawFx();
+        }
       }
+    } else if (lasso) {
+      const p = eventCanvasPos(e);
+      if (lasso.rect) {
+        // rectangle from the anchor to the cursor (4 corners → still a polygon)
+        const a = lasso.anchor;
+        lasso.pts = [{ x: a.x, y: a.y }, { x: p.x, y: a.y }, { x: p.x, y: p.y }, { x: a.x, y: p.y }];
+        drawFx();
+      } else {
+        const last = lasso.pts[lasso.pts.length - 1];
+        // sample only when the pointer has moved a little (keeps the path light)
+        if (!last || Math.abs(p.x - last.x) + Math.abs(p.y - last.y) > 2) {
+          lasso.pts.push({ x: p.x, y: p.y });
+          drawFx();
+        }
+      }
+    } else if (resizing) {
+      onResizeMove(e);
     } else if (pan) {
       const p = eventCanvasPos(e);
       view.x = pan.vx + (p.x - pan.x);
@@ -778,18 +1148,127 @@
 
   function onPointerUp() {
     if (drag) {
-      const n = STATE.nodes.find((x) => x.id === drag.id);
-      const el = nodeEls.get(drag.id);
-      if (el) el.classList.remove("dragging");
-      if (n && drag.moved) api(`/api/nodes/${drag.id}`, "PATCH", { x: n.x, y: n.y });
+      const wdx = strokeDragOffset?.dx ?? 0;
+      const wdy = strokeDragOffset?.dy ?? 0;
+      if (drag.strokeOnly) {
+        if (drag.moved && drag.origStrokePoints) commitStrokeMove(drag.origStrokePoints, wdx, wdy);
+        else { strokeDragOffset = null; drawFx(); }
+      } else if (drag.multi && drag.moved) {
+        for (const orig of drag.origPositions) {
+          const mn = STATE.nodes.find((x) => x.id === orig.id);
+          if (mn) api(`/api/nodes/${orig.id}`, "PATCH", { x: mn.x, y: mn.y });
+          const mel = nodeEls.get(orig.id);
+          if (mel) mel.classList.remove("dragging");
+        }
+        if (drag.origStrokePoints) commitStrokeMove(drag.origStrokePoints, wdx, wdy);
+        else { strokeDragOffset = null; }
+      } else {
+        const n = STATE.nodes.find((x) => x.id === drag.id);
+        const el = nodeEls.get(drag.id);
+        if (el) el.classList.remove("dragging");
+        if (n && drag.moved) {
+          api(`/api/nodes/${drag.id}`, "PATCH", { x: n.x, y: n.y });
+          if (drag.origStrokePoints) commitStrokeMove(drag.origStrokePoints, wdx, wdy);
+          else { strokeDragOffset = null; }
+        } else { strokeDragOffset = null; }
+      }
       drag = null;
     }
+    if (lasso) {
+      const poly = lasso.pts;
+      lasso = null;
+      // bounding box of the path — ignore tiny taps (treat as a click/deselect)
+      let lminX = Infinity, lminY = Infinity, lmaxX = -Infinity, lmaxY = -Infinity;
+      for (const pt of poly) {
+        if (pt.x < lminX) lminX = pt.x; if (pt.x > lmaxX) lmaxX = pt.x;
+        if (pt.y < lminY) lminY = pt.y; if (pt.y > lmaxY) lmaxY = pt.y;
+      }
+      if (poly.length >= 3 && (lmaxX - lminX > 6 || lmaxY - lminY > 6)) {
+        const hidden = computeHidden();
+        const canvasRect = canvas.getBoundingClientRect();
+        // Separate features: a lasso grabs ONLY nodes OR ONLY strokes,
+        // depending on the active select target (toggle in the toolbar).
+        selectedIds = new Set();
+        selectedStrokeIds = new Set();
+        if (selectTarget === "nodes") {
+          for (const n of STATE.nodes) {
+            if (hidden.has(n.id)) continue;
+            const el = nodeEls.get(n.id);
+            let cx, cy;
+            if (el) {
+              const r = el.getBoundingClientRect();
+              cx = (r.left + r.right) / 2 - canvasRect.left;
+              cy = (r.top + r.bottom) / 2 - canvasRect.top;
+            } else {
+              const s = worldToScreen(n.x, n.y); cx = s.x; cy = s.y;
+            }
+            if (pointInPolygon(cx, cy, poly)) selectedIds.add(n.id);
+          }
+        } else {
+          // a stroke is selected if any of its points falls inside the loop
+          for (const d of STATE.drawings) {
+            if (!d.points || !d.points.length) continue;
+            let hit = false;
+            for (const pt of d.points) {
+              const s = worldToScreen(pt.x, pt.y);
+              if (pointInPolygon(s.x, s.y, poly)) { hit = true; break; }
+            }
+            if (hit) selectedStrokeIds.add(d.id);
+          }
+        }
+        if (selectedIds.size > 0 || selectedStrokeIds.size > 0) {
+          selectedId = null; justMarqueed = true;
+        }
+      }
+      render(); drawFx();
+    }
+    if (resizing) { onResizeUp(); }
     if (pan) {
       pan = null;
       canvas.classList.remove("panning");
     }
     if (stroke) endStroke();
+    renderResizeBox(); // refresh the scale box after any drag/move
     window.removeEventListener("pointermove", onPointerMove);
+  }
+
+  // ----------------------------------------------------------------------
+  // Drag-to-reparent
+  // ----------------------------------------------------------------------
+  function nodeAtScreenPoint(sx, sy) {
+    for (const [id, el] of nodeEls) {
+      const r = el.getBoundingClientRect();
+      const cr = canvas.getBoundingClientRect();
+      const ex = r.left - cr.left, ey = r.top - cr.top;
+      if (sx >= ex && sx <= ex + r.width && sy >= ey && sy <= ey + r.height) return id;
+    }
+    return null;
+  }
+
+  function onReparentMove(e) {
+    if (!reparentDrag) return;
+    const r = canvas.getBoundingClientRect();
+    reparentDrag.ex = e.clientX - r.left;
+    reparentDrag.ey = e.clientY - r.top;
+    const hit = nodeAtScreenPoint(reparentDrag.ex, reparentDrag.ey);
+    const prev = reparentDrag.targetId;
+    reparentDrag.targetId = (hit && hit !== reparentDrag.fromId) ? hit : null;
+    if (prev !== reparentDrag.targetId) {
+      if (prev) nodeEls.get(prev)?.classList.remove("reparent-target");
+      if (reparentDrag.targetId) nodeEls.get(reparentDrag.targetId)?.classList.add("reparent-target");
+    }
+    drawFx();
+  }
+
+  function onReparentUp() {
+    if (!reparentDrag) return;
+    if (reparentDrag.targetId) {
+      nodeEls.get(reparentDrag.targetId)?.classList.remove("reparent-target");
+      api(`/api/nodes/${reparentDrag.fromId}`, "PATCH", { parentId: reparentDrag.targetId });
+    }
+    reparentDrag = null;
+    drawFx();
+    window.removeEventListener("pointermove", onReparentMove);
   }
 
   // ----------------------------------------------------------------------
@@ -813,10 +1292,45 @@
 
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
-    // Right-click an existing node → edit its text inline.
     const nodeEl = e.target.closest(".node");
-    if (nodeEl) beginEditNode(nodeEl.querySelector(".node-text"));
+    if (nodeEl) { beginEditNode(nodeEl.querySelector(".node-text")); return; }
+    if (e.target.closest(".hbox")) return;
+    if (mode === "select") showPortalMenu(e);
   });
+
+  function removeContextMenu() {
+    const m = document.querySelector(".ctx-menu");
+    if (m) { if (m._closeHandler) document.removeEventListener("pointerdown", m._closeHandler); m.remove(); }
+  }
+
+  function showPortalMenu(e) {
+    removeContextMenu();
+    const pos = eventCanvasPos(e);
+    const wpos = screenToWorld(pos.x, pos.y);
+    const others = PROJECTS.filter((p) => p.id !== ACTIVE_ID);
+    if (!others.length) return;
+    const menu = document.createElement("div");
+    menu.className = "ctx-menu";
+    menu.style.cssText = `left:${e.clientX}px;top:${e.clientY}px;`;
+    const head = document.createElement("div");
+    head.className = "ctx-head";
+    head.textContent = "สร้าง Portal ไปยัง…";
+    menu.appendChild(head);
+    others.forEach((p) => {
+      const item = document.createElement("div");
+      item.className = "ctx-item";
+      item.textContent = "🔀 " + p.title;
+      item.addEventListener("click", () => {
+        removeContextMenu();
+        api("/api/boxes", "POST", { kind: "portal", x: Math.round(wpos.x), y: Math.round(wpos.y), w: 200, h: 80, title: p.title, targetProjectId: p.id });
+      });
+      menu.appendChild(item);
+    });
+    document.body.appendChild(menu);
+    const closeHandler = (ev) => { if (!menu.contains(ev.target)) { removeContextMenu(); } };
+    menu._closeHandler = closeHandler;
+    setTimeout(() => document.addEventListener("pointerdown", closeHandler), 0);
+  }
 
   // ----------------------------------------------------------------------
   // Freehand stroke
@@ -825,8 +1339,10 @@
     fxCanvas.setPointerCapture?.(e.pointerId);
     const p = eventCanvasPos(e);
     const w = screenToWorld(p.x, p.y);
+    drawBusy = true; // hold off broadcasts until this gesture is saved
     if (eraser) {
       eraseDelete = new Set();
+      lastEraseW = w;
       eraseAt(w);
       // keep erasing on move
       stroke = { eraser: true };
@@ -851,52 +1367,92 @@
   function endStroke() {
     const s = stroke;
     stroke = null;
-    if (s && s.points && s.points.length > 0) api("/api/drawings", "POST", s);
     window.removeEventListener("pointermove", onPointerMove);
+    if (s && s.points && s.points.length > 0) {
+      // Show it immediately (optimistic) so the stroke doesn't blink out while the
+      // POST round-trips; the reconciling broadcast then swaps in the real id.
+      s.id = "tmp-" + tmpCounter++;
+      STATE.drawings.push(s);
+      drawFx();
+      api("/api/drawings", "POST", { color: s.color, width: s.width, points: s.points })
+        .finally(endDrawBusy);
+    } else {
+      endDrawBusy();
+    }
   }
   function onEraseMove(e) {
     const p = eventCanvasPos(e);
-    eraseAt(screenToWorld(p.x, p.y));
+    const w = screenToWorld(p.x, p.y);
+    const thr = Number($("#eraser-size").value) / view.scale;
+    // Interpolate between samples so fast drags erase a continuous path, not dots.
+    if (lastEraseW) {
+      const dist = Math.hypot(w.x - lastEraseW.x, w.y - lastEraseW.y);
+      const steps = Math.max(1, Math.ceil(dist / Math.max(thr * 0.5, 0.5)));
+      for (let k = 1; k <= steps; k++) {
+        const t = k / steps;
+        eraseAt({ x: lastEraseW.x + (w.x - lastEraseW.x) * t, y: lastEraseW.y + (w.y - lastEraseW.y) * t });
+      }
+    } else {
+      eraseAt(w);
+    }
+    lastEraseW = w;
   }
   async function onEraseUp() {
     stroke = null;
+    lastEraseW = null;
     window.removeEventListener("pointermove", onEraseMove);
     // Persist the erase: delete touched originals, create the surviving pieces.
     const dels = [...eraseDelete];
     eraseDelete = new Set();
     const news = STATE.drawings.filter((d) => d._new);
-    for (const id of dels) await api(`/api/drawings/${id}`, "DELETE");
-    for (const d of news) {
-      await api("/api/drawings", "POST", {
-        color: d.color,
-        width: d.width,
-        points: d.points,
-      });
+    try {
+      for (const id of dels) await api(`/api/drawings/${id}`, "DELETE");
+      for (const d of news) {
+        await api("/api/drawings", "POST", {
+          color: d.color,
+          width: d.width,
+          points: d.points,
+        });
+      }
+    } finally {
+      endDrawBusy();
     }
   }
 
-  // Paint-style eraser: remove only the points under the cursor and split the
-  // stroke into the surviving segments, instead of deleting the whole stroke.
-  function splitStrokeByErase(d, w, thr) {
+  // Split a polyline by an eraser circle (cx,cy,thr). Walks each segment in small
+  // steps so the eraser catches the line BETWEEN stored points too — without that,
+  // fast strokes (sparse points) slip past the cursor and "don't erase enough".
+  // Survivors keep the original point objects (pressure preserved), so no bloat.
+  // Returns null when untouched, [] when fully erased, else surviving point-arrays.
+  function erasePolyline(pts, cx, cy, thr, step) {
+    if (!pts || !pts.length) return null;
+    const inside = (x, y) => Math.hypot(x - cx, y - cy) < thr;
+    if (pts.length === 1) return inside(pts[0].x, pts[0].y) ? [] : null;
     let hit = false;
-    const segments = [];
+    const out = [];
     let cur = [];
-    for (const pt of d.points) {
-      if (Math.hypot(pt.x - w.x, pt.y - w.y) < thr) {
-        hit = true;
-        if (cur.length) {
-          segments.push(cur);
-          cur = [];
-        }
-      } else {
-        cur.push(pt);
+    const flush = () => { if (cur.length) { out.push(cur); cur = []; } };
+    const keep = (pt) => { if (inside(pt.x, pt.y)) { hit = true; flush(); } else cur.push(pt); };
+    keep(pts[0]);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step));
+      for (let k = 1; k < n; k++) {
+        const t = k / n;
+        if (inside(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)) { hit = true; flush(); }
       }
+      keep(b);
     }
-    if (cur.length) segments.push(cur);
-    if (!hit) return null;
-    return segments
-      .filter((s) => s.length > 0)
-      .map((s) => ({ color: d.color, width: d.width, points: s }));
+    flush();
+    return hit ? out : null;
+  }
+
+  // Paint-style eraser: split a canvas stroke into the surviving segments instead
+  // of deleting the whole thing.
+  function splitStrokeByErase(d, w, thr) {
+    const pieces = erasePolyline(d.points, w.x, w.y, thr, Math.max(thr * 0.5, 0.5));
+    if (pieces === null) return null;
+    return pieces.map((s) => ({ color: d.color, width: d.width, points: s }));
   }
 
   function eraseAt(w) {
@@ -1122,33 +1678,46 @@
     };
   }
 
+  function setMicUI(active) {
+    $("#mic-btn").classList.toggle("listening", active);
+    $("#mic-cancel").hidden = !active;
+  }
+
   function startListening() {
     if (!recog) return;
     finalBuf = "";
     listening = true;
-    recog.lang = voiceLang(); // honor the latest language choice
-    try {
-      recog.start();
-    } catch {}
-    $("#mic-btn").classList.add("listening");
+    recog.lang = voiceLang();
+    try { recog.start(); } catch {}
+    setMicUI(true);
     $("#voice-status").textContent = isThai()
-      ? "กำลังฟัง… พูดได้เลย (กดอีกครั้งเพื่อหยุด)"
-      : "Listening… speak now (tap again to stop)";
+      ? "กำลังฟัง… พูดได้เลย (กดไมค์ = ส่ง · ✕ = ยกเลิก)"
+      : "Listening… speak now (mic = send · ✕ = cancel)";
   }
 
   function stopListening() {
     listening = false;
-    try {
-      recog.stop();
-    } catch {}
-    $("#mic-btn").classList.remove("listening");
+    try { recog.stop(); } catch {}
+    setMicUI(false);
     $("#voice-status").textContent = isThai() ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English";
     const text = (finalBuf + " " + $("#voice-interim").textContent).trim();
     $("#voice-interim").textContent = "";
     if (text) submitUserInput(text);
   }
 
+  function cancelListening() {
+    listening = false;
+    try { recog.stop(); } catch {}
+    setMicUI(false);
+    finalBuf = "";
+    $("#voice-interim").textContent = "";
+    const idle = isThai() ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English";
+    $("#voice-status").textContent = isThai() ? "ยกเลิกแล้ว" : "Cancelled";
+    setTimeout(() => { $("#voice-status").textContent = idle; }, 1500);
+  }
+
   $("#mic-btn").addEventListener("click", () => (listening ? stopListening() : startListening()));
+  $("#mic-cancel").addEventListener("click", cancelListening);
 
   const textInput = $("#text-input");
   function sendFromInput() {
@@ -1166,7 +1735,11 @@
   $("#chat-tab-add").addEventListener("click", async () => {
     const name = prompt("ชื่อแชทใหม่:", "แชทใหม่");
     if (name === null) return;
-    await api("/api/chat-sections", "POST", { name: name.trim() || "แชทใหม่" });
+    const trimmed = name.trim() || "แชทใหม่";
+    await api("/api/chat-sections", "POST", { name: trimmed });
+    const launch = await api("/api/launch-claude", "POST", { section: trimmed });
+    if (launch?.ok) toast(`เปิด Claude สำหรับ "${trimmed}" แล้ว 🚀`);
+    else toast(`สร้างแชทแล้ว — เปิด claude-listen.cmd "${trimmed}" เองได้เลยครับ`);
   });
 
   async function submitUserInput(text) {
@@ -1220,6 +1793,27 @@
   }
   $("#btn-select").addEventListener("click", () => setMode("select"));
   $("#btn-draw").addEventListener("click", () => setMode("draw"));
+  // Toggle what the marquee grabs: topics (nodes) vs strokes you drew.
+  function setSelectTarget(t) {
+    selectTarget = t;
+    const btn = $("#btn-sel-target");
+    if (btn) {
+      btn.textContent = t === "strokes" ? "🎯 เส้นวาด" : "🎯 หัวข้อ";
+      btn.classList.toggle("target-strokes", t === "strokes");
+    }
+    // Separate features: clear whichever kind we're no longer targeting.
+    if (t === "strokes") { selectedIds = new Set(); selectedId = null; }
+    else { selectedStrokeIds = new Set(); strokeDragOffset = null; }
+    render(); drawFx();
+  }
+  $("#btn-sel-target").addEventListener("click", () => {
+    if (mode !== "select") setMode("select");
+    setSelectTarget(selectTarget === "nodes" ? "strokes" : "nodes");
+  });
+  // Resize-box corner handles: grab to scale the selection up/down.
+  document.querySelectorAll("#resize-box .rz-handle").forEach((h) => {
+    h.addEventListener("pointerdown", (e) => startResize(h.dataset.corner, e));
+  });
   // Dock buttons: stop pointerdown so the canvas draw handler doesn't intercept.
   document.querySelectorAll(".dock-tool, .dock-swatch").forEach(el => {
     el.addEventListener("pointerdown", (e) => e.stopPropagation());
@@ -1343,8 +1937,10 @@
       el.style.width = b.w + "px";
       el.classList.toggle("selected", b.id === selectedBoxId);
       el.querySelector(".box-title").textContent =
-        b.title || (b.kind === "image" ? "คลังรูปภาพ" : "บันทึกลายมือ");
-      if (b.kind === "image") {
+        b.title || (b.kind === "image" ? "คลังรูปภาพ" : b.kind === "portal" ? "Portal" : "บันทึกลายมือ");
+      if (b.kind === "portal") {
+        el.style.height = (b.h || 80) + "px";
+      } else if (b.kind === "image") {
         el.style.height = (b.h || 240) + "px";
         renderGallery(el, b);
       } else {
@@ -1386,6 +1982,12 @@
         e.stopPropagation();
         if (it.url) window.open(it.url, "_blank", "noopener");
       });
+      // right-click → fullscreen lightbox
+      cell.querySelector("img").addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openLightbox(it.src);
+      });
       cell.querySelector(".gallery-del").addEventListener("pointerdown", (e) => e.stopPropagation());
       cell.querySelector(".gallery-del").addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1397,11 +1999,50 @@
     });
   }
 
+  // Fullscreen lightbox — click backdrop or press Escape to close.
+  function openLightbox(src) {
+    const backdrop = document.createElement("div");
+    backdrop.className = "lightbox-backdrop";
+    backdrop.innerHTML = `<img class="lightbox-img" src="${escapeHtml(src)}" alt="" />`;
+    const close = () => backdrop.remove();
+    backdrop.addEventListener("click", close);
+    backdrop.querySelector(".lightbox-img").addEventListener("click", (e) => e.stopPropagation());
+    const onKey = (e) => { if (e.key === "Escape") { close(); window.removeEventListener("keydown", onKey); } };
+    window.addEventListener("keydown", onKey);
+    document.body.appendChild(backdrop);
+  }
+
   function createBoxEl(b) {
     const el = document.createElement("div");
-    el.className = "hbox" + (b.kind === "image" ? " hbox-image" : "");
+    el.className = "hbox" + (b.kind === "image" ? " hbox-image" : b.kind === "portal" ? " hbox-portal" : "");
     el.dataset.id = b.id;
     el.dataset.kind = b.kind || "note";
+
+    if (b.kind === "portal") {
+      el.innerHTML =
+        `<div class="box-head">
+           <span class="box-title"></span>
+           <button class="box-btn b-del" title="ลบกล่อง">×</button>
+         </div>
+         <div class="portal-body">🔀 คลิกเพื่อเปิด</div>`;
+      el.querySelector(".box-head").addEventListener("pointerdown", (e) => {
+        if (mode !== "select") return;
+        if (e.target.closest(".box-btn")) return;
+        e.stopPropagation();
+        selectedBoxId = b.id;
+        startBoxMove(e, b.id);
+      });
+      el.querySelector(".b-del").addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm("ลบกล่อง Portal นี้?")) api(`/api/boxes/${b.id}`, "DELETE");
+      });
+      el.querySelector(".portal-body").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const box = (STATE.boxes || []).find((x) => x.id === b.id);
+        if (box?.targetProjectId) api(`/api/projects/${box.targetProjectId}/activate`, "POST");
+      });
+      return el;
+    }
     const tools =
       b.kind === "image"
         ? `<button class="box-btn b-link" title="โยงไปกล่องอื่น">🔗</button>
@@ -1506,11 +2147,11 @@
     const ld = linkDrag;
     linkDrag = null;
     if (!ld) return;
-    const tgt = document.elementFromPoint(e.clientX, e.clientY)?.closest(".hbox");
+    const tgt = document.elementFromPoint(e.clientX, e.clientY)?.closest(".hbox, .node");
     const toId = tgt?.dataset.id;
     if (toId && toId !== ld.from) {
       api("/api/box-links", "POST", { from: ld.from, to: toId });
-      toast("โยงกล่องแล้ว 🔗");
+      toast("โยงแล้ว 🔗");
     }
     render();
   }
@@ -1539,8 +2180,16 @@
     if (boxInteract.mode === "move") {
       b.x = boxInteract.ox + (p.x - boxInteract.sx) / view.scale;
       b.y = boxInteract.oy + (p.y - boxInteract.sy) / view.scale;
+    } else if ((b.kind || "note") === "note") {
+      // Note pages keep their aspect ratio so handwriting never stretches —
+      // strokes are normalized 0..1 in each axis, so changing w:h would distort
+      // the letters ("ตำแหน่งไม่ตรง"). Width drives the size.
+      const aspect = (boxInteract.oh / boxInteract.ow) || PAGE_ASPECT;
+      const newW = Math.max(120, boxInteract.ow + (p.x - boxInteract.sx) / view.scale);
+      b.w = newW;
+      b.h = Math.round(newW * aspect);
     } else {
-      // free resize: width and height independent
+      // images / portals resize freely (width and height independent)
       b.w = Math.max(120, boxInteract.ow + (p.x - boxInteract.sx) / view.scale);
       b.h = Math.max(120, boxInteract.oh + (p.y - boxInteract.sy) / view.scale);
     }
@@ -1604,9 +2253,10 @@
     bcanvas.setPointerCapture?.(e.pointerId);
     const pt = bmodalPt(e);
     if (modalState.eraser) {
+      lastBoxEraseW = pt;
       eraseBoxAt(pt);
       bcanvas.addEventListener("pointermove", onBoxErase);
-      window.addEventListener("pointerup", () => bcanvas.removeEventListener("pointermove", onBoxErase), { once: true });
+      window.addEventListener("pointerup", () => { bcanvas.removeEventListener("pointermove", onBoxErase); lastBoxEraseW = null; }, { once: true });
       return;
     }
     modalState.cur = {
@@ -1629,13 +2279,34 @@
   }
   function eraseBoxAt(pt) {
     const thr = 0.015 + Number($("#box-pen-size").value) / 500; // normalized radius
-    const before = modalState.strokes.length;
-    modalState.strokes = modalState.strokes.filter((s) =>
-      !(s.points || []).some((p) => Math.hypot(p.x - pt.x, p.y - pt.y) < thr)
-    );
-    if (modalState.strokes.length !== before) { modalState.dirty = true; bmodalRedraw(); }
+    const next = [];
+    let changed = false;
+    for (const s of modalState.strokes) {
+      // Split like the canvas eraser instead of deleting the whole stroke, so a
+      // partly-touched letter keeps the parts you didn't erase.
+      const pieces = erasePolyline(s.points, pt.x, pt.y, thr, Math.max(thr * 0.5, 0.004));
+      if (pieces === null) { next.push(s); continue; }
+      changed = true;
+      for (const p of pieces) next.push({ color: s.color, width: s.width, points: p });
+    }
+    if (changed) { modalState.strokes = next; modalState.dirty = true; bmodalRedraw(); }
   }
-  function onBoxErase(e) { eraseBoxAt(bmodalPt(e)); }
+  function onBoxErase(e) {
+    const pt = bmodalPt(e);
+    const thr = 0.015 + Number($("#box-pen-size").value) / 500;
+    // Interpolate so a fast drag erases a continuous path, not spaced-out dots.
+    if (lastBoxEraseW) {
+      const dist = Math.hypot(pt.x - lastBoxEraseW.x, pt.y - lastBoxEraseW.y);
+      const steps = Math.max(1, Math.ceil(dist / Math.max(thr * 0.5, 0.004)));
+      for (let k = 1; k <= steps; k++) {
+        const t = k / steps;
+        eraseBoxAt({ x: lastBoxEraseW.x + (pt.x - lastBoxEraseW.x) * t, y: lastBoxEraseW.y + (pt.y - lastBoxEraseW.y) * t });
+      }
+    } else {
+      eraseBoxAt(pt);
+    }
+    lastBoxEraseW = pt;
+  }
 
   $("#box-pen-size").addEventListener("input", (e) => {
     $("#box-pen-size-val").textContent = e.target.value;
@@ -1662,7 +2333,7 @@
     modalState = null;
     bmodal.hidden = true;
     const el = boxEls.get(id);
-    if (el) { const b = STATE.boxes.find(x => x.id === id); if (b) paintBox(el.querySelector(".box-preview"), b.strokes, b.w); }
+    if (el) { const b = STATE.boxes.find(x => x.id === id); if (b) paintBox(el.querySelector(".box-preview"), b.strokes, b.w, b.h || Math.round(b.w * PAGE_ASPECT)); }
   });
 
   // Render the current page to a white PNG at OCR resolution (box aspect).
@@ -1846,4 +2517,255 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.remove("show"), 3200);
   }
+
+  // ----------------------------------------------------------------------
+  // Tags
+  // ----------------------------------------------------------------------
+  const TAGS = [
+    { name: "todo",      color: "#f97316", emoji: "📋" },
+    { name: "done",      color: "#22c55e", emoji: "✅" },
+    { name: "idea",      color: "#a855f7", emoji: "💡" },
+    { name: "important", color: "#ef4444", emoji: "❗" },
+    { name: "question",  color: "#3b82f6", emoji: "❓" },
+  ];
+
+  let tagPickerNodeId = null;
+  const tagPicker = (() => {
+    const el = document.createElement("div");
+    el.className = "tag-picker";
+    el.hidden = true;
+    TAGS.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.className = "tag-picker-item";
+      btn.dataset.tag = t.name;
+      btn.style.setProperty("--tc", t.color);
+      btn.textContent = `${t.emoji} ${t.name}`;
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!tagPickerNodeId) return;
+        const node = STATE.nodes.find((n) => n.id === tagPickerNodeId);
+        if (!node) return;
+        const tags = Array.isArray(node.tags) ? [...node.tags] : [];
+        const idx = tags.indexOf(t.name);
+        if (idx >= 0) tags.splice(idx, 1); else tags.push(t.name);
+        node.tags = tags;
+        api(`/api/nodes/${tagPickerNodeId}`, "PATCH", { tags });
+        renderTagPicker(tagPickerNodeId);
+        render();
+      });
+      el.appendChild(btn);
+    });
+    document.body.appendChild(el);
+    document.addEventListener("pointerdown", (e) => {
+      if (!e.target.closest(".tag-picker") && !e.target.closest(".tag-btn")) {
+        el.hidden = true;
+        tagPickerNodeId = null;
+      }
+    });
+    return el;
+  })();
+
+  function renderTagPicker(nodeId) {
+    const node = STATE.nodes.find((n) => n.id === nodeId);
+    const tags = node?.tags || [];
+    tagPicker.querySelectorAll(".tag-picker-item").forEach((btn) => {
+      btn.classList.toggle("active", tags.includes(btn.dataset.tag));
+    });
+  }
+
+  function openTagPicker(e, nodeId) {
+    e.stopPropagation();
+    if (tagPickerNodeId === nodeId && !tagPicker.hidden) {
+      tagPicker.hidden = true;
+      tagPickerNodeId = null;
+      return;
+    }
+    tagPickerNodeId = nodeId;
+    renderTagPicker(nodeId);
+    const r = e.target.getBoundingClientRect();
+    tagPicker.style.left = r.left + "px";
+    tagPicker.style.top = r.bottom + 6 + "px";
+    tagPicker.hidden = false;
+  }
+
+  // ----------------------------------------------------------------------
+  // Export
+  // ----------------------------------------------------------------------
+  function exportMarkdown() {
+    const byId = new Map(STATE.nodes.map((n) => [n.id, n]));
+    const roots = STATE.nodes.filter((n) => !n.parentId);
+    const lines = [`# ${STATE.meta?.title || "Mind Map"}`, ""];
+    function walk(node, depth) {
+      const prefix = "#".repeat(Math.min(depth + 1, 6));
+      const tagStr = (node.tags || []).map((t) => `\`${t}\``).join(" ");
+      lines.push(`${prefix} ${node.text}${tagStr ? " " + tagStr : ""}`);
+      STATE.nodes.filter((n) => n.parentId === node.id)
+        .sort((a, b) => a.y - b.y)
+        .forEach((child) => walk(child, depth + 1));
+    }
+    roots.sort((a, b) => a.y - b.y).forEach((r) => walk(r, 1));
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(STATE.meta?.title || "mindmap").replace(/[^a-z0-9ก-๙]+/gi, "_")}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("ดาวน์โหลด Markdown แล้ว ✓");
+  }
+
+  async function exportPng() {
+    if (typeof html2canvas !== "function") {
+      toast("html2canvas ยังโหลดไม่เสร็จ ลองอีกครั้ง");
+      return;
+    }
+    toast("กำลัง render PNG…");
+    try {
+      const cvs = await html2canvas(document.getElementById("canvas"), {
+        backgroundColor: getComputedStyle(document.body).getPropertyValue("--bg").trim() || "#0f172a",
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+      });
+      const a = document.createElement("a");
+      a.href = cvs.toDataURL("image/png");
+      a.download = `${(STATE.meta?.title || "mindmap").replace(/[^a-z0-9ก-๙]+/gi, "_")}.png`;
+      a.click();
+      toast("ดาวน์โหลด PNG แล้ว ✓");
+    } catch (err) {
+      toast("Export PNG ไม่สำเร็จ: " + err.message);
+    }
+  }
+
+  $("#btn-export-md").addEventListener("click", exportMarkdown);
+  $("#btn-export-png").addEventListener("click", exportPng);
+
+  // -------------------------------------------------------------------------
+  // Calendar right panel
+  // -------------------------------------------------------------------------
+  const calPanel = document.getElementById("cal-panel");
+  const calBody = document.getElementById("cal-body");
+  const calFetchedAt = document.getElementById("cal-fetched-at");
+
+  function toggleCalPanel(open) {
+    const show = open !== undefined ? open : calPanel.classList.toggle("open");
+    calPanel.classList.toggle("open", show);
+    calPanel.setAttribute("aria-hidden", String(!show));
+    $("#btn-toggle-cal").classList.toggle("active", show);
+    if (show) loadCalendarFromServer();
+  }
+
+  async function loadCalendarFromServer() {
+    try {
+      const data = await api("/api/calendar");
+      if (data) renderCalendar(data);
+    } catch {}
+  }
+
+  let calEvents = [];
+  let calDayView = null; // currently zoomed-in date string "YYYY-MM-DD" or null
+
+  const thTime = (iso) => {
+    if (!iso || iso.length === 10) return "ทั้งวัน";
+    return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  function renderCalendar({ events, fetchedAt }) {
+    calEvents = events || [];
+    if (!fetchedAt) {
+      calFetchedAt.textContent = "";
+      calBody.innerHTML = `<div class="cal-empty">กด 🔄 Refresh เพื่อโหลดตาราง 2 สัปดาห์จาก Google Calendar</div>`;
+      return;
+    }
+    calFetchedAt.textContent = "อัปเดตล่าสุด: " + new Date(fetchedAt).toLocaleString("th-TH");
+    if (calDayView) renderDayView(calDayView);
+    else renderGridView();
+  }
+
+  function eventsByDate() {
+    const g = {};
+    for (const ev of calEvents) {
+      const d = (ev.start || "").slice(0, 10);
+      if (!g[d]) g[d] = [];
+      g[d].push(ev);
+    }
+    return g;
+  }
+
+  function renderGridView() {
+    calDayView = null;
+    const groups = eventsByDate();
+    // Build a 2-week grid starting from today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+    const cells = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      const evs = groups[iso] || [];
+      const isToday = i === 0;
+      cells.push({ iso, d, evs, isToday });
+    }
+    // week header
+    const header = DOW.map(w => `<div class="cgrid-hd">${w}</div>`).join("");
+    // fill blank cells before first day's weekday
+    const startDow = cells[0].d.getDay(); // 0=Sun
+    const blanks = Array(startDow).fill(`<div class="cgrid-cell cgrid-blank"></div>`).join("");
+    const dayCells = cells.map(({ iso, d, evs, isToday }) => {
+      const dots = evs.slice(0, 3).map(() => `<span class="cgrid-dot"></span>`).join("");
+      const more = evs.length > 3 ? `<span class="cgrid-more">+${evs.length - 3}</span>` : "";
+      return `<div class="cgrid-cell${isToday ? " cgrid-today" : ""}" data-date="${iso}">
+        <span class="cgrid-num">${d.getDate()}</span>
+        <div class="cgrid-dots">${dots}${more}</div>
+      </div>`;
+    }).join("");
+    calBody.innerHTML = `
+      <div class="cgrid-wrap">
+        <div class="cgrid-header">${header}</div>
+        <div class="cgrid-grid">${blanks}${dayCells}</div>
+      </div>
+      <div class="cal-hint">ดับเบิลคลิกวันเพื่อดู schedule</div>`;
+    calBody.querySelectorAll(".cgrid-cell[data-date]").forEach(el => {
+      el.addEventListener("dblclick", () => {
+        calDayView = el.dataset.date;
+        renderDayView(calDayView);
+      });
+    });
+  }
+
+  function renderDayView(iso) {
+    calDayView = iso;
+    const groups = eventsByDate();
+    const evs = (groups[iso] || []).slice().sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+    const d = new Date(iso + "T00:00:00");
+    const label = d.toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const evHtml = evs.length
+      ? evs.map(ev => `
+          <div class="cal-event">
+            <div class="cal-event-time">${thTime(ev.start)}${ev.end && ev.end !== ev.start ? " – " + thTime(ev.end) : ""}</div>
+            <div class="cal-event-title">${escapeHtml(ev.title || "(ไม่มีชื่อ)")}</div>
+            ${ev.location ? `<div class="cal-event-loc">📍 ${escapeHtml(ev.location)}</div>` : ""}
+          </div>`).join("")
+      : `<div class="cal-empty">ไม่มี event วันนี้</div>`;
+    calBody.innerHTML = `
+      <button class="cal-back-btn">← กลับ</button>
+      <div class="cal-day-title">${label}</div>
+      <div class="cal-events-list">${evHtml}</div>`;
+    calBody.querySelector(".cal-back-btn").addEventListener("click", renderGridView);
+  }
+
+  document.getElementById("btn-toggle-cal").addEventListener("click", () => toggleCalPanel());
+  document.getElementById("cal-close").addEventListener("click", () => toggleCalPanel(false));
+  document.getElementById("cal-refresh").addEventListener("click", async () => {
+    calBody.innerHTML = `<div class="cal-empty">⏳ กำลังขอให้ Claude ดึงข้อมูล…</div>`;
+    await api("/api/inbox", "POST", { text: "[refresh-calendar]", section: "main" });
+    toast("ส่งคำขอให้ Claude ดึง Calendar แล้ว — รอสักครู่ 🗓️");
+  });
+
+  // Listen for real-time calendar updates pushed from the server
+  const _origOnWsMsg = window.__wsOnMsg;
+  window.__wsOnCalendar = (data) => {
+    if (data.type === "calendar") renderCalendar(data);
+  };
 })();

@@ -1,29 +1,73 @@
-// listen.js - Polling script to monitor Powerfull Note inbox
-// This script checks for new messages from the user every 2 seconds.
+// listen.js - Smart Gemini Auto-Agent for Powerfull Note
+// This script polls the inbox and autonomously performs actions based on keywords.
 
 const PORT = process.env.PORT || 4321;
-const URL = `http://localhost:${PORT}/api/inbox?drain=true`;
+const BASE = `http://localhost:${PORT}`;
 
-console.log(`\n  👂 Listening for messages from Powerfull Note...`);
-console.log(`  Target: ${URL}\n`);
+const API = {
+  inbox: `${BASE}/api/inbox?drain=true`,
+  chat: `${BASE}/api/chat`,
+  nodes: `${BASE}/api/nodes`,
+  layout: `${BASE}/api/layout`,
+  clear: `${BASE}/api/clear`
+};
+
+console.log(`\n  🚀 Smart Gemini Agent is LIVE and Auto-Processing...`);
+console.log(`  Watching: ${API.inbox}\n`);
+
+async function call(url, method = 'GET', body = null) {
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined
+    });
+    return res.ok ? await res.json() : null;
+  } catch (e) { return null; }
+}
+
+async function say(text) {
+  await call(API.chat, 'POST', { role: 'gemini', text: `[Gemini Auto] ${text}` });
+}
+
+async function handleMessage(text) {
+  const msg = text.trim();
+  console.log(`\x1b[36m[Processing]\x1b[0m ${msg}`);
+
+  // 1. "เพิ่มหัวข้อ [ชื่อ]"
+  if (msg.startsWith('เพิ่มหัวข้อ')) {
+    const title = msg.replace('เพิ่มหัวข้อ', '').trim();
+    const node = await call(API.nodes, 'POST', { text: title || 'หัวข้อใหม่' });
+    if (node) {
+      await say(`เพิ่มหัวข้อ "${node.text}" ให้แล้วครับ! (ID: ${node.id})`);
+      await call(API.layout, 'POST'); // Auto tidy
+    }
+    return;
+  }
+
+  // 2. "จัดระเบียบ" หรือ "จัดเลย์เอาต์"
+  if (msg.includes('จัดระเบียบ') || msg.includes('จัดเลย์เอาต์') || msg.includes('tidy')) {
+    const res = await call(API.layout, 'POST');
+    if (res) await say(`จัดระเบียบมายด์แมปให้สวยงามแล้วครับ (${res.nodes} โหนด)`);
+    return;
+  }
+
+  // 3. "ล้าง"
+  if (msg === 'ล้าง' || msg === 'เคลียร์') {
+    await call(API.clear, 'POST');
+    await say('ล้างมายด์แมปให้เรียบร้อยแล้วครับ เริ่มต้นใหม่ได้เลย!');
+    return;
+  }
+
+  // Default: Just acknowledge
+  await say(`ได้รับข้อความ: "${msg}" แล้วครับ! (สำหรับคำสั่งซับซ้อน โปรดบอก Gemini ใน Terminal นะครับ)`);
+}
 
 async function poll() {
-  try {
-    const res = await fetch(URL);
-    if (res.ok) {
-      const { items } = await res.json();
-      if (items && items.length > 0) {
-        items.forEach(item => {
-          const time = new Date(item.ts).toLocaleTimeString();
-          console.log(`\x1b[36m[${time}] User:\x1b[0m ${item.text}`);
-        });
-      }
-    }
-  } catch (err) {
-    if (err.code === 'ECONNREFUSED') {
-      // Server not running yet, just wait silently
-    } else {
-      console.error('Error polling inbox:', err.message);
+  const data = await call(API.inbox);
+  if (data && data.items && data.items.length > 0) {
+    for (const item of data.items) {
+      await handleMessage(item.text);
     }
   }
   setTimeout(poll, 2000);
