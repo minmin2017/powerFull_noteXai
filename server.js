@@ -304,6 +304,24 @@ function tidyLayout({ colW = 260, rowH = 92, gap = 1, x0 = 120, y0 = 120 } = {})
     place(r, 0);
     row += gap; // blank row between top-level branches
   }
+
+  // Images aren't part of the node tree, so spread them into their own
+  // non-overlapping row below the lowest node — add_image alone can't avoid
+  // stacking everything at the same default (200,200) spot.
+  if (state.images.length) {
+    const maxNodeY = state.nodes.length
+      ? Math.max(...state.nodes.map((n) => n.y || 0))
+      : y0;
+    let imgX = x0;
+    const imgY = maxNodeY + rowH * 2;
+    const imgGap = 40;
+    for (const img of state.images) {
+      img.x = imgX;
+      img.y = imgY;
+      imgX += (img.w || 240) + imgGap;
+    }
+  }
+
   changed();
   return state.nodes.length;
 }

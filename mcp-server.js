@@ -366,11 +366,58 @@ server.registerTool(
 );
 
 server.registerTool(
+  "list_images",
+  {
+    title: "ดูตำแหน่งรูปภาพทั้งหมดบนมายด์แมป",
+    description:
+      "List every image on the active mind map with its id, x/y position and w/h size. Use this to check whether images overlap/clump before or after placing them, since get_mindmap does not include image data.",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const s = await api("/api/state");
+      const imgs = s.images || [];
+      if (!imgs.length) return ok("ยังไม่มีรูปในมายด์แมปนี้");
+      const lines = imgs.map(
+        (im) => `- [id: ${im.id}] x:${im.x} y:${im.y} w:${im.w} h:${im.h}`
+      );
+      return ok(`รูปทั้งหมด (${imgs.length}):\n` + lines.join("\n"));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  "move_image",
+  {
+    title: "ย้าย/ปรับขนาดรูปภาพ",
+    description:
+      "Move and/or resize an image on the active mind map (move_node does NOT work on image ids — images live in a separate store from topic nodes). Use list_images to find ids and check current positions, e.g. to fix clumped/overlapping images after add_image.",
+    inputSchema: {
+      id: z.string().describe("id ของรูป (im_...)"),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      w: z.number().optional(),
+      h: z.number().optional(),
+    },
+  },
+  async ({ id, x, y, w, h }) => {
+    try {
+      const img = await api(`/api/images/${id}`, "PATCH", { x, y, w, h });
+      return ok(`ย้ายรูป [id: ${img.id}] ไปที่ (${img.x}, ${img.y}) ขนาด ${img.w}x${img.h}`);
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
   "tidy_layout",
   {
     title: "จัดเลย์เอาต์มายด์แมปให้สวยอัตโนมัติ",
     description:
-      "Auto-arrange ALL nodes into a clean left-to-right tidy tree so nothing overlaps: siblings stack in rows, parents center on their children, top-level branches are separated by a gap. Call this RIGHT AFTER add_topic/add_topics_bulk (their auto-positioning tends to clump). Optional spacing overrides: colW (column gap, default 260), rowH (row gap, default 92).",
+      "Auto-arrange ALL nodes into a clean left-to-right tidy tree so nothing overlaps: siblings stack in rows, parents center on their children, top-level branches are separated by a gap. Also spreads out any images into their own non-overlapping row below the tree (images otherwise stay stacked at add_image's default position). Call this RIGHT AFTER add_topic/add_topics_bulk/add_image (their auto-positioning tends to clump). Optional spacing overrides: colW (column gap, default 260), rowH (row gap, default 92).",
     inputSchema: {
       colW: z.number().optional().describe("ระยะห่างคอลัมน์ตามความลึก (px)"),
       rowH: z.number().optional().describe("ระยะห่างแถว (px)"),

@@ -2192,16 +2192,8 @@
     if (boxInteract.mode === "move") {
       b.x = boxInteract.ox + (p.x - boxInteract.sx) / view.scale;
       b.y = boxInteract.oy + (p.y - boxInteract.sy) / view.scale;
-    } else if ((b.kind || "note") === "note") {
-      // Note pages keep their aspect ratio so handwriting never stretches —
-      // strokes are normalized 0..1 in each axis, so changing w:h would distort
-      // the letters ("ตำแหน่งไม่ตรง"). Width drives the size.
-      const aspect = (boxInteract.oh / boxInteract.ow) || PAGE_ASPECT;
-      const newW = Math.max(120, boxInteract.ow + (p.x - boxInteract.sx) / view.scale);
-      b.w = newW;
-      b.h = Math.round(newW * aspect);
     } else {
-      // images / portals resize freely (width and height independent)
+      // all box kinds resize freely (width and height independent)
       b.w = Math.max(120, boxInteract.ow + (p.x - boxInteract.sx) / view.scale);
       b.h = Math.max(120, boxInteract.oh + (p.y - boxInteract.sy) / view.scale);
     }
