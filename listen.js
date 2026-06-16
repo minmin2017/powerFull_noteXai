@@ -5,7 +5,9 @@ const PORT = process.env.PORT || 4321;
 const BASE = `http://localhost:${PORT}`;
 
 const API = {
-  inbox: `${BASE}/api/inbox?drain=true`,
+  // scoped to a dedicated "gemini" chat section so it never drains the messages
+  // Claude listens for (Claude reads its own section's inbox via MCP)
+  inbox: `${BASE}/api/inbox?section=gemini&drain=true`,
   chat: `${BASE}/api/chat`,
   nodes: `${BASE}/api/nodes`,
   layout: `${BASE}/api/layout`,

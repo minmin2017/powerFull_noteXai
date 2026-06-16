@@ -3,7 +3,8 @@
 # It helps the Gemini CLI "see" what's happening in the app without manual checks.
 
 $PORT = 4321
-$URL = "http://localhost:$PORT/api/inbox?drain=true"
+# scoped to a dedicated "gemini" section so it never steals Claude's inbox
+$URL = "http://localhost:$PORT/api/inbox?section=gemini&drain=true"
 
 Write-Host "`n  🧠 Gemini Autonomous Observer started..." -ForegroundColor Cyan
 Write-Host "  Watching for messages at: $URL"

@@ -114,6 +114,18 @@
         incoming.y = local.y;
       }
     }
+    // Same guard for an image or box being moved/resized/rotated right now, so a
+    // broadcast can't snap it back mid-gesture.
+    if (imgInteract) {
+      const local = (STATE.images || []).find((i) => i.id === imgInteract.id);
+      const incoming = (s.images || []).find((i) => i.id === imgInteract.id);
+      if (local && incoming) Object.assign(incoming, { x: local.x, y: local.y, w: local.w, h: local.h, rotation: local.rotation });
+    }
+    if (boxInteract) {
+      const local = (STATE.boxes || []).find((b) => b.id === boxInteract.id);
+      const incoming = (s.boxes || []).find((b) => b.id === boxInteract.id);
+      if (local && incoming) Object.assign(incoming, { x: local.x, y: local.y, w: local.w, h: local.h });
+    }
     maybeNotifyClaude(s);
     STATE = s;
     renderChat();
@@ -191,7 +203,9 @@
     const hidden = new Set();
     for (const n of STATE.nodes) {
       let p = n.parentId ? byId.get(n.parentId) : null;
-      while (p) {
+      const seen = new Set([n.id]); // guard against a stray parent cycle (don't hang)
+      while (p && !seen.has(p.id)) {
+        seen.add(p.id);
         if (p.collapsed) {
           hidden.add(n.id);
           break;
@@ -286,7 +300,7 @@
   // can edit the URL; otherwise URLs render as clickable links.
   const URL_RE = /(https?:\/\/[^\s<]+)/g;
   function escapeHtml(s) {
-    return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
   function linkifyHtml(text) {
     return escapeHtml(text).replace(URL_RE, '<a href="$1" target="_blank" rel="noopener" class="node-link">$1</a>');
@@ -1552,9 +1566,7 @@
     }
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  }
+  // escapeHtml is defined once near the Render section (escapes & < > and ").
 
   // ----------------------------------------------------------------------
   // Title
@@ -2699,10 +2711,11 @@
     today.setHours(0, 0, 0, 0);
     const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
     const cells = [];
+    const localISO = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
     for (let i = 0; i < 14; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
+      const iso = localISO(d); // local date — toISOString() is UTC and shifts UTC+7 back a day
       const evs = groups[iso] || [];
       const isToday = i === 0;
       cells.push({ iso, d, evs, isToday });

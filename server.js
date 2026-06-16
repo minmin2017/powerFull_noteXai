@@ -231,9 +231,28 @@ function createNode({ text, parentId = null, x, y, color }) {
   return node;
 }
 
+// True if `ancestorId` sits above `nodeId` in the parent chain (cycle-safe walk).
+function isAncestorOf(ancestorId, nodeId) {
+  let cur = state.nodes.find((n) => n.id === nodeId);
+  const seen = new Set();
+  while (cur && cur.parentId && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    if (cur.parentId === ancestorId) return true;
+    cur = state.nodes.find((n) => n.id === cur.parentId);
+  }
+  return false;
+}
+
 function updateNode(id, patch) {
   const node = state.nodes.find((n) => n.id === id);
   if (!node) return null;
+  // Reject a reparent onto the node itself or one of its descendants — a parent
+  // cycle would freeze computeHidden (client) and overflow tidyLayout (server).
+  if (patch.parentId !== undefined && patch.parentId !== null &&
+      (patch.parentId === id || isAncestorOf(id, patch.parentId))) {
+    patch = { ...patch };
+    delete patch.parentId;
+  }
   for (const k of ["text", "x", "y", "color", "collapsed", "parentId", "tags"]) {
     if (patch[k] !== undefined) node[k] = patch[k];
   }
@@ -485,8 +504,7 @@ function addInbox(text, section) {
 
 function drainInbox() {
   const items = state.inbox.slice();
-  state.inbox = [];
-  changed();
+  if (items.length) { state.inbox = []; changed(); }
   return items;
 }
 
@@ -508,8 +526,7 @@ function addImageInbox({ id, src, note }) {
 
 function drainImageInbox() {
   const items = state.imageInbox.slice();
-  state.imageInbox = [];
-  changed();
+  if (items.length) { state.imageInbox = []; changed(); }
   return items;
 }
 
@@ -525,6 +542,14 @@ function broadcast() {
   const payload = JSON.stringify({ type: "state", state, projects, activeId, history: historyCounts(), bootId: BOOT_ID });
   for (const client of wss.clients) {
     if (client.readyState === 1) client.send(payload);
+  }
+}
+
+// Send an arbitrary message (e.g. calendar pushes) to every connected client.
+function broadcastRaw(payload) {
+  const s = JSON.stringify(payload);
+  for (const client of wss.clients) {
+    if (client.readyState === 1) client.send(s);
   }
 }
 
@@ -583,12 +608,17 @@ function historyOf() {
 }
 function recordHistory() {
   const h = historyOf();
+  const snap = snapMap();
+  // Only count it as an undo step if the mind-map content actually changed.
+  // Chat/inbox/voice/section mutations call changed() too but leave the map
+  // identical — without this they'd flood the undo stack with no-op steps.
+  if (h.last && JSON.stringify(h.last) === JSON.stringify(snap)) return;
   if (h.last) {
     h.past.push(h.last);
     if (h.past.length > HISTORY_CAP) h.past.shift();
   }
   h.future = [];
-  h.last = snapMap();
+  h.last = snap;
 }
 function historyCounts() {
   const h = histories.get(activeId);
@@ -859,7 +889,9 @@ app.get("/api/inbox", (req, res) => {
   }
   const match = (m) => secId === null || (m.section || "main") === secId;
   const items = state.inbox.filter(match);
-  if (drain) {
+  if (drain && items.length) {
+    // only mutate/broadcast when something was actually drained — otherwise every
+    // ~3s poll triggered a full state broadcast + history snapshot + file write
     state.inbox = secId === null ? [] : state.inbox.filter((m) => !match(m));
     changed();
   }
@@ -885,7 +917,7 @@ app.get("/api/calendar", (_req, res) => res.json(calendarCache));
 app.post("/api/calendar", (req, res) => {
   const { events } = req.body || {};
   calendarCache = { events: Array.isArray(events) ? events : [], fetchedAt: Date.now() };
-  broadcast({ type: "calendar", ...calendarCache });
+  broadcastRaw({ type: "calendar", ...calendarCache });
   res.json({ ok: true, count: calendarCache.events.length });
 });
 

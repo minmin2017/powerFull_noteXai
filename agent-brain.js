@@ -51,7 +51,7 @@ async function askGemini(prompt) {
 }
 
 async function loop() {
-  const data = await callApp('/api/inbox?drain=true');
+  const data = await callApp('/api/inbox?section=gemini&drain=true'); // scoped: never steal Claude's inbox
   if (data && data.items && data.items.length > 0) {
     console.log(`[EVENT] Found ${data.items.length} msgs`);
     for (const item of data.items) {
