@@ -64,7 +64,42 @@ body.col-resizing {
 .sb-head {
   padding: 16px 18px 12px;
   border-bottom: 1px solid var(--line);
+  position: relative;
 }
+.sidebar-collapse {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 7px;
+  font-family: inherit;
+}
+.sidebar-collapse:hover { color: var(--text); background: rgba(255,255,255,0.12); }
+/* Collapsed state: sidebar + its resizer disappear, a floating button reopens it */
+#sidebar.collapsed { display: none; }
+.sidebar-expand {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+}
+.sidebar-expand:hover { background: rgba(255,255,255,0.08); }
+.sidebar-expand[hidden] { display: none; }
 .sb-title {
   font-size: 18px;
   font-weight: 700;
@@ -918,6 +953,138 @@ body.col-resizing {
   margin: 1px 4px;
 }
 .ctx-item:hover { background: #2e2e50; color: #e0e7ff; }
+
+/* While arming/drawing an AI Box, show a crosshair over the canvas */
+#canvas.aibox-arming { cursor: crosshair; }
+
+/* AI Box — a translucent dashed region. Its body lets clicks pass through to
+   the nodes inside; only the header bar + resize handle are interactive. */
+.hbox-aibox {
+  position: absolute;
+  border: 1.5px dashed rgba(56,189,248,0.85);
+  background: rgba(56,189,248,0.06);
+  border-radius: 10px;
+  box-sizing: border-box;
+  pointer-events: none; /* pass-through; head/handle re-enable below */
+}
+.hbox-aibox .box-head {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 9px;
+  background: rgba(56,189,248,0.16);
+  border-radius: 8px 8px 0 0;
+  font-size: 12px;
+  cursor: grab;
+}
+.hbox-aibox .box-title {
+  flex: 1;
+  font-weight: 600;
+  color: #bae6fd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hbox-aibox .box-head .box-btn {
+  pointer-events: auto;
+  background: transparent;
+  border: none;
+  color: #bae6fd;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.hbox-aibox .box-head .box-btn:hover { color: #fff; }
+.hbox-aibox .aibox-body { pointer-events: none; }
+.hbox-aibox .box-resize { pointer-events: auto; }
+.hbox-aibox.selected { border-color: #38bdf8; background: rgba(56,189,248,0.12); }
+
+/* -------- Object panel (right drawer) -------- */
+.obj-panel {
+  flex: 0 0 auto;
+  width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  transition: width 0.22s ease;
+  order: 3;
+}
+.obj-panel.open { width: 280px; min-width: 230px; }
+.obj-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.obj-title { font-size: 14px; font-weight: 700; flex: 1; }
+.obj-btn-refresh, .obj-btn-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-family: inherit;
+}
+.obj-btn-refresh:hover, .obj-btn-close:hover { color: var(--text); background: rgba(255,255,255,0.07); }
+.obj-body { flex: 1; overflow-y: auto; padding: 6px 8px 24px; }
+.obj-section {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 12px 8px 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.obj-count {
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 0 7px;
+  font-size: 10px;
+}
+.obj-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  cursor: default;
+}
+.obj-row:hover { background: rgba(255,255,255,0.05); }
+.obj-icon { cursor: pointer; font-size: 13px; width: 16px; text-align: center; }
+.obj-label {
+  flex: 1;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.obj-label:hover { color: var(--accent); }
+.obj-sub { color: var(--muted); font-size: 11px; margin-left: 6px; }
+.obj-del {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  opacity: 0;
+}
+.obj-row:hover .obj-del { opacity: 1; }
+.obj-del:hover { color: #f87171; background: rgba(248,113,113,0.12); }
+.obj-empty { color: var(--muted); font-size: 12px; padding: 6px 10px; }
 /* Select-target toggle: purple when grabbing strokes (matches stroke highlight) */
 #btn-sel-target.target-strokes {
   background: #3b1d5e;

@@ -426,20 +426,73 @@ server.registerTool(
 );
 
 server.registerTool(
+  "list_aiboxes",
+  {
+    title: "ดูกรอบ AI Box (พื้นที่งานที่ผู้ใช้วาดให้)",
+    description:
+      "List the AI Boxes on the active mind map. An AI Box is a rectangle the user drew on the canvas to mark a working REGION, then spoke a command about it (e.g. 'put a mindmap in this box'). Each entry gives the box bounds in WORLD coordinates: x,y (top-left) and w,h. The newest box is marked (ล่าสุด) — when the user says 'in this box / ในกรอบนี้' without naming one, assume the newest. To place nodes INSIDE a box, pass add_topic x/y within [x .. x+w] and [y .. y+h] (keep a small margin), then run tidy_layout is NOT needed if you positioned them yourself.",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const s = await api("/api/state");
+      const boxes = (s.boxes || []).filter((b) => b.kind === "aibox");
+      if (!boxes.length)
+        return ok("ยังไม่มี AI Box — ให้ผู้ใช้คลิกขวาบนพื้นที่ว่าง → เลือก 'AI Box' แล้วลากวาดกรอบก่อน");
+      // newest last by createdAt
+      const sorted = boxes.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      const newestId = sorted[sorted.length - 1].id;
+      const lines = sorted.map((b) => {
+        const tag = b.id === newestId ? " (ล่าสุด)" : "";
+        return `- [id: ${b.id}]${tag} "${b.title || "AI Box"}" — x:${Math.round(b.x)} y:${Math.round(b.y)} w:${Math.round(b.w)} h:${Math.round(b.h)} → วางของในช่วง x ${Math.round(b.x)}…${Math.round(b.x + b.w)}, y ${Math.round(b.y)}…${Math.round(b.y + b.h)}`;
+      });
+      return ok(`AI Box ทั้งหมด (${boxes.length}):\n` + lines.join("\n"));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  "delete_box",
+  {
+    title: "ลบกล่อง/กรอบ (รวม AI Box)",
+    description:
+      "Delete a box by id — works for any box kind (aibox, note, image, portal). Use list_aiboxes to get an AI Box id. Useful when the user asks you to remove an AI Box region after you're done working in it.",
+    inputSchema: {
+      id: z.string().describe("id ของกล่อง (box_...)"),
+    },
+  },
+  async ({ id }) => {
+    try {
+      const r = await api(`/api/boxes/${id}`, "DELETE");
+      return ok(r.removed ? `ลบกล่อง [id: ${id}] แล้ว` : `ไม่พบกล่อง [id: ${id}]`);
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
   "tidy_layout",
   {
     title: "จัดเลย์เอาต์มายด์แมปให้สวยอัตโนมัติ",
     description:
-      "Auto-arrange ALL nodes into a clean left-to-right tidy tree so nothing overlaps: siblings stack in rows, parents center on their children, top-level branches are separated by a gap. Also spreads out any images into their own non-overlapping row below the tree (images otherwise stay stacked at add_image's default position). Call this RIGHT AFTER add_topic/add_topics_bulk/add_image (their auto-positioning tends to clump). By default the tidied tree is anchored to the user's CURRENT VIEWPORT (top-left of what they're looking at) so it stays on screen. Optional spacing overrides: colW (column gap, default 260), rowH (row gap, default 92).",
+      "Auto-arrange nodes into a clean left-to-right tidy tree so nothing overlaps.\n\nPREFERRED: pass rootId to tidy ONLY that node's subtree, pinned where it currently sits — every OTHER branch and all images stay exactly put. The user dislikes the whole project reshuffling, so after add_topic/add_topics_bulk you should normally tidy just the affected branch: pass the new node's id (or its top-most ancestor you added under) as rootId. New nodes are already placed sensibly next to their parent, so often you don't need to tidy at all.\n\nWithout rootId it tidies the ENTIRE project (all nodes + spreads images into a row below) anchored to the current viewport — only use this when the user explicitly asks to re-arrange the whole board. Optional spacing overrides: colW (default 260), rowH (default 92).",
     inputSchema: {
+      rootId: z.string().optional().describe("จัดเฉพาะ subtree ของโหนดนี้ (ตรึงตำแหน่งเดิม ไม่ยุ่งกิ่งอื่น) — เว้นว่าง = จัดทั้งโปรเจกต์"),
       colW: z.number().optional().describe("ระยะห่างคอลัมน์ตามความลึก (px)"),
       rowH: z.number().optional().describe("ระยะห่างแถว (px)"),
     },
   },
-  async ({ colW, rowH }) => {
+  async ({ rootId, colW, rowH }) => {
     try {
-      const r = await api("/api/layout", "POST", { colW, rowH });
-      return ok(`จัดเลย์เอาต์ใหม่แล้ว (${r.nodes} โหนด) ไม่ทับกัน`);
+      const r = await api("/api/layout", "POST", { rootId, colW, rowH });
+      return ok(
+        rootId
+          ? `จัดเฉพาะกิ่ง [${rootId}] แล้ว (${r.nodes} โหนด) — กิ่งอื่นไม่ขยับ`
+          : `จัดเลย์เอาต์ใหม่ทั้งโปรเจกต์แล้ว (${r.nodes} โหนด) ไม่ทับกัน`
+      );
     } catch (e) {
       return fail(e);
     }
@@ -479,6 +532,46 @@ server.registerTool(
       return { content };
     } catch (e) {
       return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  "get_canvas_screenshot",
+  {
+    title: "ดูจอตรงที่ User เลื่อนอยู่ตอนนี้ (viewport)",
+    description:
+      "Returns a screenshot of ONLY what the user currently sees on screen — the current viewport, exactly where they panned/zoomed to. The browser captures and uploads automatically after each viewport change. Use when the user says 'ดูหน้าจอหน่อย' / 'เห็นไหม' / 'ตรงนี้มีอะไร'. For the WHOLE map at once, use get_full_map instead.",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const { dataUrl } = await api("/api/screenshot");
+      const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
+      const mimeType = dataUrl.match(/^data:(image\/\w+);/)?.[1] || "image/jpeg";
+      return { content: [{ type: "image", data: base64, mimeType }] };
+    } catch (e) {
+      return fail("ยังไม่มี screenshot — ลอง pan หรือ zoom แผนที่ก่อนแล้วลองใหม่ครับ");
+    }
+  }
+);
+
+server.registerTool(
+  "get_full_map",
+  {
+    title: "ดูภาพรวมทั้ง Mind Map (ทุกโหนด)",
+    description:
+      "Returns a screenshot of the ENTIRE mind map — every node fitted into one image, regardless of where the user is currently zoomed. The browser briefly fits the whole map, snapshots it, then restores the user's view (non-disruptive). Use this for an overview of the whole project, or when the user says 'ดูทั้งหมด' / 'ภาพรวม' / 'มีอะไรในแผนที่บ้าง'. For only the current on-screen area, use get_canvas_screenshot instead.",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      const { dataUrl } = await api("/api/fullmap");
+      const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
+      const mimeType = dataUrl.match(/^data:(image\/\w+);/)?.[1] || "image/jpeg";
+      return { content: [{ type: "image", data: base64, mimeType }] };
+    } catch (e) {
+      return fail("ถ่ายภาพรวมไม่สำเร็จ — เปิดหน้า http://localhost:4321 ในเบราว์เซอร์ไว้ก่อนนะครับ");
     }
   }
 );

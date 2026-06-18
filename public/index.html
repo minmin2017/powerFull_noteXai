@@ -10,9 +10,13 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js" defer></script>
   </head>
   <body>
     <div id="app">
+      <!-- Floating rail to re-open the chat panel after it's collapsed -->
+      <button id="sidebar-expand" class="sidebar-expand" title="เปิดพาเนลแชท" hidden>💬</button>
+
       <!-- ========== Left: Claude chat panel ========== -->
       <aside id="sidebar">
         <header class="sb-head">
@@ -21,6 +25,7 @@
             Claude
           </div>
           <div class="sb-sub">พาเนลแชท — อ่านสิ่งที่ Claude บอก</div>
+          <button id="sidebar-collapse" class="sidebar-collapse" title="ย่อพาเนลแชท">⟨</button>
         </header>
 
         <div id="chat-tabs" class="chat-tabs">
@@ -106,6 +111,16 @@
         </div>
       </aside>
 
+      <!-- ========== Right: Object panel (collapsible drawer) ========== -->
+      <aside id="obj-panel" class="obj-panel" aria-hidden="true">
+        <div class="obj-head">
+          <span class="obj-title">📋 Object ในโปรเจกต์</span>
+          <button id="obj-refresh" class="obj-btn-refresh" title="รีเฟรชรายการ">🔄</button>
+          <button id="obj-close" class="obj-btn-close" title="ปิด">✕</button>
+        </div>
+        <div id="obj-body" class="obj-body"></div>
+      </aside>
+
       <!-- ========== Right: Mind map stage ========== -->
       <main id="stage">
         <div class="toolbar">
@@ -134,6 +149,7 @@
             <button id="btn-export-png" class="tb-btn" title="ส่งออกเป็นภาพ PNG">⬇ PNG</button>
             <button id="btn-export-pdf" class="tb-btn" title="ส่งออกเป็น PDF ความละเอียดสูง (รวม Handwriting)">⬇ PDF</button>
             <button id="btn-clear" class="tb-btn danger" title="ล้างทั้งกระดาน">🗑</button>
+            <button id="btn-toggle-objects" class="tb-btn" title="พาเนล Object — รายการของทั้งหมดในโปรเจกต์">📋</button>
             <button id="btn-toggle-cal" class="tb-btn" title="เปิด/ปิดแถบตารางเวลา">🗓️</button>
           </div>
         </div>

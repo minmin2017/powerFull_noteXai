@@ -90,6 +90,7 @@
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === "reload") { location.reload(); return; }
+        if (msg.type === "capture-fullmap") { if (window.__captureFullMap) window.__captureFullMap(msg.reqId); return; }
         if (msg.type === "calendar") { if (window.__wsOnCalendar) window.__wsOnCalendar(msg); return; }
         if (msg.type === "state") {
           // Server restarted with new code → refresh to pick it up.
@@ -244,6 +245,7 @@
 
     renderImages();
     renderBoxes();
+    if (typeof renderObjectPanel === "function") renderObjectPanel();
     scheduleReportViewport(); // keep the server's notion of the visible area fresh
 
     const hidden = computeHidden();
@@ -1162,10 +1164,54 @@
   function scheduleReportViewport() {
     if (reportViewportTimer) clearTimeout(reportViewportTimer);
     reportViewportTimer = setTimeout(reportViewport, 350);
+    scheduleScreenshot();
   }
+
+  let screenshotTimer = 0;
+  function scheduleScreenshot() {
+    clearTimeout(screenshotTimer);
+    screenshotTimer = setTimeout(captureScreenshot, 2500);
+  }
+  async function captureScreenshot() {
+    if (!window.html2canvas) return;
+    try {
+      const el = document.getElementById("canvas");
+      const cvs = await html2canvas(el, { useCORS: true, scale: 1, logging: false, backgroundColor: "#1a1a2e" });
+      const dataUrl = cvs.toDataURL("image/jpeg", 0.85);
+      fetch("/api/screenshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl }) }).catch(() => {});
+    } catch (_) {}
+  }
+
+  // Full-map capture — triggered by the server (Claude's get_full_map MCP).
+  // Temporarily fit ALL nodes into view, snapshot, then restore the user's view
+  // so it doesn't disturb where they were looking.
+  async function captureFullMap(reqId) {
+    if (!window.html2canvas) { fetch("/api/fullmap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reqId, error: "no html2canvas" }) }).catch(() => {}); return; }
+    const saved = { x: view.x, y: view.y, scale: view.scale };
+    try {
+      fitView();
+      await new Promise((r) => setTimeout(r, 300)); // let transform + edges settle
+      const el = document.getElementById("canvas");
+      const cvs = await html2canvas(el, { useCORS: true, scale: 1.2, logging: false, backgroundColor: "#1a1a2e" });
+      const dataUrl = cvs.toDataURL("image/jpeg", 0.85);
+      fetch("/api/fullmap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reqId, dataUrl }) }).catch(() => {});
+    } catch (e) {
+      fetch("/api/fullmap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reqId, error: String(e) }) }).catch(() => {});
+    } finally {
+      view.x = saved.x; view.y = saved.y; view.scale = saved.scale;
+      render();
+    }
+  }
+  window.__captureFullMap = captureFullMap;
 
   canvas.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".node")) return;
+    // AI Box draw armed: left-drag traces the region rectangle.
+    if (pendingAiBox && e.button === 0 && !spaceDown) {
+      if (e.target.closest(".hbox")) { disarmAiBox(); return; }
+      startAiBoxDraw(e);
+      return;
+    }
     if (mode === "draw" && e.button === 0 && !spaceDown) {
       startStroke(e);
       return;
@@ -1471,7 +1517,7 @@
     const nodeEl = e.target.closest(".node");
     if (nodeEl) { beginEditNode(nodeEl.querySelector(".node-text")); return; }
     if (e.target.closest(".hbox")) return;
-    if (mode === "select") showPortalMenu(e);
+    if (mode === "select") showCanvasMenu(e);
   });
 
   function removeContextMenu() {
@@ -1479,33 +1525,103 @@
     if (m) { if (m._closeHandler) document.removeEventListener("pointerdown", m._closeHandler); m.remove(); }
   }
 
-  function showPortalMenu(e) {
+  function showCanvasMenu(e) {
     removeContextMenu();
     const pos = eventCanvasPos(e);
     const wpos = screenToWorld(pos.x, pos.y);
-    const others = PROJECTS.filter((p) => p.id !== ACTIVE_ID);
-    if (!others.length) return;
     const menu = document.createElement("div");
     menu.className = "ctx-menu";
     menu.style.cssText = `left:${e.clientX}px;top:${e.clientY}px;`;
-    const head = document.createElement("div");
-    head.className = "ctx-head";
-    head.textContent = "สร้าง Portal ไปยัง…";
-    menu.appendChild(head);
-    others.forEach((p) => {
+
+    const addHead = (txt) => {
+      const head = document.createElement("div");
+      head.className = "ctx-head";
+      head.textContent = txt;
+      menu.appendChild(head);
+    };
+    const addItem = (txt, onClick) => {
       const item = document.createElement("div");
       item.className = "ctx-item";
-      item.textContent = "🔀 " + p.title;
-      item.addEventListener("click", () => {
-        removeContextMenu();
-        api("/api/boxes", "POST", { kind: "portal", x: Math.round(wpos.x), y: Math.round(wpos.y), w: 200, h: 80, title: p.title, targetProjectId: p.id });
-      });
+      item.textContent = txt;
+      item.addEventListener("click", () => { removeContextMenu(); onClick(); });
       menu.appendChild(item);
-    });
+    };
+
+    // AI Box — arm draw mode; user then drags a rectangle region for Claude.
+    addItem("🤖 AI Box — ลากเลือกพื้นที่ให้ AI", () => armAiBoxDraw());
+
+    const others = PROJECTS.filter((p) => p.id !== ACTIVE_ID);
+    if (others.length) {
+      addHead("สร้าง Portal ไปยัง…");
+      others.forEach((p) => {
+        addItem("🔀 " + p.title, () => {
+          api("/api/boxes", "POST", { kind: "portal", x: Math.round(wpos.x), y: Math.round(wpos.y), w: 200, h: 80, title: p.title, targetProjectId: p.id });
+        });
+      });
+    }
+
     document.body.appendChild(menu);
     const closeHandler = (ev) => { if (!menu.contains(ev.target)) { removeContextMenu(); } };
     menu._closeHandler = closeHandler;
     setTimeout(() => document.addEventListener("pointerdown", closeHandler), 0);
+  }
+
+  // ----------------------------------------------------------------------
+  // AI Box — a rectangle region the user drags to scope an AI command.
+  // ----------------------------------------------------------------------
+  let pendingAiBox = false; // armed: next left-drag draws the region rect
+  let aiboxDraw = null;     // active drag: { sx, sy } screen anchor
+
+  function armAiBoxDraw() {
+    pendingAiBox = true;
+    canvas.classList.add("aibox-arming");
+    toast("ลากเมาส์ซ้ายเพื่อวาดกรอบ AI Box 🤖");
+  }
+  function disarmAiBox() {
+    pendingAiBox = false;
+    canvas.classList.remove("aibox-arming");
+  }
+
+  function startAiBoxDraw(e) {
+    const p = eventCanvasPos(e);
+    aiboxDraw = { sx: p.x, sy: p.y };
+    marqueeEl.style.display = "block";
+    marqueeEl.style.left = p.x + "px";
+    marqueeEl.style.top = p.y + "px";
+    marqueeEl.style.width = "0px";
+    marqueeEl.style.height = "0px";
+    window.addEventListener("pointermove", onAiBoxDrawMove);
+    window.addEventListener("pointerup", onAiBoxDrawUp, { once: true });
+  }
+  function onAiBoxDrawMove(e) {
+    if (!aiboxDraw) return;
+    const p = eventCanvasPos(e);
+    const l = Math.min(p.x, aiboxDraw.sx), t = Math.min(p.y, aiboxDraw.sy);
+    const w = Math.abs(p.x - aiboxDraw.sx), h = Math.abs(p.y - aiboxDraw.sy);
+    marqueeEl.style.left = l + "px";
+    marqueeEl.style.top = t + "px";
+    marqueeEl.style.width = w + "px";
+    marqueeEl.style.height = h + "px";
+  }
+  async function onAiBoxDrawUp(e) {
+    window.removeEventListener("pointermove", onAiBoxDrawMove);
+    marqueeEl.style.display = "none";
+    const d = aiboxDraw;
+    aiboxDraw = null;
+    disarmAiBox();
+    if (!d) return;
+    const p = eventCanvasPos(e);
+    const a = screenToWorld(Math.min(p.x, d.sx), Math.min(p.y, d.sy));
+    const b = screenToWorld(Math.max(p.x, d.sx), Math.max(p.y, d.sy));
+    const w = Math.round(b.x - a.x), h = Math.round(b.y - a.y);
+    if (w < 24 || h < 24) { toast("กรอบเล็กไป — ลองวาดใหม่"); return; }
+    const n = (STATE.boxes || []).filter((x) => x.kind === "aibox").length + 1;
+    await api("/api/boxes", "POST", {
+      kind: "aibox",
+      x: Math.round(a.x), y: Math.round(a.y), w, h,
+      title: "AI " + n,
+    });
+    toast("สร้าง AI Box แล้ว — พูดสั่งงานในกรอบนี้ได้เลย 🎙️");
   }
 
   // ----------------------------------------------------------------------
@@ -2214,7 +2330,7 @@
     const pad = 80;
     const w = maxX - minX + pad * 2;
     const h = maxY - minY + pad * 2;
-    const scale = Math.min(2, Math.max(0.2, Math.min(canvas.clientWidth / w, canvas.clientHeight / h)));
+    const scale = Math.min(2, Math.max(0.04, Math.min(canvas.clientWidth / w, canvas.clientHeight / h)));
     view.scale = scale;
     view.x = (canvas.clientWidth - (maxX + minX) * scale) / 2;
     view.y = (canvas.clientHeight - (maxY + minY) * scale) / 2;
@@ -2282,6 +2398,8 @@
         b.title || (b.kind === "image" ? "คลังรูปภาพ" : b.kind === "portal" ? "Portal" : "บันทึกลายมือ");
       if (b.kind === "portal") {
         el.style.height = (b.h || 80) + "px";
+      } else if (b.kind === "aibox") {
+        el.style.height = (b.h || 200) + "px";
       } else if (b.kind === "image") {
         el.style.height = (b.h || 240) + "px";
         renderGallery(el, b);
@@ -2356,9 +2474,38 @@
 
   function createBoxEl(b) {
     const el = document.createElement("div");
-    el.className = "hbox" + (b.kind === "image" ? " hbox-image" : b.kind === "portal" ? " hbox-portal" : "");
+    el.className =
+      "hbox" +
+      (b.kind === "image" ? " hbox-image" :
+       b.kind === "portal" ? " hbox-portal" :
+       b.kind === "aibox" ? " hbox-aibox" : "");
     el.dataset.id = b.id;
     el.dataset.kind = b.kind || "note";
+
+    // AI Box — a translucent region rectangle. Its body lets clicks pass through
+    // to the nodes inside; only the header bar and resize handle are interactive.
+    if (b.kind === "aibox") {
+      el.innerHTML =
+        `<div class="box-head">
+           <span class="box-title"></span>
+           <button class="box-btn b-del" title="ลบกรอบ AI Box">×</button>
+         </div>
+         <div class="aibox-body"></div>
+         <div class="box-resize" title="ปรับขนาด"></div>`;
+      el.querySelector(".box-head").addEventListener("pointerdown", (e) => {
+        if (mode !== "select") return;
+        if (e.target.closest(".box-btn")) return;
+        e.stopPropagation();
+        selectedBoxId = b.id;
+        startBoxMove(e, b.id);
+      });
+      el.querySelector(".b-del").addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm("ลบกรอบ AI Box นี้?")) api(`/api/boxes/${b.id}`, "DELETE");
+      });
+      el.querySelector(".box-resize").addEventListener("pointerdown", (e) => { e.stopPropagation(); startBoxResize(e, b.id); });
+      return el;
+    }
 
     if (b.kind === "portal") {
       el.innerHTML =
@@ -3262,4 +3409,112 @@
   window.__wsOnCalendar = (data) => {
     if (data.type === "calendar") renderCalendar(data);
   };
+
+  // -------------------------------------------------------------------------
+  // Collapse the left chat panel (ย่อพาเนลซ้าย) — persisted in localStorage
+  // -------------------------------------------------------------------------
+  const sidebarEl = document.getElementById("sidebar");
+  const sidebarResizer = document.getElementById("sidebar-resizer");
+  const sidebarExpandBtn = document.getElementById("sidebar-expand");
+  function setSidebarCollapsed(collapsed) {
+    sidebarEl.classList.toggle("collapsed", collapsed);
+    sidebarEl.setAttribute("aria-hidden", String(collapsed));
+    if (sidebarResizer) sidebarResizer.style.display = collapsed ? "none" : "";
+    if (sidebarExpandBtn) sidebarExpandBtn.hidden = !collapsed;
+    try { localStorage.setItem("sidebarCollapsed", collapsed ? "1" : "0"); } catch {}
+    // canvases are sized to their container — refit after the layout shift
+    setTimeout(() => { try { render(); drawEdges(computeHidden()); drawFx(); } catch {} }, 60);
+  }
+  document.getElementById("sidebar-collapse")?.addEventListener("click", () => setSidebarCollapsed(true));
+  sidebarExpandBtn?.addEventListener("click", () => setSidebarCollapsed(false));
+  try { if (localStorage.getItem("sidebarCollapsed") === "1") setSidebarCollapsed(true); } catch {}
+
+  // -------------------------------------------------------------------------
+  // Object panel (พาเนล Object ฝั่งขวา) — list every object, delete by hand
+  // -------------------------------------------------------------------------
+  const objPanel = document.getElementById("obj-panel");
+  const objBody = document.getElementById("obj-body");
+
+  function toggleObjPanel(open) {
+    const show = open !== undefined ? open : !objPanel.classList.contains("open");
+    objPanel.classList.toggle("open", show);
+    objPanel.setAttribute("aria-hidden", String(!show));
+    document.getElementById("btn-toggle-objects").classList.toggle("active", show);
+    if (show) renderObjectPanel();
+  }
+
+  function focusObject(kind, id) {
+    // center the view on an object so the user sees what a row refers to
+    let cx, cy;
+    if (kind === "node") { const n = STATE.nodes.find((x) => x.id === id); if (n) { cx = n.x; cy = n.y; } }
+    else if (kind === "image") { const im = (STATE.images || []).find((x) => x.id === id); if (im) { cx = im.x + im.w / 2; cy = im.y + im.h / 2; } }
+    else { const b = (STATE.boxes || []).find((x) => x.id === id); if (b) { cx = b.x + b.w / 2; cy = b.y + (b.h || 80) / 2; } }
+    if (cx === undefined) return;
+    const r = canvas.getBoundingClientRect();
+    view.x = r.width / 2 - cx * view.scale;
+    view.y = r.height / 2 - cy * view.scale;
+    render(); drawEdges(computeHidden()); drawFx(); scheduleViewport();
+  }
+
+  // window so renderObjectPanel is reachable from render()'s typeof check
+  window.renderObjectPanel = renderObjectPanel;
+  function renderObjectPanel() {
+    if (!objPanel.classList.contains("open")) return;
+    const rows = [];
+    const esc = (s) => escapeHtml(String(s ?? ""));
+
+    const aiboxes = (STATE.boxes || []).filter((b) => b.kind === "aibox");
+    const otherBoxes = (STATE.boxes || []).filter((b) => b.kind !== "aibox");
+    const roots = STATE.nodes.filter((n) => !n.parentId);
+
+    const section = (label, count) => `<div class="obj-section">${label} <span class="obj-count">${count}</span></div>`;
+    const row = (icon, kind, id, label, sub) =>
+      `<div class="obj-row" data-kind="${kind}" data-id="${esc(id)}">
+         <span class="obj-icon">${icon}</span>
+         <span class="obj-label" title="${esc(label)}">${esc(label) || "<ว่าง>"}${sub ? `<span class="obj-sub">${esc(sub)}</span>` : ""}</span>
+         <button class="obj-del" title="ลบ">🗑</button>
+       </div>`;
+
+    if (aiboxes.length) {
+      rows.push(section("🤖 AI Box", aiboxes.length));
+      for (const b of aiboxes) rows.push(row("🤖", "box", b.id, b.title || "AI Box", `${Math.round(b.w)}×${Math.round(b.h)}`));
+    }
+    rows.push(section("🧠 หัวข้อ (Topics)", STATE.nodes.length));
+    if (!STATE.nodes.length) rows.push(`<div class="obj-empty">— ยังไม่มีหัวข้อ —</div>`);
+    for (const n of roots) rows.push(row("●", "node", n.id, n.text || "<ว่าง>", null));
+
+    if (otherBoxes.length) {
+      rows.push(section("📦 กล่อง (Boxes)", otherBoxes.length));
+      for (const b of otherBoxes) {
+        const icon = b.kind === "image" ? "🖼️" : b.kind === "portal" ? "🔀" : "📦";
+        rows.push(row(icon, "box", b.id, b.title || b.kind, b.kind));
+      }
+    }
+    const imgs = STATE.images || [];
+    if (imgs.length) {
+      rows.push(section("🌅 รูปลอย (Images)", imgs.length));
+      imgs.forEach((im, i) => rows.push(row("🌅", "image", im.id, "รูป #" + (i + 1), `${Math.round(im.w)}×${Math.round(im.h)}`)));
+    }
+    const draws = STATE.drawings || [];
+    rows.push(section("✏️ เส้นวาด (Drawings)", draws.length));
+
+    objBody.innerHTML = rows.join("") || `<div class="obj-empty">ยังไม่มี object</div>`;
+
+    objBody.querySelectorAll(".obj-row").forEach((rowEl) => {
+      const kind = rowEl.dataset.kind, id = rowEl.dataset.id;
+      rowEl.querySelector(".obj-label").addEventListener("click", () => focusObject(kind, id));
+      rowEl.querySelector(".obj-icon").addEventListener("click", () => focusObject(kind, id));
+      rowEl.querySelector(".obj-del").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm("ลบ object นี้?")) return;
+        if (kind === "node") await api(`/api/nodes/${id}`, "DELETE");
+        else if (kind === "image") await api(`/api/images/${id}`, "DELETE");
+        else await api(`/api/boxes/${id}`, "DELETE");
+      });
+    });
+  }
+
+  document.getElementById("btn-toggle-objects").addEventListener("click", () => toggleObjPanel());
+  document.getElementById("obj-close").addEventListener("click", () => toggleObjPanel(false));
+  document.getElementById("obj-refresh").addEventListener("click", () => renderObjectPanel());
 })();

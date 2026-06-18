@@ -200,11 +200,14 @@ function autoPosition({ parentId }) {
     const parent = state.nodes.find((n) => n.id === parentId);
     if (parent) {
       const sibs = childrenOf(parentId);
-      const i = sibs.length;
-      return {
-        x: (parent.x ?? 0) + 240,
-        y: (parent.y ?? 0) + (i * 96 - 0),
-      };
+      const x = (parent.x ?? 0) + 240;
+      // Stack the new child just below the lowest existing sibling so it never
+      // overlaps one that was moved by hand — and nobody else has to shift.
+      if (sibs.length) {
+        const lowest = Math.max(...sibs.map((s) => s.y ?? 0));
+        return { x, y: lowest + 96 };
+      }
+      return { x, y: parent.y ?? 0 };
     }
   }
   const roots = state.nodes.filter((n) => !n.parentId);
@@ -299,7 +302,34 @@ function deleteNode(id) {
 // Tidy tree layout: lay every node out left-to-right per branch so siblings
 // never overlap. x = depth column; y = packed rows (leaves get their own row,
 // parents center on their children). Roots stack vertically with a gap.
-function tidyLayout({ colW = 260, rowH = 92, gap = 1, x0, y0 } = {}) {
+function tidyLayout({ colW = 260, rowH = 92, gap = 1, x0, y0, rootId } = {}) {
+  const kidsOf = (id) => state.nodes.filter((n) => (n.parentId || null) === id);
+
+  // Scoped tidy: arrange ONLY the given node's subtree, pinned where that node
+  // currently sits. Every other branch and all images stay exactly put — so
+  // adding/arranging one topic never reshuffles the whole project.
+  if (rootId) {
+    const root = state.nodes.find((n) => n.id === rootId);
+    if (!root) return 0;
+    const baseX = root.x ?? 0, baseY = root.y ?? 0;
+    const subtree = [];
+    let row = 0;
+    const placeOne = (node, depth) => {
+      subtree.push(node);
+      node.x = baseX + depth * colW;
+      const children = kidsOf(node.id);
+      if (!children.length) { node.y = baseY + row * rowH; row += 1; return; }
+      for (const c of children) placeOne(c, depth + 1);
+      node.y = (children[0].y + children[children.length - 1].y) / 2;
+    };
+    placeOne(root, 0);
+    // pin the root to its original y (children centering may have shifted it)
+    const dy = baseY - root.y;
+    if (dy) for (const n of subtree) n.y += dy;
+    changed();
+    return subtree.length;
+  }
+
   // When no explicit origin is given, lay the tidy tree out near the top-left of
   // what the user is currently viewing, so the result stays on screen instead of
   // snapping back to a fixed origin they may have panned away from.
@@ -743,6 +773,56 @@ app.post("/api/viewport", (req, res) => {
 });
 app.get("/api/viewport", (_req, res) => res.json(lastViewport || {}));
 
+// Canvas screenshot — browser POSTs a JPEG dataUrl after each viewport settle
+const SCREENSHOT_PATH = "D:\\powerfull_note_screenshot.jpg";
+app.post("/api/screenshot", (req, res) => {
+  const { dataUrl } = req.body || {};
+  if (dataUrl && dataUrl.startsWith("data:image/")) {
+    const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
+    fs.writeFile(SCREENSHOT_PATH, Buffer.from(base64, "base64"), () => {});
+  }
+  res.json({ ok: true });
+});
+app.get("/api/screenshot", (_req, res) => {
+  if (!fs.existsSync(SCREENSHOT_PATH)) return res.status(404).json({ error: "no screenshot yet" });
+  const base64 = fs.readFileSync(SCREENSHOT_PATH).toString("base64");
+  res.json({ dataUrl: "data:image/jpeg;base64," + base64 });
+});
+
+// Full-map snapshot — Claude asks via GET; we tell the browser (over WS) to fit
+// the whole map and capture it, then resolve once the browser POSTs it back.
+const FULLMAP_PATH = "D:\\powerfull_note_fullmap.jpg";
+const fullmapWaiters = new Map(); // reqId -> {resolve, timer}
+app.post("/api/fullmap", (req, res) => {
+  const { reqId, dataUrl, error } = req.body || {};
+  const w = fullmapWaiters.get(reqId);
+  if (w) {
+    fullmapWaiters.delete(reqId);
+    clearTimeout(w.timer);
+    if (dataUrl && dataUrl.startsWith("data:image/")) {
+      const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
+      fs.writeFile(FULLMAP_PATH, Buffer.from(base64, "base64"), () => {});
+      w.resolve({ dataUrl });
+    } else {
+      w.resolve({ error: error || "no image" });
+    }
+  }
+  res.json({ ok: true });
+});
+app.get("/api/fullmap", (_req, res) => {
+  if (!wss.clients.size) return res.status(503).json({ error: "no browser connected — open http://localhost:4321 first" });
+  const reqId = "fm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+  const p = new Promise((resolve) => {
+    const timer = setTimeout(() => { fullmapWaiters.delete(reqId); resolve({ error: "timeout — browser did not respond" }); }, 12000);
+    fullmapWaiters.set(reqId, { resolve, timer });
+  });
+  broadcastRaw({ type: "capture-fullmap", reqId });
+  p.then((out) => {
+    if (out.dataUrl) res.json({ dataUrl: out.dataUrl });
+    else res.status(504).json({ error: out.error || "capture failed" });
+  });
+});
+
 app.post("/api/undo", (_req, res) => res.json({ ok: undo(), history: historyCounts() }));
 app.post("/api/redo", (_req, res) => res.json({ ok: redo(), history: historyCounts() }));
 
@@ -824,17 +904,27 @@ app.delete("/api/images/:id", (req, res) => res.json({ removed: deleteImage(req.
 // ---- Handwriting boxes ----
 app.post("/api/boxes", (req, res) => {
   const b = req.body || {};
-  const kind = b.kind === "image" ? "image" : b.kind === "portal" ? "portal" : "note";
+  const kind =
+    b.kind === "image" ? "image" :
+    b.kind === "portal" ? "portal" :
+    b.kind === "aibox" ? "aibox" : "note";
+  // aibox = an AI working-region rectangle. It scopes voice commands: the user
+  // draws it, then tells Claude what to do "inside this box". Claude reads its
+  // bounds via list_aiboxes and places nodes within them.
+  const defaultTitle =
+    kind === "image" ? "คลังรูปภาพ" :
+    kind === "portal" ? "Portal" :
+    kind === "aibox" ? "AI Box" : "บันทึกลายมือ";
   const box = {
     id: uid("box"),
     kind,
     x: Number.isFinite(b.x) ? b.x : 160,
     y: Number.isFinite(b.y) ? b.y : 160,
     w: Number.isFinite(b.w) ? b.w : 200,
-    h: Number.isFinite(b.h) ? b.h : 80,
-    title: typeof b.title === "string" ? b.title : kind === "image" ? "คลังรูปภาพ" : kind === "portal" ? "Portal" : "บันทึกลายมือ",
-    strokes: kind === "portal" ? [] : Array.isArray(b.strokes) ? b.strokes : [],
-    items: kind === "portal" ? [] : Array.isArray(b.items) ? b.items : [],
+    h: Number.isFinite(b.h) ? b.h : (kind === "aibox" ? 200 : 80),
+    title: typeof b.title === "string" ? b.title : defaultTitle,
+    strokes: kind === "portal" || kind === "aibox" ? [] : Array.isArray(b.strokes) ? b.strokes : [],
+    items: kind === "portal" || kind === "aibox" ? [] : Array.isArray(b.items) ? b.items : [],
     targetProjectId: kind === "portal" ? (b.targetProjectId || null) : undefined,
     createdAt: Date.now(),
   };
