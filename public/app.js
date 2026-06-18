@@ -2105,7 +2105,14 @@
             fullText = data.text || "";
           }
           $("#voice-interim").textContent = "";
-          if (fullText) submitUserInput(fullText);
+          if (fullText) {
+            const inp = $("#text-input");
+            inp.value = fullText;
+            inp.focus();
+            inp.select();
+            $("#voice-status").textContent = "แก้ข้อความได้ แล้วกด Enter หรือ ส่ง";
+            setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 4000);
+          }
         } catch (err) {
           $("#voice-status").textContent = "STT error: " + err.message;
           setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 3000);
@@ -2155,8 +2162,16 @@
       setMicUI(false);
       const text = (finalBuf + " " + $("#voice-interim").textContent).trim();
       $("#voice-interim").textContent = "";
-      if (text) submitUserInput(text);
-      $("#voice-status").textContent = idleStatus();
+      if (text) {
+        const inp = $("#text-input");
+        inp.value = text;
+        inp.focus();
+        inp.select();
+        $("#voice-status").textContent = "แก้ข้อความได้ แล้วกด Enter หรือ ส่ง";
+        setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 4000);
+      } else {
+        $("#voice-status").textContent = idleStatus();
+      }
     }
   }
 
