@@ -40,6 +40,24 @@
           <span class="model-note">มีผลครั้งถัดไปที่เปิด Claude Code</span>
         </div>
 
+        <div class="stt-switcher">
+          <span class="model-label">ไมค์ STT:</span>
+          <div class="model-btns">
+            <button class="stt-btn" data-stt="webspeech" title="ฟรี ไม่ต้อง API key — ใช้ Chrome/Edge">Web Speech</button>
+            <button class="stt-btn" data-stt="groq" title="แม่นกว่า — ต้อง GROQ_API_KEY ใน env">Groq</button>
+            <button class="stt-btn" data-stt="local" title="Whisper รันบนเครื่อง — ต้อง faster-whisper">Local</button>
+          </div>
+        </div>
+        <div class="stt-switcher" id="whisper-model-row" hidden>
+          <span class="model-label">Whisper:</span>
+          <div class="model-btns">
+            <button class="whisper-btn" data-wm="large-v3-turbo" title="เร็ว ~4× แม่นใกล้เคียง v3">Turbo</button>
+            <button class="whisper-btn" data-wm="large-v3" title="แม่นสุด แต่ช้ากว่า">v3</button>
+            <button class="whisper-btn" data-wm="medium" title="เร็วมาก แม่นพอใช้">Medium</button>
+            <button class="whisper-btn" data-wm="small" title="เร็วสุด แม่นน้อยสุด">Small</button>
+          </div>
+        </div>
+
         <div class="voice-area">
           <div id="voice-status" class="voice-status">กดไมค์เพื่อพูดภาษาไทย</div>
           <div id="voice-interim" class="voice-interim"></div>
@@ -114,6 +132,7 @@
             <span id="zoom-label" class="zoom-label">100%</span>
             <button id="btn-export-md" class="tb-btn" title="ส่งออกเป็น Markdown (.md)">⬇ MD</button>
             <button id="btn-export-png" class="tb-btn" title="ส่งออกเป็นภาพ PNG">⬇ PNG</button>
+            <button id="btn-export-pdf" class="tb-btn" title="ส่งออกเป็น PDF ความละเอียดสูง (รวม Handwriting)">⬇ PDF</button>
             <button id="btn-clear" class="tb-btn danger" title="ล้างทั้งกระดาน">🗑</button>
             <button id="btn-toggle-cal" class="tb-btn" title="เปิด/ปิดแถบตารางเวลา">🗓️</button>
           </div>
@@ -204,6 +223,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

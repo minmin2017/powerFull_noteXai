@@ -280,6 +280,51 @@ body.col-resizing {
   color: var(--muted);
   opacity: 0.7;
 }
+.stt-switcher {
+  border-top: 1px solid var(--line);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+}
+.stt-btn {
+  flex: 1;
+  padding: 5px 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.stt-btn:hover { border-color: var(--accent); }
+.stt-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.whisper-btn {
+  flex: 1;
+  padding: 5px 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.whisper-btn:hover { border-color: var(--accent); }
+.whisper-btn.active {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
 .voice-area {
   border-top: 1px solid var(--line);
   padding: 12px 14px 14px;
@@ -353,15 +398,9 @@ body.col-resizing {
   animation: pulse-red 1.2s infinite;
 }
 @keyframes pulse-red {
-  0% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
-  }
+  0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  70%  { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 .mic-cancel {
   flex: 0 0 auto;
@@ -673,6 +712,16 @@ body.col-resizing {
 }
 #canvas.mode-eraser {
   cursor: cell;
+}
+/* Hold-Space pan: show the grab hand even over the pen/eraser tools, and the
+   closed hand while actually dragging (2-class rules beat the 1-class ones). */
+#canvas.space-pan,
+#canvas.space-pan.mode-draw,
+#canvas.space-pan.mode-eraser {
+  cursor: grab;
+}
+#canvas.space-pan.panning {
+  cursor: grabbing;
 }
 #world {
   position: absolute;

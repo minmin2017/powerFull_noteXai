@@ -1,0 +1,40 @@
+{
+  "round": 6,
+  "responses": [
+    {
+      "agent_id": "index_investor",
+      "name": "Emma",
+      "speech": "Alex, I hear you, and I'll concede the point I've been dancing around: yes, discipline is harder to build when you're food-insecure or working three jobs. But here's what I keep coming back to — the index fund system is uniquely forgiving of imperfect entry. You don't need a network like Carlos's, a down payment like David's, or years of skill-building like Priya's. A $50 automatic transfer the week you get your first raise is enough to start a system that will outlast every mistake you make afterward. The bar isn't zero, but it's the lowest bar on this table.",
+      "key_point": "Index investing has the most forgiving on-ramp of any compounding system — small, automatic, and resilient to imperfect circumstances.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "real_estate",
+      "name": "David",
+      "speech": "Alex, I'll grant you this much — you've been the most honest person at this table about the gap between theory and practice. But here's what I've noticed across six rounds: you keep pointing at the map without ever drawing a better one. Emma's system, Priya's skills, Carlos's networks, my properties — we've all got scars from building these, not just blueprints. At some point, 'your circumstances may vary' stops being a critique and starts being an excuse not to commit to anything. I had to scrape together a down payment on my first duplex working double shifts — the leverage was always there waiting, I just had to show up for it.",
+      "key_point": "Structural critique without alternative prescription is paralysis dressed as sophistication — real access gaps exist, but they don't invalidate the mechanism for those who can reach it.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "self_investor",
+      "name": "Priya",
+      "speech": "Alex, I've been listening carefully to your critique across every round, and I want to name what's actually happening: you're using 'unequal starting conditions' as an epistemological escape hatch that immunizes you from ever having to recommend anything. Yes, conditions vary — but the person with the fewest assets and the worst starting position still has a brain, time, and the ability to learn. I built my first company with no capital, no network, and no safety net — the skills came first and created everything else. At some point, acknowledging systemic barriers has to coexist with identifying what someone can actually do tomorrow morning.",
+      "key_point": "Critique without alternative is paralysis dressed as sophistication — human capital remains the most actionable first move precisely for those with the worst starting conditions.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "relationship_investor",
+      "name": "Carlos",
+      "speech": "Alex, I want to genuinely engage with your critique because you've been the sharpest thorn in this conversation — but I think you've backed yourself into a corner. You keep pointing out that every strategy depends on starting conditions, and you're right, but you never tell us what someone *without* good starting conditions should actually do. My father came to this country with nothing — no savings, no English, no credit — but he had cousins, a church, a community that pooled money for his first year. That network *was* his starting condition, and it was one he could build even when everything else was stripped away. Social capital isn't immune to your critique, but it's the most buildable asset from zero, which is exactly why marginalized communities have always turned to it first.",
+      "key_point": "Alex's structural critique is valid but incomplete — social capital is uniquely buildable from genuine zero, which is why it's historically been the first resort of people with nothing else.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "pragmatic_skeptic",
+      "name": "Alex",
+      "speech": "I want to pause on something Emma, David, Priya, and Carlos are all doing: each of you claims your strategy is 'accessible' by redefining accessibility around the specific barriers you never personally hit. Emma, you say discipline is available at any income level — but when you're working two jobs and your car breaks down, 'margin before lifestyle inflation' is a luxury of predictability, not just willpower. The real question nobody here has answered is: what do you actually recommend to someone with negative margin, no network, no credit history, and no time — and how do you know it works for them, not just for people who look like you did at 25?",
+      "key_point": "Every 'accessible' claim in this room is accessibility defined from the speaker's position, not the most constrained person's.",
+      "directed_at": "group"
+    }
+  ]
+}

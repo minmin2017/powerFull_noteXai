@@ -1,0 +1,40 @@
+{
+  "round": 1,
+  "responses": [
+    {
+      "agent_id": "index_investor",
+      "name": "Emma",
+      "speech": "I'll start with what actually worked for me: I retired at 38 by treating investing like a boring utility bill — automatic, consistent, non-negotiable. Every month, 70% of my income went into low-cost index funds, and I never tried to be clever about it. The math of compound interest doesn't care how exciting your strategy is, it just rewards patience and time in the market.",
+      "key_point": "Consistency and low costs beat cleverness — index funds and high savings rate is the most reliable path to financial freedom.",
+      "directed_at": "group"
+    },
+    {
+      "agent_id": "real_estate",
+      "name": "David",
+      "speech": "I'll tell you exactly where I put my money — brick and mortar, every single time. Twelve properties, and every month those tenants pay down my mortgages while I sleep. You can't do that with a stock certificate — you can't leverage a bank's money at 4-to-1 to buy the S&P 500 the way I can buy a $400,000 duplex with $80,000 down. And when the market crashed in 2008, I still had roofs over people's heads — people always need a place to live.",
+      "key_point": "Real estate uniquely combines leverage, cash flow, tax advantages, and a tangible asset that produces income regardless of market sentiment.",
+      "directed_at": "group"
+    },
+    {
+      "agent_id": "self_investor",
+      "name": "Priya",
+      "speech": "I'll say what nobody with a brokerage account wants to hear: the highest-returning asset I've ever owned wasn't equity — it was the $15,000 I spent on a coding bootcamp at 22 that let me build my first product with zero employees. That single skill investment returned 200x when I sold the company. The S&P 500 is a great place to park money you've already created, but it cannot create your first dollar — only you can do that, and you do it by being more valuable than you were yesterday.",
+      "key_point": "Human capital — skills, network, and judgment — is the engine that generates wealth; financial assets are just where you store the exhaust.",
+      "directed_at": "group"
+    },
+    {
+      "agent_id": "relationship_investor",
+      "name": "Carlos",
+      "speech": "I'll start simple: my network has returned more than any stock I've ever heard of. Three job offers came through people I knew, not applications I sent. When I had a health scare two years ago, it was relationships that got me to the right doctor fast, negotiated my bills down, and kept my family fed while I recovered. You can't put that in a brokerage account, but try telling me it's not an investment.",
+      "key_point": "Social capital is the highest-ROI investment most people ignore because it doesn't show up on a spreadsheet.",
+      "directed_at": "group"
+    },
+    {
+      "agent_id": "pragmatic_skeptic",
+      "name": "Alex",
+      "speech": "Before anyone starts pitching their favorite asset class, I want to put something on the table: every single piece of advice you're about to hear is filtered through your specific circumstances — your country, your starting capital, your network, your timing. The person who got rich flipping condos in 2012 Miami is not giving you a universal truth, they're giving you a survivor's memoir. So when you tell me 'this is what works,' I need to know: works for whom, when, and what percentage of people who tried it actually succeeded?",
+      "key_point": "All investment advice is survivorship-biased autobiography, not universal strategy.",
+      "directed_at": "group"
+    }
+  ]
+}

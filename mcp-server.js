@@ -69,15 +69,28 @@ server.registerTool(
   {
     title: "อ่านมายด์แมปปัจจุบัน",
     description:
-      "Read the current mind map: returns the topic tree with node ids, plus counts of drawings and recent chat. Call this first before editing so you know which node ids exist.",
+      "Read the current mind map: returns the topic tree with node ids, counts of drawings and recent chat, AND the user's current viewport (the world-area they are looking at right now). Call this first before editing so you know which node ids exist and where the user is looking.",
     inputSchema: {},
   },
   async () => {
     try {
       const s = await api("/api/state");
       const tree = renderTree(s.nodes);
+      let vpLine;
+      const vp = s.viewport;
+      if (vp && Number.isFinite(vp.cx)) {
+        vpLine =
+          `\n\nหน้าต่างที่ผู้ใช้กำลังดูอยู่ (current viewport): ` +
+          `กึ่งกลางที่ (${Math.round(vp.cx)}, ${Math.round(vp.cy)}), ` +
+          `ซูม ${Math.round((vp.scale || 1) * 100)}%, ` +
+          `กรอบโลกที่เห็น x ${Math.round(vp.minX)}…${Math.round(vp.maxX)} · y ${Math.round(vp.minY)}…${Math.round(vp.maxY)}.` +
+          `\n→ ถ้าผู้ใช้บอกให้เพิ่ม/วางของ "ตรงนี้/หน้านี้" ให้วางใกล้กึ่งกลางนี้ หรือเว้น x/y ไว้ ` +
+          `(add_topic หัวข้อหลัก / add_image จะวางที่หน้าปัจจุบันให้เอง); ถ้าตั้งใจวางที่อื่นค่อยระบุ x/y เอง.`;
+      } else {
+        vpLine = `\n\n(ยังไม่รู้ว่าผู้ใช้กำลังดูตรงไหน — ยังไม่ได้เลื่อน/ซูม หรือเพิ่งสลับโปรเจกต์)`;
+      }
       const out =
-        `หัวข้อ (Mind map): "${s.meta?.title || "Untitled"}"\n\n${tree}\n\n` +
+        `หัวข้อ (Mind map): "${s.meta?.title || "Untitled"}"\n\n${tree}${vpLine}\n\n` +
         `รวมโหนด: ${s.nodes.length} | ลายเส้นวาด: ${s.drawings.length} | ข้อความแชท: ${s.chat.length}`;
       return ok(out);
     } catch (e) {
@@ -91,7 +104,7 @@ server.registerTool(
   {
     title: "เพิ่มหัวข้อ/หัวข้อย่อย",
     description:
-      "Add a node to the mind map. Omit parentId to create a top-level topic. Pass parentId to add a sub-topic under an existing node (get ids from get_mindmap). Position is auto-laid-out unless x and y are given. Returns the new node id.",
+      "Add a node to the mind map. Omit parentId to create a top-level topic. Pass parentId to add a sub-topic under an existing node (get ids from get_mindmap). Position is auto-laid-out unless x and y are given — and when omitted, a new top-level topic is placed in the user's CURRENT VIEWPORT (where they are looking) instead of a fixed origin. Returns the new node id.",
     inputSchema: {
       text: z.string().describe("ข้อความของหัวข้อ"),
       parentId: z.string().optional().describe("id ของโหนดแม่ (เว้นว่าง = หัวข้อหลัก)"),
@@ -346,7 +359,7 @@ server.registerTool(
   {
     title: "วางรูปภาพลงบนมายด์แมป",
     description:
-      "Place an image onto the current mind map by URL — use this to paste an important picture you found while browsing the web. The server downloads the image and adds it to the active project; the user can then move, resize and rotate it. Optionally give world coordinates (x, y) and a target width/height.",
+      "Place an image onto the current mind map by URL — use this to paste an important picture you found while browsing the web. The server downloads the image and adds it to the active project; the user can then move, resize and rotate it. If you omit x/y the image is centered on the user's CURRENT VIEWPORT (where they are looking); optionally give world coordinates (x, y) and a target width/height.",
     inputSchema: {
       url: z.string().describe("URL ของรูปภาพ (เช่นรูปที่เจอจากการค้นเว็บ)"),
       x: z.number().optional().describe("ตำแหน่ง x ในพิกัดโลก (เว้นว่าง = ค่าเริ่มต้น)"),
@@ -417,7 +430,7 @@ server.registerTool(
   {
     title: "จัดเลย์เอาต์มายด์แมปให้สวยอัตโนมัติ",
     description:
-      "Auto-arrange ALL nodes into a clean left-to-right tidy tree so nothing overlaps: siblings stack in rows, parents center on their children, top-level branches are separated by a gap. Also spreads out any images into their own non-overlapping row below the tree (images otherwise stay stacked at add_image's default position). Call this RIGHT AFTER add_topic/add_topics_bulk/add_image (their auto-positioning tends to clump). Optional spacing overrides: colW (column gap, default 260), rowH (row gap, default 92).",
+      "Auto-arrange ALL nodes into a clean left-to-right tidy tree so nothing overlaps: siblings stack in rows, parents center on their children, top-level branches are separated by a gap. Also spreads out any images into their own non-overlapping row below the tree (images otherwise stay stacked at add_image's default position). Call this RIGHT AFTER add_topic/add_topics_bulk/add_image (their auto-positioning tends to clump). By default the tidied tree is anchored to the user's CURRENT VIEWPORT (top-left of what they're looking at) so it stays on screen. Optional spacing overrides: colW (column gap, default 260), rowH (row gap, default 92).",
     inputSchema: {
       colW: z.number().optional().describe("ระยะห่างคอลัมน์ตามความลึก (px)"),
       rowH: z.number().optional().describe("ระยะห่างแถว (px)"),
@@ -452,7 +465,8 @@ server.registerTool(
         text: `ผู้ใช้ส่งรูปมาให้ดู ${items.length} รูป:`,
       });
       for (const it of items) {
-        const resp = await fetch(BASE + it.src);
+        const url = /^https?:\/\//i.test(it.src) ? it.src : BASE + it.src;
+        const resp = await fetch(url);
         if (!resp.ok) {
           content.push({ type: "text", text: `(โหลดรูปไม่ได้: ${it.src})` });
           continue;

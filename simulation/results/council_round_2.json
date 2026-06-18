@@ -1,0 +1,40 @@
+{
+  "round": 2,
+  "responses": [
+    {
+      "agent_id": "index_investor",
+      "name": "Emma",
+      "speech": "Alex, you're half right — survivorship bias is real, and I'll own that my path required a stable income and no major health crises. But the math of low-cost index funds isn't autobiography, it's arithmetic: fees compound just as powerfully as returns, and a 1% expense ratio over 30 years can cost you a decade of freedom. Priya, I love the human capital framing, but skills without a system to capture and deploy the income they generate is just a leaky bucket — I've watched high earners burn through $300K salaries with nothing to show at 50.",
+      "key_point": "The FIRE framework isn't about being clever — it's about building an irreversible system where every dollar you earn automatically works harder than you do.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "real_estate",
+      "name": "David",
+      "speech": "Priya, I actually agree with you more than you'd expect — human capital is the engine. But here's where I push back: real estate IS the vehicle that turns that engine into generational wealth, because it's one of the only asset classes where the bank hands you four dollars for every one you put in. Carlos, you talk about social capital — my best deals came from relationships with contractors, property managers, and other landlords. So I'm not dismissing either of you, I'm saying real estate is where all of it converges: skills, relationships, and financial leverage working together.",
+      "key_point": "Real estate is uniquely powerful because it multiplies human and social capital through leverage, not just financial capital alone.",
+      "directed_at": "Priya"
+    },
+    {
+      "agent_id": "self_investor",
+      "name": "Priya",
+      "speech": "Carlos, you're onto something I almost missed in my own story — when I sold my company, half the value came from introductions my investors made, not the product itself. But I'd push back slightly: social capital without underlying skill is just networking, which is hollow. The relationships that moved the needle for me were built because I had something real to offer, not because I was good at schmoozing. So maybe it's not human capital versus social capital — it's that skills are the currency you use to buy the relationships that actually matter.",
+      "key_point": "Social capital and human capital are multiplicative, not competing — skills are the currency that makes relationships valuable rather than transactional.",
+      "directed_at": "Carlos"
+    },
+    {
+      "agent_id": "relationship_investor",
+      "name": "Carlos",
+      "speech": "Alex, you're right that survivorship bias is real — but you're using it as an escape hatch from having to commit to anything. I'll grant you that my story isn't everyone's story, but here's what I'd push back on: when I was in the hospital three years ago and couldn't work for four months, it wasn't my index fund that brought meals to my kids or called in favors to keep my consulting contract alive — it was people. Priya, I think we're actually saying the same thing from different angles, because the network you're calling 'human capital' IS what I mean by social capital — the real question is whether you're treating those relationships as assets to extract from or as living things you genuinely tend to.",
+      "key_point": "Social capital isn't just a career accelerator — it's an insurance policy and a safety net that financial instruments fundamentally cannot replicate.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "pragmatic_skeptic",
+      "name": "Alex",
+      "speech": "I want to push back on all of you at once, but let me start with Priya. You said human capital is 'the engine' — but that's exactly what someone who succeeded via human capital would say. I've interviewed janitors with incredible skills who stayed janitors because they were born in the wrong city, spoke the wrong language, or graduated in 2008. Carlos, same problem: your 'social capital' advice is essentially 'know the right people' — which is spectacularly unhelpful if you weren't born into rooms where the right people exist.",
+      "key_point": "Every framework here confuses personal success factors with universal levers — the strategy that worked for you is inseparable from the circumstances you can't replicate.",
+      "directed_at": "Priya"
+    }
+  ]
+}

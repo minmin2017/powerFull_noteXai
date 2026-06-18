@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import os from "node:os";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 4321;
@@ -52,6 +53,11 @@ function emptyState(title = "My Mind Map") {
 let projects = []; // [{ id, title }]
 let activeId = null;
 let state = emptyState();
+
+// Ephemeral UI state: the world-area the user is currently looking at (reported
+// by the browser on pan/zoom). Lets new nodes/images land where the user can see
+// them, and lets Claude read it via get_mindmap. Not persisted, not broadcast.
+let lastViewport = null;
 
 function ensureDirs() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -161,6 +167,7 @@ function activateProject(id) {
   flushNow(); // persist the project we're leaving
   activeId = id;
   state = loadProjectData(id);
+  lastViewport = null; // viewport is per-project; the browser re-reports on switch
   saveIndex();
   return true;
 }
@@ -175,6 +182,7 @@ function deleteProject(id) {
   if (activeId === id) {
     activeId = projects[0].id;
     state = loadProjectData(activeId);
+    lastViewport = null;
   }
   saveIndex();
   return true;
@@ -200,6 +208,15 @@ function autoPosition({ parentId }) {
     }
   }
   const roots = state.nodes.filter((n) => !n.parentId);
+  // Drop new top-level topics where the user is currently looking (current
+  // viewport), lightly fanned so several adds in a row don't stack exactly.
+  if (lastViewport && Number.isFinite(lastViewport.cx)) {
+    const k = roots.length % 6;
+    return {
+      x: Math.round(lastViewport.cx - 90 + k * 18),
+      y: Math.round(lastViewport.cy - 24 + k * 48),
+    };
+  }
   return { x: 120, y: 120 + roots.length * 140 };
 }
 
@@ -282,7 +299,19 @@ function deleteNode(id) {
 // Tidy tree layout: lay every node out left-to-right per branch so siblings
 // never overlap. x = depth column; y = packed rows (leaves get their own row,
 // parents center on their children). Roots stack vertically with a gap.
-function tidyLayout({ colW = 260, rowH = 92, gap = 1, x0 = 120, y0 = 120 } = {}) {
+function tidyLayout({ colW = 260, rowH = 92, gap = 1, x0, y0 } = {}) {
+  // When no explicit origin is given, lay the tidy tree out near the top-left of
+  // what the user is currently viewing, so the result stays on screen instead of
+  // snapping back to a fixed origin they may have panned away from.
+  if (x0 === undefined || y0 === undefined) {
+    if (lastViewport && Number.isFinite(lastViewport.minX)) {
+      x0 = x0 ?? Math.round(lastViewport.minX + 60);
+      y0 = y0 ?? Math.round(lastViewport.minY + 60);
+    } else {
+      x0 = x0 ?? 120;
+      y0 = y0 ?? 120;
+    }
+  }
   const kids = (id) =>
     state.nodes.filter((n) => (n.parentId || null) === id);
   let row = 0;
@@ -368,13 +397,22 @@ function saveAsset(buffer, mime) {
 
 // Place an image object into the active map (src is a public /assets URL).
 function placeImage({ src, x, y, w, h, rotation }) {
+  w = w ?? 240;
+  h = h ?? 180;
+  // No explicit position → center the image on the user's current viewport so a
+  // pasted/fetched picture lands where they're looking (paste from the browser
+  // already passes explicit coords; this covers Claude's add_image).
+  if ((x === undefined || y === undefined) && lastViewport && Number.isFinite(lastViewport.cx)) {
+    x = x ?? Math.round(lastViewport.cx - w / 2);
+    y = y ?? Math.round(lastViewport.cy - h / 2);
+  }
   const img = {
     id: uid("im"),
     src,
     x: x ?? 200,
     y: y ?? 200,
-    w: w ?? 240,
-    h: h ?? 180,
+    w,
+    h,
     rotation: rotation ?? 0,
     createdAt: Date.now(),
   };
@@ -684,7 +722,26 @@ wss.on("connection", (ws) => {
 // ---------------------------------------------------------------------------
 // REST API
 // ---------------------------------------------------------------------------
-app.get("/api/state", (_req, res) => res.json({ ...state, projects, activeId, history: historyCounts() }));
+app.get("/api/state", (_req, res) => res.json({ ...state, projects, activeId, viewport: lastViewport, history: historyCounts() }));
+
+// Ephemeral: the world-area the user is currently looking at. Reported by the
+// browser on pan/zoom (debounced). Does NOT broadcast or persist — it's a
+// one-way hint so server-side auto-placement and Claude can use the live view.
+app.post("/api/viewport", (req, res) => {
+  const b = req.body || {};
+  const n = (v) => (Number.isFinite(v) ? v : undefined);
+  if (Number.isFinite(b.cx) && Number.isFinite(b.cy)) {
+    lastViewport = {
+      x: n(b.x), y: n(b.y), scale: n(b.scale) || 1,
+      cx: b.cx, cy: b.cy,
+      minX: n(b.minX), minY: n(b.minY), maxX: n(b.maxX), maxY: n(b.maxY),
+      w: n(b.w), h: n(b.h),
+      ts: Date.now(),
+    };
+  }
+  res.json({ ok: true });
+});
+app.get("/api/viewport", (_req, res) => res.json(lastViewport || {}));
 
 app.post("/api/undo", (_req, res) => res.json({ ok: undo(), history: historyCounts() }));
 app.post("/api/redo", (_req, res) => res.json({ ok: redo(), history: historyCounts() }));
@@ -883,6 +940,124 @@ app.post("/api/launch-claude", (req, res) => {
 });
 
 app.post("/api/voice", (req, res) => res.json(setVoice((req.body || {}).text)));
+
+// Groq Whisper transcription — accepts raw audio bytes, returns { text }
+app.post("/api/transcribe", express.raw({ type: "*/*", limit: "25mb" }), async (req, res) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "GROQ_API_KEY ไม่ได้ตั้งค่า — ใส่ใน env ก่อนรัน server" });
+  const lang = req.query.lang || "th";
+  try {
+    const formData = new FormData();
+    const blob = new Blob([req.body], { type: req.headers["content-type"] || "audio/webm" });
+    formData.append("file", blob, "audio.webm");
+    formData.append("model", "whisper-large-v3");
+    formData.append("language", lang);
+    const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: formData,
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data.error?.message || "Groq API error" });
+    res.json({ text: data.text || "" });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+// ---------------------------------------------------------------------------
+// Persistent faster-whisper worker — loads model once, reuses for all jobs
+// ---------------------------------------------------------------------------
+let whisperWorker = null;
+let whisperReady = false;
+let whisperModel = "large-v3-turbo"; // default
+const whisperQueue = [];
+let whisperCurrentJob = null;
+let whisperLineBuf = "";
+
+function whisperHandleLine(line) {
+  if (line === "LOADING") { console.log(`[Whisper] loading ${whisperModel}…`); return; }
+  if (line === "READY")   { whisperReady = true; console.log(`[Whisper] ${whisperModel} ready ✓`); whisperProcessNext(); return; }
+  if (!whisperCurrentJob) return;
+  const { res, tmpFile } = whisperCurrentJob;
+  if (line === "DONE" || line.startsWith("ERROR:")) {
+    if (line.startsWith("ERROR:")) console.error("[Whisper]", line);
+    res.end();
+    try { fs.unlinkSync(tmpFile); } catch {}
+    whisperCurrentJob = null;
+    whisperProcessNext();
+    return;
+  }
+  if (line) res.write(line + "\n");
+}
+
+function whisperProcessNext() {
+  if (!whisperReady || whisperCurrentJob || whisperQueue.length === 0) return;
+  whisperCurrentJob = whisperQueue.shift();
+  const { tmpFile, lang } = whisperCurrentJob;
+  console.log(`[Whisper] job: lang=${lang} queue=${whisperQueue.length}`);
+  whisperWorker.stdin.write(`${tmpFile}|${lang}\n`);
+}
+
+function spawnWhisperWorker(model) {
+  if (model) whisperModel = model;
+  if (whisperWorker) {
+    // end any in-progress job so its HTTP response closes cleanly
+    if (whisperCurrentJob) { whisperCurrentJob.res.end(); whisperCurrentJob = null; }
+    whisperReady = false;
+    try { whisperWorker.kill(); } catch {}
+  }
+  console.log(`[Whisper] spawning worker (${whisperModel})…`);
+  whisperWorker = spawn("python", [path.join(__dirname, "whisper_worker.py"), whisperModel]);
+  whisperReady = false;
+  whisperLineBuf = "";
+  whisperWorker.stdout.on("data", (d) => {
+    whisperLineBuf += d.toString();
+    const lines = whisperLineBuf.split("\n");
+    whisperLineBuf = lines.pop();
+    lines.forEach(l => whisperHandleLine(l.trim()));
+  });
+  whisperWorker.stderr.on("data", d => console.error("[Whisper stderr]", d.toString().trim()));
+  whisperWorker.on("close", (code) => {
+    if (code === null) return; // killed intentionally (model switch)
+    console.log(`[Whisper] worker exited: ${code} — restarting in 3s`);
+    whisperWorker = null; whisperReady = false;
+    if (whisperCurrentJob) { whisperCurrentJob.res.end(); whisperCurrentJob = null; }
+    setTimeout(() => spawnWhisperWorker(), 3000);
+  });
+}
+spawnWhisperWorker();
+
+const VALID_WHISPER_MODELS = ["large-v3", "large-v3-turbo", "medium", "small"];
+app.get("/api/whisper-model", (_req, res) => res.json({ model: whisperModel }));
+app.post("/api/whisper-model", (req, res) => {
+  const { model } = req.body || {};
+  if (!VALID_WHISPER_MODELS.includes(model)) return res.status(400).json({ error: "invalid model" });
+  if (model === whisperModel) return res.json({ ok: true, model });
+  spawnWhisperWorker(model);
+  res.json({ ok: true, model });
+});
+
+// Local faster-whisper endpoint — streams segments, model stays loaded between calls
+app.post("/api/transcribe-local", express.raw({ type: "*/*", limit: "100mb" }), (req, res) => {
+  const lang = req.query.lang || "th";
+  const body = req.body;
+  if (!body || !Buffer.isBuffer(body) || body.length === 0)
+    return res.status(400).json({ error: "ไม่ได้รับข้อมูลเสียง (body ว่าง)" });
+  const tmpFile = path.join(os.tmpdir(), `pn_audio_${Date.now()}.webm`);
+  try { fs.writeFileSync(tmpFile, body); } catch (e) { return res.status(500).json({ error: String(e) }); }
+  console.log(`[STT] queued: ${body.length} bytes, lang=${lang}`);
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Transfer-Encoding", "chunked");
+  res.setHeader("X-Accel-Buffering", "no");
+  const job = { tmpFile, lang, res };
+  whisperQueue.push(job);
+  whisperProcessNext();
+  res.on("close", () => {
+    const qi = whisperQueue.indexOf(job);
+    if (qi !== -1) { whisperQueue.splice(qi, 1); try { fs.unlinkSync(tmpFile); } catch {} }
+  });
+});
+
 app.get("/api/voice/latest", (req, res) => {
   const consume = req.query.consume === "true" || req.query.consume === "1";
   const v = state.voice.latest;

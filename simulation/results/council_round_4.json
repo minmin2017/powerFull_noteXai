@@ -1,0 +1,40 @@
+{
+  "round": 4,
+  "responses": [
+    {
+      "agent_id": "index_investor",
+      "name": "Emma",
+      "speech": "Alex, I hear you on unequal access, and you're not wrong that starting capital matters — but you're conflating 'imperfect access' with 'useless advice.' A 22-year-old earning $40,000 can open a Vanguard account with $1 and invest in a total market index fund today, this afternoon, with lower barriers than at any point in human history. Priya, I actually want to concede something to you this round: you're right that the capacity to earn matters — I just think most people dramatically underinvest in the *capture* system relative to the *generation* system, spending years building skills while letting savings sit in a checking account earning nothing.",
+      "key_point": "Democratized access to low-cost index funds means the 'unequal access' objection, while real at the margins, doesn't invalidate the core system for the vast majority of earners.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "real_estate",
+      "name": "David",
+      "speech": "Alex, you keep pointing at unequal access like it's a gotcha, but you're describing the starting line, not the finish line — and frankly, real estate has historically been one of the most accessible wealth-building tools for working-class people precisely because banks will lend you 80% of the purchase price on a tangible asset they can repossess. My first property was a duplex I bought with an FHA loan at 3.5% down while earning a middle-class salary. Emma's right that systems matter, but her system requires capital to invest upfront with no cash flow in the meantime — my system paid me rent while it compounded. Priya, I hear you on skills being portable, but skills depreciate; a paid-off building in a growing city does not.",
+      "key_point": "Real estate democratizes leverage in a way no other asset class does — banks fund 80% of your investment in a cash-flowing tangible asset, making it uniquely accessible to ordinary earners.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "self_investor",
+      "name": "Priya",
+      "speech": "Alex, you keep raising the access problem as if it invalidates every argument — but you're actually proving my point. The one investment with the lowest barrier to entry is learning: a library card, YouTube, a cheap laptop, conversations with people smarter than you. I started with none of David's capital, none of Emma's stable income to index — I started with obsessive curiosity and a willingness to work alongside people who knew more than me. The access gap is real, but human capital is precisely *where* the gap is smallest, which is why I'm frustrated we keep treating it as a luxury rather than the starting point.",
+      "key_point": "Human capital has the lowest barrier to entry of any compounding asset, making it the most democratically accessible path — especially for those without starting capital.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "relationship_investor",
+      "name": "Carlos",
+      "speech": "Alex, you're right that access is unequally distributed — but here's what you keep missing: social capital is the *most* equally accessible form of compounding available to people with nothing. I grew up in a neighborhood where nobody had index funds or rental properties, but the people who thrived were the ones who showed up for others, built trust, and called in favors when it mattered. Priya, I love where you're going with 'multiplicative' — because that's exactly it: a first-generation immigrant with skills but no network is leaving enormous value on the table, while someone with half the skills and deep community roots will outperform them every time. The uncomfortable truth is that relationships aren't just a multiplier for people who already have advantages — they're often the *only* lever available to people who don't.",
+      "key_point": "Social capital is uniquely democratic as an investment — it's the one compounding asset accessible regardless of starting wealth, and historically it's what poor and marginalized communities have always relied on to survive and advance.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "pragmatic_skeptic",
+      "name": "Alex",
+      "speech": "Carlos, you just called social capital a 'cross-cultural human technology' — but whose culture? The research on social trust and network density shows enormous variance: Scandinavian countries have high generalized trust baked into institutions, while in high-inequality societies, networks calcify into gatekeeping mechanisms that exclude more people than they include. And Priya, I want to push on 'portable' — portable to whom? A software engineer's skills travel; a coal miner's don't. The capacity to generate value is durable only if you started with access to the kind of human capital the market currently rewards. I'm not saying any of you are wrong about what worked for you — I'm saying you're all describing climbing a ladder while ignoring that the ladder was bolted to the floor before you arrived.",
+      "key_point": "The portability and universality of every strategy here depends on initial conditions that the strategies themselves cannot create.",
+      "directed_at": "Carlos"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "round": 3,
+  "responses": [
+    {
+      "agent_id": "index_investor",
+      "name": "Emma",
+      "speech": "Alex, I hear you on survivorship bias — but you're conflating 'not universally replicable' with 'not useful.' The math of compound interest isn't autobiography; it's arithmetic. A 25-year-old saving 50% of a $50k salary into index funds will reach financial independence in roughly 17 years — that's not my story, that's a spreadsheet. Priya, I actually agree that skills generate the income — but without the system to capture and compound what skills produce, you're running on a treadmill that stops the moment you do.",
+      "key_point": "Compound interest is math, not memoir — the system that captures earnings matters as much as the capacity to earn them.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "real_estate",
+      "name": "David",
+      "speech": "Alex, I hear your survivorship bias critique and I'll grant you it has teeth — but here's where I think you're wrong: the mechanics of real estate aren't autobiography, they're arithmetic. Leverage at 4:1 on an appreciating, cash-flowing asset is math, not luck. Priya, you said skills make relationships non-transactional, and I actually love that framing — because what I've found is that every deal I've done in the last 20 years came through a relationship first, a spreadsheet second. My point isn't that real estate beats everything for everyone, it's that the structure of the asset class — leverage, depreciation, cash flow, forced savings through principal paydown — creates compounding that paper assets simply cannot replicate at the same risk-adjusted level for someone willing to put in the work.",
+      "key_point": "Real estate's advantage isn't personal circumstance — it's structural: leverage on a tangible, income-producing asset creates compounding that paper assets can't match at the same risk-adjusted level.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "self_investor",
+      "name": "Priya",
+      "speech": "Alex, I hear your survivorship bias critique and I'll give you partial credit — but you're using it as a universal solvent that dissolves every argument without offering an alternative. My point isn't 'do what I did,' it's that the *capacity to generate value* is more portable and more durable than any single asset class, and that holds across wildly different circumstances. Carlos, you're right that social capital is insurance, but I'd push further: relationships without skills are just favors waiting to be called in, and eventually the account runs dry. The compounding happens when your skills make you genuinely useful to people worth knowing — that's not survivorship bias, that's basic incentive structure.",
+      "key_point": "The capacity to generate value is the most portable and durable asset across all circumstances — skills and relationships compound together, not separately.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "relationship_investor",
+      "name": "Carlos",
+      "speech": "Priya, you just said something that stopped me cold — skills are the currency that makes relationships valuable rather than transactional. I've been sitting with that. You're right, and I want to push it further: the people in my network who showed up when my wife was sick weren't doing a transaction, but they were also not showing up to strangers. They showed up because over ten years I had been genuinely useful, present, and trustworthy — which is a form of skill. Alex, I hear your survivorship bias argument, but here's what I'd challenge you on: the safety net I'm describing isn't a strategy that worked for me in lucky circumstances, it's a structure that exists in every human culture across all of history precisely because it's robust to bad circumstances.",
+      "key_point": "Social capital is not a lucky strategy but a cross-cultural human technology for surviving uncertainty — the bias isn't in recommending it, but in ignoring it.",
+      "directed_at": "Alex"
+    },
+    {
+      "agent_id": "pragmatic_skeptic",
+      "name": "Alex",
+      "speech": "Carlos, you called social capital an 'insurance policy' — but insurance policies have premiums, and the premium on social capital is paid disproportionately by people who already have access, status, and time. When you say relationships saved you, I want to know: did your network find you, or did you find them, and what did you already have that made you worth finding? Priya, you're describing skills as 'currency' — but currency depreciates differently depending on your passport, your accent, your gender, and which decade you entered the workforce. You're all describing things that worked FOR you AS IF they're things that work IN GENERAL, and that conflation is exactly the mistake I keep seeing in every success narrative I've ever covered.",
+      "key_point": "Access to the very investments being praised — networks, leverage, compounding — is itself unequally distributed, so prescribing them universally smuggles in a hidden assumption about starting conditions.",
+      "directed_at": "Carlos"
+    }
+  ]
+}

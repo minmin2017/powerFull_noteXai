@@ -34,6 +34,10 @@
   let tmpCounter = 0; // temp ids for stroke pieces created while erasing
   let drawBusy = false; // a pen/erase/stroke-resize/stroke-move gesture is mid-flight
   let pendingState = null; // newest server broadcast deferred while drawBusy
+  // Strokes drawn locally but not yet confirmed by a server broadcast. Kept here
+  // so a stale/out-of-order broadcast can't momentarily wipe a just-drawn stroke
+  // ("letters disappear then come back" while writing a lot). id -> stroke.
+  const inflightStrokes = new Map();
   let lastEraseW = null; // last eraser position (world) for motion interpolation
   let lastBoxEraseW = null; // last box-eraser position (normalized) for interpolation
   let localActiveSection = "main"; // mirrors activeSection but updates immediately on tab click
@@ -50,6 +54,7 @@
   const ectx = edgesCanvas.getContext("2d");
   const fctx = fxCanvas.getContext("2d");
   const nodeEls = new Map();
+  const nodeSize = new Map(); // id -> {w,h} world-space size, refreshed each full render()
   const imgEls = new Map();
   const boxEls = new Map();
   let boxInteract = null; // active box move/resize
@@ -128,6 +133,16 @@
     }
     maybeNotifyClaude(s);
     STATE = s;
+    // Re-pin any locally-drawn strokes the server hasn't echoed back yet, so this
+    // broadcast can't make a just-drawn stroke flicker out. Once the server state
+    // includes one, stop tracking it (its canonical copy is now authoritative).
+    if (inflightStrokes.size) {
+      s.drawings = s.drawings || [];
+      for (const [id, st] of inflightStrokes) {
+        if (s.drawings.some((d) => d.id === id)) inflightStrokes.delete(id);
+        else s.drawings.push(st);
+      }
+    }
     renderChat();
     syncTitle();
     render();
@@ -229,6 +244,7 @@
 
     renderImages();
     renderBoxes();
+    scheduleReportViewport(); // keep the server's notion of the visible area fresh
 
     const hidden = computeHidden();
     const present = new Set();
@@ -291,6 +307,13 @@
     }
 
     $("#empty-hint").style.display = STATE.nodes.length ? "none" : "";
+    // Cache each node's world-space size once (one batched layout read, after all
+    // the style writes above). drawEdges then positions edges analytically with
+    // no per-node getBoundingClientRect — so panning never triggers a reflow storm.
+    for (const [id, el] of nodeEls) {
+      if (el.style.display === "none") continue;
+      nodeSize.set(id, { w: el.offsetWidth, h: el.offsetHeight });
+    }
     drawEdges(hidden);
     drawFx();
     renderResizeBox();
@@ -617,18 +640,19 @@
     const r = canvas.getBoundingClientRect();
     sizeCanvas(edgesCanvas, ectx, r);
     ectx.clearRect(0, 0, r.width, r.height);
+    const byId = new Map();
+    for (const nn of STATE.nodes) byId.set(nn.id, nn);
+    // Screen-space rect of a node, computed from its world position + cached
+    // size (no getBoundingClientRect → no forced layout, even during a pan).
     const rect = (id) => {
+      const nn = byId.get(id);
       const el = nodeEls.get(id);
-      if (!el || el.style.display === "none") return null;
-      const b = el.getBoundingClientRect();
-      return {
-        l: b.left - r.left,
-        t: b.top - r.top,
-        cx: b.left - r.left + b.width / 2,
-        cy: b.top - r.top + b.height / 2,
-        w: b.width,
-        h: b.height,
-      };
+      if (!nn || !el || el.style.display === "none") return null;
+      const sz = nodeSize.get(id);
+      const w = (sz ? sz.w : el.offsetWidth) * view.scale;
+      const h = (sz ? sz.h : el.offsetHeight) * view.scale;
+      const s = worldToScreen(nn.x, nn.y);
+      return { l: s.x, t: s.y, cx: s.x + w / 2, cy: s.y + h / 2, w, h };
     };
     for (const n of STATE.nodes) {
       if (!n.parentId || hidden.has(n.id)) continue;
@@ -644,7 +668,7 @@
       ectx.beginPath();
       ectx.moveTo(ax, ay);
       ectx.bezierCurveTo(ax + (bx >= ax ? dx : -dx), ay, bx - (bx >= ax ? dx : -dx), by, bx, by);
-      ectx.strokeStyle = (STATE.nodes.find((x) => x.id === n.id)?.color) || "#6366f1";
+      ectx.strokeStyle = n.color || "#6366f1";
       ectx.globalAlpha = 0.55;
       ectx.lineWidth = Math.max(1.5, 2.2 * view.scale);
       ectx.stroke();
@@ -708,14 +732,83 @@
     ectx.restore();
   }
 
-  // freehand drawings + active stroke (screen space, above nodes)
+  // freehand drawings + active stroke (screen space, above nodes).
+  // Throttled to one paint per animation frame so a burst of pointermove
+  // samples collapses into a single render instead of N.
+  let fxRaf = 0;
   function drawFx() {
+    if (fxRaf) return;
+    fxRaf = requestAnimationFrame(() => { fxRaf = 0; drawFxNow(); });
+  }
+  // Paint right now, cancelling any frame queued by drawFx(). Used before code
+  // that reads the canvas pixels (PNG export) so it can't capture a stale frame.
+  function flushFx() {
+    if (fxRaf) { cancelAnimationFrame(fxRaf); fxRaf = 0; }
+    drawFxNow();
+  }
+
+  // Offscreen cache of the committed strokes, rendered a bit larger than the
+  // viewport (a margin all around). During a draw OR a pan the scale is fixed,
+  // so we render every committed stroke once and then just blit this bitmap —
+  // translated by how far we've panned — instead of re-rendering them each
+  // frame. That keeps drawing AND panning O(1) no matter how many strokes are on
+  // the page (re-rendering every stroke each frame is what made both lag once a
+  // lot had been drawn). The cache is only rebuilt when the view drifts past the
+  // margin or the scale changes.
+  const STROKE_CACHE_MARGIN = 256; // CSS px of slack so short pans don't rebuild
+  const strokeCache = document.createElement("canvas");
+  const sctx = strokeCache.getContext("2d");
+  let strokeCacheValid = false;
+  let strokeCacheView = null; // view the cache was rendered at
+  function buildStrokeCache(r) {
+    const dpr = window.devicePixelRatio || 1;
+    const m = STROKE_CACHE_MARGIN;
+    const w = Math.round((r.width + 2 * m) * dpr), h = Math.round((r.height + 2 * m) * dpr);
+    if (strokeCache.width !== w) strokeCache.width = w;
+    if (strokeCache.height !== h) strokeCache.height = h;
+    // Shift the origin by the margin so screen (0,0) maps to (m,m) in the cache.
+    sctx.setTransform(dpr, 0, 0, dpr, m * dpr, m * dpr);
+    sctx.clearRect(-m, -m, r.width + 2 * m, r.height + 2 * m);
+    for (const d of STATE.drawings) drawStroke(d, sctx);
+    strokeCacheValid = true;
+    strokeCacheView = { x: view.x, y: view.y, scale: view.scale };
+  }
+  // Stale if invalidated, the scale changed, the canvas resized, or the pan has
+  // moved far enough that the margin no longer covers the viewport.
+  function strokeCacheStale(r) {
+    if (!strokeCacheValid || !strokeCacheView) return true;
+    if (strokeCacheView.scale !== view.scale) return true;
+    if (Math.abs(view.x - strokeCacheView.x) > STROKE_CACHE_MARGIN) return true;
+    if (Math.abs(view.y - strokeCacheView.y) > STROKE_CACHE_MARGIN) return true;
+    const dpr = window.devicePixelRatio || 1, m = STROKE_CACHE_MARGIN;
+    return strokeCache.width !== Math.round((r.width + 2 * m) * dpr) ||
+           strokeCache.height !== Math.round((r.height + 2 * m) * dpr);
+  }
+  // Blit the cache onto the fx canvas, offset by however far we've panned since
+  // it was built (the -m undoes the margin origin).
+  function blitStrokeCache(r) {
+    const m = STROKE_CACHE_MARGIN;
+    const dx = view.x - strokeCacheView.x, dy = view.y - strokeCacheView.y;
+    fctx.drawImage(strokeCache, dx - m, dy - m, r.width + 2 * m, r.height + 2 * m);
+  }
+
+  function drawFxNow() {
     const r = canvas.getBoundingClientRect();
     sizeCanvas(fxCanvas, fctx, r);
     fctx.clearRect(0, 0, r.width, r.height);
-    const all = STATE.drawings.slice();
-    if (stroke) all.push(stroke);
-    for (const d of all) drawStroke(d);
+    const drawingPen = stroke && !stroke.eraser;
+    if (drawingPen || pan) {
+      // Draw or pan gesture: scale is fixed, so blit the cached committed strokes
+      // (rebuilding only when the view drifts past the margin) and, while
+      // drawing, lay just the live stroke on top.
+      if (strokeCacheStale(r)) buildStrokeCache(r);
+      blitStrokeCache(r);
+      if (drawingPen) drawStroke(stroke, fctx);
+    } else {
+      // Full repaint (idle / erasing / dragging). Cache rebuilt next gesture.
+      strokeCacheValid = false;
+      for (const d of STATE.drawings) drawStroke(d, fctx);
+    }
     if (reparentDrag) {
       fctx.save();
       fctx.strokeStyle = reparentDrag.targetId ? "rgba(99,241,130,0.9)" : "rgba(99,102,241,0.9)";
@@ -744,14 +837,14 @@
     }
   }
 
-  function drawStroke(d) {
+  function drawStroke(d, ctx = fctx) {
     if (!d.points || d.points.length < 1) return;
     const isSel = selectedStrokeIds.has(d.id);
     const off = (isSel && strokeDragOffset) ? strokeDragOffset : null;
     const rs = (isSel && strokeResize) ? strokeResize : null; // live scale preview
     const wmul = rs ? rs.s : 1; // stroke width scales with the drawing
-    fctx.lineCap = "round";
-    fctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     const pts = d.points.map((p) => {
       let wx = p.x, wy = p.y;
       if (off) { wx += off.dx; wy += off.dy; }
@@ -761,30 +854,42 @@
     });
     // selection highlight pass
     if (isSel && !off) {
-      fctx.save();
-      fctx.strokeStyle = "rgba(99,102,241,0.45)";
-      fctx.lineWidth = (d.width * wmul + 8) * view.scale;
-      fctx.beginPath();
-      if (pts.length === 1) { fctx.arc(pts[0].x, pts[0].y, (d.width * wmul + 8) * view.scale / 2, 0, Math.PI * 2); fctx.fillStyle = "rgba(99,102,241,0.45)"; fctx.fill(); }
-      else { fctx.moveTo(pts[0].x, pts[0].y); for (const pt of pts.slice(1)) fctx.lineTo(pt.x, pt.y); fctx.stroke(); }
-      fctx.restore();
+      ctx.save();
+      ctx.strokeStyle = "rgba(99,102,241,0.45)";
+      ctx.lineWidth = (d.width * wmul + 8) * view.scale;
+      ctx.beginPath();
+      if (pts.length === 1) { ctx.arc(pts[0].x, pts[0].y, (d.width * wmul + 8) * view.scale / 2, 0, Math.PI * 2); ctx.fillStyle = "rgba(99,102,241,0.45)"; ctx.fill(); }
+      else { ctx.moveTo(pts[0].x, pts[0].y); for (const pt of pts.slice(1)) ctx.lineTo(pt.x, pt.y); ctx.stroke(); }
+      ctx.restore();
     }
-    fctx.strokeStyle = d.color;
+    ctx.strokeStyle = d.color;
     if (pts.length === 1) {
-      fctx.beginPath();
-      fctx.arc(pts[0].x, pts[0].y, (d.width * wmul * view.scale) / 2, 0, Math.PI * 2);
-      fctx.fillStyle = d.color;
-      fctx.fill();
+      ctx.beginPath();
+      ctx.arc(pts[0].x, pts[0].y, (d.width * wmul * view.scale) / 2, 0, Math.PI * 2);
+      ctx.fillStyle = d.color;
+      ctx.fill();
+      return;
+    }
+    // Zoomed out the per-segment pressure taper is sub-pixel, so draw the whole
+    // polyline as ONE path (a single stroke() call) — dramatically cheaper when
+    // there are many strokes. Up close, keep the per-segment width for the nice
+    // tapered handwriting look.
+    if (view.scale < 0.5) {
+      ctx.lineWidth = Math.max(0.6, d.width * wmul * view.scale);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
       return;
     }
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1];
       const b = pts[i];
-      fctx.beginPath();
-      fctx.moveTo(a.x, a.y);
-      fctx.lineTo(b.x, b.y);
-      fctx.lineWidth = Math.max(0.6, d.width * wmul * view.scale * (0.35 + 1.3 * b.p));
-      fctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineWidth = Math.max(0.6, d.width * wmul * view.scale * (0.35 + 1.3 * b.p));
+      ctx.stroke();
     }
   }
 
@@ -981,6 +1086,9 @@
     const txt = e.target.closest(".node-text");
     if (txt && txt.getAttribute("contenteditable") === "true") return; // editing
     if (e.target.closest(".handle")) return;
+    // Space held = pan the camera, even when the press lands on a node (so you
+    // can still pan when zoomed in and nodes cover the screen). Don't move it.
+    if (spaceDown) { e.stopPropagation(); startPan(e); return; }
     if (mode === "draw") return; // let fx capture
     e.stopPropagation();
     const n = STATE.nodes.find((x) => x.id === id);
@@ -1000,6 +1108,62 @@
   // ----------------------------------------------------------------------
   // Canvas pan / draw start
   // ----------------------------------------------------------------------
+  // Begin a camera pan from this pointer (middle/right button, or Space held).
+  function startPan(e) {
+    const p = eventCanvasPos(e);
+    pan = { x: p.x, y: p.y, vx: view.x, vy: view.y };
+    canvas.classList.add("panning");
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+  }
+
+  // Cheap per-frame repaint for pan AND zoom: the nodes/images/boxes live inside
+  // #world and ride its CSS transform (translate + scale) for free, so we only
+  // update the transform and repaint the two screen-space canvases (edges +
+  // strokes). This skips the whole per-node DOM reconciliation render() does —
+  // that, plus the now reflow-free drawEdges, is what keeps pan/zoom smooth.
+  // rAF-throttled so a burst of wheel/pointer events collapses to one repaint.
+  let viewportRaf = 0;
+  function applyViewport() {
+    viewportRaf = 0;
+    world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+    $("#zoom-label").textContent = Math.round(view.scale * 100) + "%";
+    if (typeof updateEraserCursor === "function") updateEraserCursor();
+    drawEdges(computeHidden());
+    flushFx(); // paint strokes in this same frame (don't lag the edges by one)
+    renderResizeBox(); // keep the selection handles glued to the moving content
+    scheduleReportViewport(); // tell the server which world-area is on screen
+  }
+  function scheduleViewport() {
+    if (!viewportRaf) viewportRaf = requestAnimationFrame(applyViewport);
+  }
+
+  // ---- Current viewport → server ---------------------------------------
+  // Report the world-rect the user is currently viewing so server-side
+  // auto-placement drops new nodes/images where they can see them, and Claude
+  // can read it via get_mindmap. Debounced: only POSTs after the view settles.
+  function currentViewport() {
+    const r = canvas.getBoundingClientRect();
+    const tl = screenToWorld(0, 0);
+    const br = screenToWorld(r.width, r.height);
+    const c = screenToWorld(r.width / 2, r.height / 2);
+    return {
+      x: view.x, y: view.y, scale: view.scale,
+      cx: c.x, cy: c.y,
+      minX: tl.x, minY: tl.y, maxX: br.x, maxY: br.y,
+      w: br.x - tl.x, h: br.y - tl.y,
+    };
+  }
+  let reportViewportTimer = 0;
+  function reportViewport() {
+    reportViewportTimer = 0;
+    api("/api/viewport", "POST", currentViewport()).catch(() => {});
+  }
+  function scheduleReportViewport() {
+    if (reportViewportTimer) clearTimeout(reportViewportTimer);
+    reportViewportTimer = setTimeout(reportViewport, 350);
+  }
+
   canvas.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".node")) return;
     if (mode === "draw" && e.button === 0 && !spaceDown) {
@@ -1008,11 +1172,7 @@
     }
     const wantPan = e.button === 1 || e.button === 2 || spaceDown;
     if (wantPan) {
-      const p = eventCanvasPos(e);
-      pan = { x: p.x, y: p.y, vx: view.x, vy: view.y };
-      canvas.classList.add("panning");
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp, { once: true });
+      startPan(e);
     } else if (mode === "select" && e.button === 0) {
       const p = eventCanvasPos(e);
       if (selectedStrokeIds.size > 0 && selectedIds.size === 0) {
@@ -1154,7 +1314,7 @@
       const p = eventCanvasPos(e);
       view.x = pan.vx + (p.x - pan.x);
       view.y = pan.vy + (p.y - pan.y);
-      render();
+      scheduleViewport();
     } else if (stroke) {
       addStrokePoint(e);
     }
@@ -1299,7 +1459,9 @@
       const after = screenToWorld(p.x, p.y);
       view.x += (after.x - before.x) * view.scale;
       view.y += (after.y - before.y) * view.scale;
-      render();
+      // View math runs per-event (so zoom-toward-cursor stays accurate); the
+      // repaint is rAF-throttled and skips node reconciliation like panning.
+      scheduleViewport();
     },
     { passive: false }
   );
@@ -1373,9 +1535,15 @@
     window.addEventListener("pointerup", onPointerUp, { once: true });
   }
   function addStrokePoint(e) {
-    const p = eventCanvasPos(e);
-    const w = screenToWorld(p.x, p.y);
-    stroke.points.push({ x: w.x, y: w.y, p: e.pressure || 0.5 });
+    // Pull every sub-sample the browser coalesced into this event so fast pen
+    // movement keeps its detail, while the actual paint still happens once per
+    // frame (drawFx is rAF-throttled).
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
+    for (const ev of (evs && evs.length ? evs : [e])) {
+      const p = eventCanvasPos(ev);
+      const w = screenToWorld(p.x, p.y);
+      stroke.points.push({ x: w.x, y: w.y, p: ev.pressure || 0.5 });
+    }
     drawFx();
   }
   function endStroke() {
@@ -1384,11 +1552,31 @@
     window.removeEventListener("pointermove", onPointerMove);
     if (s && s.points && s.points.length > 0) {
       // Show it immediately (optimistic) so the stroke doesn't blink out while the
-      // POST round-trips; the reconciling broadcast then swaps in the real id.
-      s.id = "tmp-" + tmpCounter++;
+      // POST round-trips. Track it as in-flight until a broadcast confirms it, so
+      // an out-of-order broadcast can't wipe it in the meantime.
+      const tmpId = "tmp-" + tmpCounter++;
+      s.id = tmpId;
       STATE.drawings.push(s);
+      inflightStrokes.set(tmpId, s);
       drawFx();
       api("/api/drawings", "POST", { color: s.color, width: s.width, points: s.points })
+        .then((real) => {
+          if (real && real.id) {
+            // Adopt the server id (same object) so the confirming broadcast matches
+            // and retires it; until then it stays pinned via inflightStrokes.
+            inflightStrokes.delete(tmpId);
+            s.id = real.id;
+            inflightStrokes.set(real.id, s);
+          } else {
+            // Save failed — drop the optimistic stroke instead of pinning it forever.
+            inflightStrokes.delete(tmpId);
+            STATE.drawings = STATE.drawings.filter((d) => d !== s);
+          }
+        })
+        .catch(() => {
+          inflightStrokes.delete(tmpId);
+          STATE.drawings = STATE.drawings.filter((d) => d !== s);
+        })
         .finally(endDrawBusy);
     } else {
       endDrawBusy();
@@ -1590,7 +1778,9 @@
     ACTIVE_ID = activeId || null;
     renderProjects();
     if (switched) {
-      // fresh project loaded — frame it once the new nodes render
+      // fresh project loaded — drop any pending optimistic strokes from the old
+      // project so they can't be re-pinned onto this one, then frame it.
+      inflightStrokes.clear();
       setTimeout(fitView, 60);
     }
   }
@@ -1636,17 +1826,67 @@
   let listening = false;
   let finalBuf = "";
 
+  // STT model selector — persisted in localStorage
+  let sttModel = localStorage.getItem("pn.sttModel") || "local";
+  let whisperModel = localStorage.getItem("pn.whisperModel") || "large-v3-turbo";
+
+  function applyWhisperModelUI() {
+    const row = $("#whisper-model-row");
+    if (row) row.hidden = sttModel !== "local";
+    document.querySelectorAll(".whisper-btn").forEach(b => b.classList.toggle("active", b.dataset.wm === whisperModel));
+  }
+
+  (function setupSttBtns() {
+    document.querySelectorAll(".stt-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.stt === sttModel);
+      btn.addEventListener("click", () => {
+        sttModel = btn.dataset.stt;
+        localStorage.setItem("pn.sttModel", sttModel);
+        document.querySelectorAll(".stt-btn").forEach(b => b.classList.toggle("active", b.dataset.stt === sttModel));
+        applyWhisperModelUI();
+        applyLang();
+      });
+    });
+    applyWhisperModelUI();
+
+    document.querySelectorAll(".whisper-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const wm = btn.dataset.wm;
+        if (wm === whisperModel) return;
+        whisperModel = wm;
+        localStorage.setItem("pn.whisperModel", whisperModel);
+        applyWhisperModelUI();
+        await fetch("/api/whisper-model", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: wm }),
+        }).catch(() => {});
+      });
+    });
+
+    // Sync server's current whisper model on load
+    fetch("/api/whisper-model").then(r => r.json()).then(({ model }) => {
+      if (model !== whisperModel) {
+        fetch("/api/whisper-model", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: whisperModel }),
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+  })();
+
   // Mic language: a two-state toggle (ไทย ↔ EN), persisted.
   const langToggle = $("#voice-lang");
   let currentLang = localStorage.getItem("pn.voiceLang") || "th-TH";
   function voiceLang() { return currentLang; }
   function isThai() { return currentLang.startsWith("th"); }
+  function idleStatus() { return isThai() ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English"; }
   function applyLang() {
     const th = isThai();
     if (langToggle) langToggle.classList.toggle("en", !th);
     if (recog) recog.lang = currentLang;
-    $("#mic-btn").title = th ? "พูดภาษาไทย (th-TH)" : "Speak English (en-US)";
-    if (!listening) $("#voice-status").textContent = th ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English";
+    const label = sttModel === "groq" ? "Groq Whisper" : "Web Speech";
+    $("#mic-btn").title = (th ? "พูดภาษาไทย" : "Speak English") + ` (${label})`;
+    if (!listening) $("#voice-status").textContent = idleStatus();
   }
   if (langToggle) {
     applyLang();
@@ -1657,11 +1897,12 @@
     });
   }
 
+  // --- Web Speech API setup ---
   function setupVoice() {
     if (!SR) {
-      $("#voice-status").textContent = "เบราว์เซอร์นี้ไม่รองรับการพูด — ใช้ Chrome หรือ Edge";
-      $("#mic-btn").disabled = true;
-      $("#mic-btn").style.opacity = 0.4;
+      if (sttModel === "webspeech") {
+        $("#voice-status").textContent = "เบราว์เซอร์นี้ไม่รองรับ Web Speech — เปลี่ยนเป็น Groq หรือใช้ Chrome/Edge";
+      }
       return;
     }
     recog = new SR();
@@ -1681,13 +1922,87 @@
       $("#voice-status").textContent = "ข้อผิดพลาดเสียง: " + e.error;
     };
     recog.onend = () => {
-      if (listening) {
-        // user still wants to listen (Chrome auto-stops); restart
-        try {
-          recog.start();
-        } catch {}
+      if (listening && sttModel === "webspeech") {
+        try { recog.start(); } catch {}
       }
     };
+  }
+
+  // --- Groq Whisper (MediaRecorder) ---
+  let mediaRecorder = null;
+  let audioChunks = [];
+
+  async function startGroqRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const shouldSubmit = listening;
+        // Release mic immediately so user can record again right away
+        listening = false;
+        setMicUI(false);
+        if (!shouldSubmit) return; // cancelled
+        const blob = new Blob(audioChunks, { type: "audio/webm" });
+        const isLocal = sttModel === "local";
+        try {
+          const lang = isThai() ? "th" : "en";
+          let fullText = "";
+          if (isLocal) {
+            // Stream segments — show each one in interim as it arrives
+            const res = await fetch(`/api/transcribe-local?lang=${lang}`, {
+              method: "POST",
+              headers: { "Content-Type": "audio/webm" },
+              body: blob,
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+              throw new Error(err.error || `HTTP ${res.status}`);
+            }
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buf += decoder.decode(value, { stream: true });
+              const lines = buf.split("\n");
+              buf = lines.pop();
+              for (const line of lines) {
+                if (line.trim()) {
+                  fullText += (fullText ? " " : "") + line.trim();
+                  $("#voice-interim").textContent = fullText;
+                }
+              }
+            }
+            if (buf.trim()) fullText += (fullText ? " " : "") + buf.trim();
+          } else {
+            const res = await fetch(`/api/transcribe?lang=${lang}`, {
+              method: "POST",
+              headers: { "Content-Type": "audio/webm" },
+              body: blob,
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            fullText = data.text || "";
+          }
+          $("#voice-interim").textContent = "";
+          if (fullText) submitUserInput(fullText);
+        } catch (err) {
+          $("#voice-status").textContent = "STT error: " + err.message;
+          setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 3000);
+          return;
+        }
+        if (!listening) $("#voice-status").textContent = idleStatus();
+      };
+      mediaRecorder.start();
+    } catch (err) {
+      listening = false;
+      setMicUI(false);
+      $("#voice-status").textContent = "ไม่สามารถเข้าถึงไมค์: " + err.message;
+    }
   }
 
   function setMicUI(active) {
@@ -1696,36 +2011,51 @@
   }
 
   function startListening() {
-    if (!recog) return;
     finalBuf = "";
     listening = true;
-    recog.lang = voiceLang();
-    try { recog.start(); } catch {}
     setMicUI(true);
-    $("#voice-status").textContent = isThai()
-      ? "กำลังฟัง… พูดได้เลย (กดไมค์ = ส่ง · ✕ = ยกเลิก)"
-      : "Listening… speak now (mic = send · ✕ = cancel)";
+    if (sttModel === "groq" || sttModel === "local") {
+      $("#voice-status").textContent = isThai()
+        ? "กำลังอัดเสียง… (กดไมค์ = ส่ง · ✕ = ยกเลิก)"
+        : "Recording… (mic = send · ✕ = cancel)";
+      startGroqRecording();
+    } else {
+      if (!recog) { listening = false; setMicUI(false); return; }
+      recog.lang = voiceLang();
+      try { recog.start(); } catch {}
+      $("#voice-status").textContent = isThai()
+        ? "กำลังฟัง… พูดได้เลย (กดไมค์ = ส่ง · ✕ = ยกเลิก)"
+        : "Listening… speak now (mic = send · ✕ = cancel)";
+    }
   }
 
   function stopListening() {
-    listening = false;
-    try { recog.stop(); } catch {}
-    setMicUI(false);
-    $("#voice-status").textContent = isThai() ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English";
-    const text = (finalBuf + " " + $("#voice-interim").textContent).trim();
-    $("#voice-interim").textContent = "";
-    if (text) submitUserInput(text);
+    if (sttModel === "groq" || sttModel === "local") {
+      // listening=true signals onstop to submit; onstop will reset UI itself
+      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    } else {
+      listening = false;
+      try { recog.stop(); } catch {}
+      setMicUI(false);
+      const text = (finalBuf + " " + $("#voice-interim").textContent).trim();
+      $("#voice-interim").textContent = "";
+      if (text) submitUserInput(text);
+      $("#voice-status").textContent = idleStatus();
+    }
   }
 
   function cancelListening() {
-    listening = false;
-    try { recog.stop(); } catch {}
+    listening = false; // set BEFORE stop so onstop skips submit
+    if (sttModel === "groq" || sttModel === "local") {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    } else {
+      try { recog.stop(); } catch {}
+    }
     setMicUI(false);
     finalBuf = "";
     $("#voice-interim").textContent = "";
-    const idle = isThai() ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English";
     $("#voice-status").textContent = isThai() ? "ยกเลิกแล้ว" : "Cancelled";
-    setTimeout(() => { $("#voice-status").textContent = idle; }, 1500);
+    setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 1500);
   }
 
   $("#mic-btn").addEventListener("click", () => (listening ? stopListening() : startListening()));
@@ -2393,27 +2723,72 @@
       if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); api("/api/redo", "POST"); return; }
     }
     if (isTyping(e)) return;
-    // Tool shortcuts: W = pen (draw), Space = select/move
+    // Tool shortcuts: W = pen (draw), E = eraser. Hold Space = temporary Pan.
     if (e.code === "KeyW") {
       e.preventDefault();
       setMode("draw");
       return;
     }
-    if (e.code === "Space") {
+    if (e.code === "KeyE") {
+      // E toggles the eraser: press once to erase (switching into draw mode if
+      // needed), press again to drop back to the pen. (W also returns to pen.)
       e.preventDefault();
-      setMode("select");
+      if (mode === "draw" && eraser) {
+        setEraser(false);
+      } else {
+        if (mode !== "draw") setMode("draw");
+        setEraser(true);
+      }
+      return;
+    }
+    if (e.code === "Space") {
+      // Hold Space to pan the camera; release to return to the current tool.
+      // The pointer handlers already pan whenever spaceDown is set — we just
+      // flip the flag here instead of switching tool/mode (so move still works
+      // via the select tool, Space no longer selects).
+      e.preventDefault();
+      if (!spaceDown) {
+        spaceDown = true;
+        canvas.classList.add("space-pan");
+      }
       return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
-      if (selectedId) {
+      if (selectedIds.size > 0) {
+        // multi-selected nodes
+        for (const id of selectedIds) api(`/api/nodes/${id}`, "DELETE");
+        selectedIds = new Set();
+        selectedId = null;
+        render();
+      } else if (selectedId) {
         api(`/api/nodes/${selectedId}`, "DELETE");
         selectedId = null;
+      } else if (selectedStrokeIds.size > 0) {
+        // selected drawing strokes
+        for (const id of selectedStrokeIds) api(`/api/drawings/${id}`, "DELETE");
+        selectedStrokeIds = new Set();
+        drawFx();
       } else if (selectedImgId) {
         api(`/api/images/${selectedImgId}`, "DELETE");
         selectedImgId = null;
+      } else if (selectedBoxId) {
+        api(`/api/boxes/${selectedBoxId}`, "DELETE");
+        selectedBoxId = null;
+        render();
       }
     }
   });
+  // Release the hold-to-pan when Space is let go (or the window loses focus,
+  // so a missed keyup can't leave us stuck panning).
+  function endSpacePan() {
+    if (!spaceDown) return;
+    spaceDown = false;
+    canvas.classList.remove("space-pan");
+  }
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space") endSpacePan();
+  });
+  window.addEventListener("blur", endSpacePan);
   function isTyping(e) {
     const t = e.target;
     return (
@@ -2617,31 +2992,145 @@
     toast("ดาวน์โหลด Markdown แล้ว ✓");
   }
 
+  // Renders the *entire* board (not just the visible viewport) into an off-DOM
+  // canvas via html2canvas, then restores the original view. Shared by PNG/PDF export.
+  async function captureFullBoard(renderScale) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const consider = (x, y, w, h) => {
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+    };
+    STATE.nodes.forEach((n) => consider(n.x, n.y, n.w || 200, n.h || 60));
+    (STATE.boxes || []).forEach((b) => consider(b.x, b.y, b.w || 240, b.h || 180));
+    (STATE.images || []).forEach((i) => consider(i.x, i.y, i.w || 160, i.h || 160));
+    (STATE.drawings || []).forEach((d) => {
+      const half = (d.width || 2) / 2 + 4;
+      (d.points || []).forEach((p) => consider(p.x - half, p.y - half, half * 2, half * 2));
+    });
+    if (!isFinite(minX)) { minX = 0; minY = 0; maxX = canvas.clientWidth; maxY = canvas.clientHeight; }
+    const pad = 80;
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+    const fullW = Math.ceil(maxX - minX);
+    const fullH = Math.ceil(maxY - minY);
+
+    // #canvas is a flex:1 child (flex-basis:0%), so plain width/height styles get
+    // ignored by the flex algorithm — and #stage/body/html all clip with overflow:hidden.
+    // Both must be overridden or the enlarged canvas never actually grows on screen,
+    // and anything outside the old viewport-sized pixel buffer is silently never drawn.
+    const htmlEl = document.documentElement;
+    const bodyEl = document.body;
+    const stageEl = $("#stage");
+
+    const prevView = { ...view };
+    const prevStyle = {
+      width: canvas.style.width, height: canvas.style.height,
+      overflow: canvas.style.overflow, flex: canvas.style.flex,
+    };
+    const prevStageOverflow = stageEl.style.overflow;
+    const prevHtmlOverflow = htmlEl.style.overflow;
+    const prevBodyOverflow = bodyEl.style.overflow;
+
+    view.scale = 1;
+    view.x = -minX;
+    view.y = -minY;
+    htmlEl.style.overflow = "visible";
+    bodyEl.style.overflow = "visible";
+    stageEl.style.overflow = "visible";
+    canvas.style.flex = "0 0 auto";
+    canvas.style.overflow = "visible";
+    canvas.style.width = fullW + "px";
+    canvas.style.height = fullH + "px";
+    render();
+    flushFx(); // paint strokes now (drawFx is throttled) so html2canvas sees them
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    try {
+      return await html2canvas(canvas, {
+        backgroundColor: getComputedStyle(document.body).getPropertyValue("--bg").trim() || "#0f172a",
+        width: fullW,
+        height: fullH,
+        windowWidth: Math.max(fullW, window.innerWidth),
+        windowHeight: Math.max(fullH, window.innerHeight),
+        scale: renderScale,
+        useCORS: true,
+        logging: false,
+      });
+    } finally {
+      stageEl.style.overflow = prevStageOverflow;
+      htmlEl.style.overflow = prevHtmlOverflow;
+      bodyEl.style.overflow = prevBodyOverflow;
+      Object.assign(view, prevView);
+      canvas.style.flex = prevStyle.flex;
+      canvas.style.width = prevStyle.width;
+      canvas.style.height = prevStyle.height;
+      canvas.style.overflow = prevStyle.overflow;
+      render();
+    }
+  }
+
   async function exportPng() {
     if (typeof html2canvas !== "function") {
       toast("html2canvas ยังโหลดไม่เสร็จ ลองอีกครั้ง");
       return;
     }
-    toast("กำลัง render PNG…");
+    toast("กำลัง render PNG ทั้งหน้า…");
     try {
-      const cvs = await html2canvas(document.getElementById("canvas"), {
-        backgroundColor: getComputedStyle(document.body).getPropertyValue("--bg").trim() || "#0f172a",
-        scale: 1.5,
-        useCORS: true,
-        logging: false,
-      });
+      const cvs = await captureFullBoard(2);
       const a = document.createElement("a");
       a.href = cvs.toDataURL("image/png");
       a.download = `${(STATE.meta?.title || "mindmap").replace(/[^a-z0-9ก-๙]+/gi, "_")}.png`;
       a.click();
-      toast("ดาวน์โหลด PNG แล้ว ✓");
+      toast("ดาวน์โหลด PNG แล้ว ✓ (ทั้งหน้า)");
     } catch (err) {
       toast("Export PNG ไม่สำเร็จ: " + err.message);
     }
   }
 
+  async function exportPdf() {
+    if (typeof html2canvas !== "function") {
+      toast("html2canvas ยังโหลดไม่เสร็จ ลองอีกครั้ง");
+      return;
+    }
+    if (typeof window.jspdf === "undefined") {
+      toast("jsPDF ยังโหลดไม่เสร็จ ลองอีกครั้ง");
+      return;
+    }
+    toast("กำลัง render PDF ความละเอียดสูง…");
+    try {
+      // Pick a render scale that lands near 4K on the longer edge, capped so the
+      // resulting canvas never blows past a sane pixel budget for huge boards.
+      const rect = canvas.getBoundingClientRect();
+      const probeW = Math.max(rect.width, 800);
+      const probeH = Math.max(rect.height, 600);
+      let scale = Math.min(3, Math.max(1.5, 4096 / Math.max(probeW, probeH)));
+      const cvs = await captureFullBoard(scale);
+      const maxPixels = 60_000_000;
+      let finalCanvas = cvs;
+      if (cvs.width * cvs.height > maxPixels) {
+        const shrink = Math.sqrt(maxPixels / (cvs.width * cvs.height));
+        const sc = document.createElement("canvas");
+        sc.width = Math.round(cvs.width * shrink);
+        sc.height = Math.round(cvs.height * shrink);
+        sc.getContext("2d").drawImage(cvs, 0, 0, sc.width, sc.height);
+        finalCanvas = sc;
+      }
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: finalCanvas.width >= finalCanvas.height ? "landscape" : "portrait",
+        unit: "px",
+        format: [finalCanvas.width, finalCanvas.height],
+      });
+      pdf.addImage(finalCanvas.toDataURL("image/png"), "PNG", 0, 0, finalCanvas.width, finalCanvas.height);
+      pdf.save(`${(STATE.meta?.title || "mindmap").replace(/[^a-z0-9ก-๙]+/gi, "_")}.pdf`);
+      toast("ดาวน์โหลด PDF แล้ว ✓ (ทั้งหน้า ความละเอียดสูง)");
+    } catch (err) {
+      toast("Export PDF ไม่สำเร็จ: " + err.message);
+    }
+  }
+
   $("#btn-export-md").addEventListener("click", exportMarkdown);
   $("#btn-export-png").addEventListener("click", exportPng);
+  $("#btn-export-pdf").addEventListener("click", exportPdf);
 
   // -------------------------------------------------------------------------
   // Calendar right panel
