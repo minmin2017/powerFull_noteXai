@@ -3,3 +3,8 @@ data/
 .claude/
 .env
 *.log
+
+# graphify: track the graph outputs, ignore machine-specific state
+graphify-out/.graphify_python
+graphify-out/cache/
+graphify-out/.cdp-profile/

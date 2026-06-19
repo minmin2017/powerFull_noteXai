@@ -1,0 +1,222 @@
+{
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\.mcp.json": {
+    "mtime": 1781526260.7162368,
+    "ast_hash": "b17b851fdc243530d86fa3362951956f",
+    "semantic_hash": "b17b851fdc243530d86fa3362951956f"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\agent-brain.js": {
+    "mtime": 1781584891.1510174,
+    "ast_hash": "87e9ffe267129353ebd26313110ab0a2",
+    "semantic_hash": "87e9ffe267129353ebd26313110ab0a2"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\gemini-loop.ps1": {
+    "mtime": 1781584892.6934564,
+    "ast_hash": "78f50656118eb612487856e49c252b02",
+    "semantic_hash": "78f50656118eb612487856e49c252b02"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\list-models.js": {
+    "mtime": 1781543868.422114,
+    "ast_hash": "dc00c8473fab3f367e05d7ed20c5dcf7",
+    "semantic_hash": "dc00c8473fab3f367e05d7ed20c5dcf7"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\listen.js": {
+    "mtime": 1781584912.8286922,
+    "ast_hash": "fb1b918a95b188310d51cbee347dd301",
+    "semantic_hash": "fb1b918a95b188310d51cbee347dd301"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\mcp-server.js": {
+    "mtime": 1781802038.528936,
+    "ast_hash": "14c5537a64f75fe297d833177a6fed25",
+    "semantic_hash": "14c5537a64f75fe297d833177a6fed25"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\package.json": {
+    "mtime": 1781600882.5143902,
+    "ast_hash": "30fb183a98fbeed1e65ee94eab8b1045",
+    "semantic_hash": "30fb183a98fbeed1e65ee94eab8b1045"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\server.js": {
+    "mtime": 1781802072.142317,
+    "ast_hash": "6a5792cff1d6a70dafe714a42190ef51",
+    "semantic_hash": "6a5792cff1d6a70dafe714a42190ef51"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\whisper_transcribe.py": {
+    "mtime": 1781770816.9751458,
+    "ast_hash": "2ccb0099e980389aa8f3c0d2af0856d5",
+    "semantic_hash": "2ccb0099e980389aa8f3c0d2af0856d5"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\whisper_worker.py": {
+    "mtime": 1781793642.338648,
+    "ast_hash": "5f3736ba8f235e28a9353a21028c2538",
+    "semantic_hash": "5f3736ba8f235e28a9353a21028c2538"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\app.js": {
+    "mtime": 1781835385.914395,
+    "ast_hash": "031b6ba89225bb9b0434f6cf2ed9f56e",
+    "semantic_hash": "031b6ba89225bb9b0434f6cf2ed9f56e"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\coordinator.js": {
+    "mtime": 1781712557.264857,
+    "ast_hash": "ea8aa7f97b288e1025707d95a14b91a4",
+    "semantic_hash": "ea8aa7f97b288e1025707d95a14b91a4"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\investment-council.js": {
+    "mtime": 1781718362.0913837,
+    "ast_hash": "c99cd26e706e8aea91a5cd419cd388b4",
+    "semantic_hash": "c99cd26e706e8aea91a5cd419cd388b4"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\motor\\ac_motor_degradation_sim.py": {
+    "mtime": 1781802207.5886326,
+    "ast_hash": "5c8eed45071668bb69737c66aefdee31",
+    "semantic_hash": "5c8eed45071668bb69737c66aefdee31"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_1.json": {
+    "mtime": 1781718412.6699975,
+    "ast_hash": "9f466f3079b90d3a25b365ee5de4a21d",
+    "semantic_hash": "9f466f3079b90d3a25b365ee5de4a21d"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_10.json": {
+    "mtime": 1781718912.2588851,
+    "ast_hash": "3b51b58628f40f7b549c3bda7b78487c",
+    "semantic_hash": "3b51b58628f40f7b549c3bda7b78487c"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_2.json": {
+    "mtime": 1781718466.3476112,
+    "ast_hash": "c22481d3c96dad498956095ead245083",
+    "semantic_hash": "c22481d3c96dad498956095ead245083"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_3.json": {
+    "mtime": 1781718525.4251468,
+    "ast_hash": "5b2aa3e52b52d256b9792e580bd18e76",
+    "semantic_hash": "5b2aa3e52b52d256b9792e580bd18e76"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_4.json": {
+    "mtime": 1781718584.0070791,
+    "ast_hash": "f0d851e929ea894f3bcbacc7236f8d30",
+    "semantic_hash": "f0d851e929ea894f3bcbacc7236f8d30"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_5.json": {
+    "mtime": 1781718644.6740608,
+    "ast_hash": "3b7dfcd97d7344a91c2699481acaddd2",
+    "semantic_hash": "3b7dfcd97d7344a91c2699481acaddd2"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_6.json": {
+    "mtime": 1781718694.2940326,
+    "ast_hash": "c5276c2a5081eabd63a0f7d7e54b8217",
+    "semantic_hash": "c5276c2a5081eabd63a0f7d7e54b8217"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_7.json": {
+    "mtime": 1781718747.4636848,
+    "ast_hash": "2ab822df76ed66631860182e5fad7ab1",
+    "semantic_hash": "2ab822df76ed66631860182e5fad7ab1"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_8.json": {
+    "mtime": 1781718800.723647,
+    "ast_hash": "5f17a82ca4fcf3aecc2f4639b315cfde",
+    "semantic_hash": "5f17a82ca4fcf3aecc2f4639b315cfde"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\council_round_9.json": {
+    "mtime": 1781718856.4178257,
+    "ast_hash": "c2d0938075b6ddcb189e93ab8dfccc5c",
+    "semantic_hash": "c2d0938075b6ddcb189e93ab8dfccc5c"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\round_1.json": {
+    "mtime": 1781712608.2476318,
+    "ast_hash": "25bb0ba7c4e1dd10614d45b00c8f3bd5",
+    "semantic_hash": "25bb0ba7c4e1dd10614d45b00c8f3bd5"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\round_2.json": {
+    "mtime": 1781712648.4417522,
+    "ast_hash": "a052c9267df38a1b3c49b1ff0d43dc35",
+    "semantic_hash": "a052c9267df38a1b3c49b1ff0d43dc35"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\round_3.json": {
+    "mtime": 1781712765.5395513,
+    "ast_hash": "06892fdb5cbe28a0c400b312a227e4fb",
+    "semantic_hash": "06892fdb5cbe28a0c400b312a227e4fb"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\round_4.json": {
+    "mtime": 1781712888.416862,
+    "ast_hash": "835ffec90e4aeae7c2054dbdbd92c792",
+    "semantic_hash": "835ffec90e4aeae7c2054dbdbd92c792"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\results\\round_5.json": {
+    "mtime": 1781713011.2690444,
+    "ast_hash": "f09344a556eb0c8d7d1f5e4737a01a6b",
+    "semantic_hash": "f09344a556eb0c8d7d1f5e4737a01a6b"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\CLAUDE.md": {
+    "mtime": 1781834198.8892667,
+    "ast_hash": "70ec10b46caaa48833a91d29414ce339",
+    "semantic_hash": "70ec10b46caaa48833a91d29414ce339"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\README.md": {
+    "mtime": 1781526312.9429474,
+    "ast_hash": "2ccf485b923c2de57d4f62a62b9c99ef",
+    "semantic_hash": "2ccf485b923c2de57d4f62a62b9c99ef"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\docs\\Digital Twin.md": {
+    "mtime": 1781621874.638581,
+    "ast_hash": "fba93eb88d69a67528418cfdc5484afe",
+    "semantic_hash": "fba93eb88d69a67528418cfdc5484afe"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\docs\\event-based-system.md": {
+    "mtime": 1781533775.3309546,
+    "ast_hash": "45556ac109aec3ec1c61f9574123021f",
+    "semantic_hash": "45556ac109aec3ec1c61f9574123021f"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\notes\\sw-engineering-principles.md": {
+    "mtime": 1781801837.7293448,
+    "ast_hash": "2d51c293830d9c3d344e895d2d322941",
+    "semantic_hash": "2d51c293830d9c3d344e895d2d322941"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\index.html": {
+    "mtime": 1781833482.697138,
+    "ast_hash": "56d0b3850fb5b7e615ae94bbfe79afa0",
+    "semantic_hash": "56d0b3850fb5b7e615ae94bbfe79afa0"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\scenarios\\anthropic-ipo.md": {
+    "mtime": 1781710030.9365554,
+    "ast_hash": "b7ae826f4580dec8cfeda24cc95ad128",
+    "semantic_hash": "b7ae826f4580dec8cfeda24cc95ad128"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\scenarios\\default.md": {
+    "mtime": 1781709796.6506095,
+    "ast_hash": "83030c6c668ec4062cf08f5c4ab558f7",
+    "semantic_hash": "83030c6c668ec4062cf08f5c4ab558f7"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\scenarios\\investment-philosophy.md": {
+    "mtime": 1781718129.8194664,
+    "ast_hash": "d4a4f8f45bebcd87fddd5977e3994573",
+    "semantic_hash": "d4a4f8f45bebcd87fddd5977e3994573"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\motor\\ac_motor_sim_plot.png": {
+    "mtime": 1781802207.74395,
+    "ast_hash": "004d488ac8e79dcc8de7fe5c0cb02455",
+    "semantic_hash": "004d488ac8e79dcc8de7fe5c0cb02455"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\ws-inbox.js": {
+    "mtime": 1781803525.000722,
+    "ast_hash": "f891f3652fca02d9b649c7eca36a936e",
+    "semantic_hash": "f891f3652fca02d9b649c7eca36a936e"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\calendar.js": {
+    "mtime": 1781804075.1126225,
+    "ast_hash": "f334cbbde57601289ca8c2dd6580c939",
+    "semantic_hash": "f334cbbde57601289ca8c2dd6580c939"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\chat.js": {
+    "mtime": 1781804151.008914,
+    "ast_hash": "e44e00dbafbd2d56e2178a9579ba150f",
+    "semantic_hash": "e44e00dbafbd2d56e2178a9579ba150f"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\export.js": {
+    "mtime": 1781804044.4305046,
+    "ast_hash": "acf6eef5b66e7025c632ba567b8343b4",
+    "semantic_hash": "acf6eef5b66e7025c632ba567b8343b4"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\voice.js": {
+    "mtime": 1781804125.0254457,
+    "ast_hash": "4b3740abd2642a5fd2d7a191759e6407",
+    "semantic_hash": "4b3740abd2642a5fd2d7a191759e6407"
+  }
+}
