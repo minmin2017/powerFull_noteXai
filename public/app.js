@@ -2,8 +2,12 @@
  * Mind map (nodes + edges), freehand pen layer, pan/zoom, Thai voice,
  * live sync with the server over WebSocket, and a Claude chat panel.
  */
-(() => {
-  "use strict";
+import setupExport from './modules/export.js';
+import setupCalendar from './modules/calendar.js';
+import setupVoice from './modules/voice.js';
+import setupChat from './modules/chat.js';
+
+"use strict";
 
   // ----------------------------------------------------------------------
   // State
@@ -41,6 +45,7 @@
   let lastEraseW = null; // last eraser position (world) for motion interpolation
   let lastBoxEraseW = null; // last box-eraser position (normalized) for interpolation
   let localActiveSection = "main"; // mirrors activeSection but updates immediately on tab click
+  let chatModule = null; // set after setupChat() runs at bottom of file
 
   const $ = (s) => document.querySelector(s);
   const canvas = $("#canvas");
@@ -144,7 +149,7 @@
         else s.drawings.push(st);
       }
     }
-    renderChat();
+    if (chatModule) chatModule.renderChat();
     syncTitle();
     render();
   }
@@ -1801,76 +1806,7 @@
     }
   }
 
-  // ----------------------------------------------------------------------
-  // Chat panel
-  // ----------------------------------------------------------------------
-  function renderChatTabs() {
-    const list = $("#chat-tab-list");
-    if (!list) return;
-    const sections = STATE.chatSections && STATE.chatSections.length
-      ? STATE.chatSections
-      : [{ id: "main", name: "แชทหลัก" }];
-    const active = STATE.activeSection || sections[0].id;
-    localActiveSection = active;
-    list.innerHTML = "";
-    for (const sec of sections) {
-      const tab = document.createElement("div");
-      tab.className = "chat-tab" + (sec.id === active ? " active" : "");
-      tab.dataset.id = sec.id;
-      const label = document.createElement("span");
-      label.className = "chat-tab-name";
-      label.textContent = sec.name || "แชท";
-      tab.appendChild(label);
-      // switch section on click
-      tab.addEventListener("click", () => {
-        localActiveSection = sec.id; // update immediately so next submit uses correct section
-        if (sec.id !== (STATE.activeSection || "main")) api(`/api/chat-sections/${sec.id}/activate`, "POST");
-      });
-      // double-click to rename
-      label.addEventListener("dblclick", (e) => {
-        e.stopPropagation();
-        const name = prompt("เปลี่ยนชื่อแชท:", sec.name || "");
-        if (name && name.trim()) api(`/api/chat-sections/${sec.id}`, "PATCH", { name: name.trim() });
-      });
-      if (sections.length > 1) {
-        const del = document.createElement("button");
-        del.className = "chat-tab-del";
-        del.textContent = "×";
-        del.title = "ลบแชทนี้ (พร้อมข้อความข้างใน)";
-        del.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (confirm(`ลบแชท "${sec.name}" และข้อความทั้งหมดในนั้น?`)) api(`/api/chat-sections/${sec.id}`, "DELETE");
-        });
-        tab.appendChild(del);
-      }
-      list.appendChild(tab);
-    }
-  }
-
-  function renderChat() {
-    renderChatTabs();
-    const box = $("#chat");
-    const active = STATE.activeSection || "main";
-    const msgs = (STATE.chat || []).filter((m) => (m.section || "main") === active);
-    if (!msgs.length) {
-      box.innerHTML =
-        '<div class="chat-empty">ยังไม่มีข้อความในแชทนี้<br>เมื่อ Claude ใช้เครื่องมือ <code>say_to_user</code><br>ข้อความจะมาโผล่ที่นี่ ✨</div>';
-      return;
-    }
-    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-    box.innerHTML = "";
-    for (const m of msgs) {
-      const el = document.createElement("div");
-      el.className = "msg " + (m.role || "claude");
-      const t = new Date(m.ts).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-      // Turn literal backslash-n (and \r\n) into real line breaks; .msg uses white-space: pre-wrap.
-      const body = escapeHtml(m.text).replace(/\\r\\n|\\n|\\r/g, "\n");
-      el.innerHTML = `${body}<span class="ts">${t}</span>`;
-      box.appendChild(el);
-    }
-    if (atBottom) box.scrollTop = box.scrollHeight;
-  }
-  // escapeHtml is defined once near the Render section (escapes & < > and ").
+  // Chat panel → extracted to modules/chat.js (setupChat called at bottom of file)
 
   // ----------------------------------------------------------------------
   // Title
@@ -1934,294 +1870,8 @@
     await api(`/api/projects/${ACTIVE_ID}`, "DELETE");
   });
 
-  // ----------------------------------------------------------------------
-  // Voice (Thai) + text input
-  // ----------------------------------------------------------------------
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let recog = null;
-  let listening = false;
-  let finalBuf = "";
-
-  // STT model selector — persisted in localStorage
-  let sttModel = localStorage.getItem("pn.sttModel") || "local";
-  let whisperModel = localStorage.getItem("pn.whisperModel") || "large-v3-turbo";
-
-  function applyWhisperModelUI() {
-    const row = $("#whisper-model-row");
-    if (row) row.hidden = sttModel !== "local";
-    document.querySelectorAll(".whisper-btn").forEach(b => b.classList.toggle("active", b.dataset.wm === whisperModel));
-  }
-
-  (function setupSttBtns() {
-    document.querySelectorAll(".stt-btn").forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.stt === sttModel);
-      btn.addEventListener("click", () => {
-        sttModel = btn.dataset.stt;
-        localStorage.setItem("pn.sttModel", sttModel);
-        document.querySelectorAll(".stt-btn").forEach(b => b.classList.toggle("active", b.dataset.stt === sttModel));
-        applyWhisperModelUI();
-        applyLang();
-      });
-    });
-    applyWhisperModelUI();
-
-    document.querySelectorAll(".whisper-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const wm = btn.dataset.wm;
-        if (wm === whisperModel) return;
-        whisperModel = wm;
-        localStorage.setItem("pn.whisperModel", whisperModel);
-        applyWhisperModelUI();
-        await fetch("/api/whisper-model", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: wm }),
-        }).catch(() => {});
-      });
-    });
-
-    // Sync server's current whisper model on load
-    fetch("/api/whisper-model").then(r => r.json()).then(({ model }) => {
-      if (model !== whisperModel) {
-        fetch("/api/whisper-model", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: whisperModel }),
-        }).catch(() => {});
-      }
-    }).catch(() => {});
-  })();
-
-  // Mic language: a two-state toggle (ไทย ↔ EN), persisted.
-  const langToggle = $("#voice-lang");
-  let currentLang = localStorage.getItem("pn.voiceLang") || "th-TH";
-  function voiceLang() { return currentLang; }
-  function isThai() { return currentLang.startsWith("th"); }
-  function idleStatus() { return isThai() ? "กดไมค์เพื่อพูดภาษาไทย" : "Tap the mic to speak English"; }
-  function applyLang() {
-    const th = isThai();
-    if (langToggle) langToggle.classList.toggle("en", !th);
-    if (recog) recog.lang = currentLang;
-    const label = sttModel === "groq" ? "Groq Whisper" : "Web Speech";
-    $("#mic-btn").title = (th ? "พูดภาษาไทย" : "Speak English") + ` (${label})`;
-    if (!listening) $("#voice-status").textContent = idleStatus();
-  }
-  if (langToggle) {
-    applyLang();
-    langToggle.addEventListener("click", () => {
-      currentLang = isThai() ? "en-US" : "th-TH";
-      localStorage.setItem("pn.voiceLang", currentLang);
-      applyLang();
-    });
-  }
-
-  // --- Web Speech API setup ---
-  function setupVoice() {
-    if (!SR) {
-      if (sttModel === "webspeech") {
-        $("#voice-status").textContent = "เบราว์เซอร์นี้ไม่รองรับ Web Speech — เปลี่ยนเป็น Groq หรือใช้ Chrome/Edge";
-      }
-      return;
-    }
-    recog = new SR();
-    recog.lang = voiceLang();
-    recog.continuous = true;
-    recog.interimResults = true;
-    recog.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) finalBuf += r[0].transcript;
-        else interim += r[0].transcript;
-      }
-      $("#voice-interim").textContent = interim;
-    };
-    recog.onerror = (e) => {
-      $("#voice-status").textContent = "ข้อผิดพลาดเสียง: " + e.error;
-    };
-    recog.onend = () => {
-      if (listening && sttModel === "webspeech") {
-        try { recog.start(); } catch {}
-      }
-    };
-  }
-
-  // --- Groq Whisper (MediaRecorder) ---
-  let mediaRecorder = null;
-  let audioChunks = [];
-
-  async function startGroqRecording() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const shouldSubmit = listening;
-        // Release mic immediately so user can record again right away
-        listening = false;
-        setMicUI(false);
-        if (!shouldSubmit) return; // cancelled
-        const blob = new Blob(audioChunks, { type: "audio/webm" });
-        const isLocal = sttModel === "local";
-        try {
-          const lang = isThai() ? "th" : "en";
-          let fullText = "";
-          if (isLocal) {
-            // Stream segments — show each one in interim as it arrives
-            const res = await fetch(`/api/transcribe-local?lang=${lang}`, {
-              method: "POST",
-              headers: { "Content-Type": "audio/webm" },
-              body: blob,
-            });
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-              throw new Error(err.error || `HTTP ${res.status}`);
-            }
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buf = "";
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buf += decoder.decode(value, { stream: true });
-              const lines = buf.split("\n");
-              buf = lines.pop();
-              for (const line of lines) {
-                if (line.trim()) {
-                  fullText += (fullText ? " " : "") + line.trim();
-                  $("#voice-interim").textContent = fullText;
-                }
-              }
-            }
-            if (buf.trim()) fullText += (fullText ? " " : "") + buf.trim();
-          } else {
-            const res = await fetch(`/api/transcribe?lang=${lang}`, {
-              method: "POST",
-              headers: { "Content-Type": "audio/webm" },
-              body: blob,
-            });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            fullText = data.text || "";
-          }
-          $("#voice-interim").textContent = "";
-          if (fullText) {
-            const inp = $("#text-input");
-            inp.value = fullText;
-            inp.focus();
-            inp.select();
-            $("#voice-status").textContent = "แก้ข้อความได้ แล้วกด Enter หรือ ส่ง";
-            setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 4000);
-          }
-        } catch (err) {
-          $("#voice-status").textContent = "STT error: " + err.message;
-          setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 3000);
-          return;
-        }
-        if (!listening) $("#voice-status").textContent = idleStatus();
-      };
-      mediaRecorder.start();
-    } catch (err) {
-      listening = false;
-      setMicUI(false);
-      $("#voice-status").textContent = "ไม่สามารถเข้าถึงไมค์: " + err.message;
-    }
-  }
-
-  function setMicUI(active) {
-    $("#mic-btn").classList.toggle("listening", active);
-    $("#mic-cancel").hidden = !active;
-  }
-
-  function startListening() {
-    finalBuf = "";
-    listening = true;
-    setMicUI(true);
-    if (sttModel === "groq" || sttModel === "local") {
-      $("#voice-status").textContent = isThai()
-        ? "กำลังอัดเสียง… (กดไมค์ = ส่ง · ✕ = ยกเลิก)"
-        : "Recording… (mic = send · ✕ = cancel)";
-      startGroqRecording();
-    } else {
-      if (!recog) { listening = false; setMicUI(false); return; }
-      recog.lang = voiceLang();
-      try { recog.start(); } catch {}
-      $("#voice-status").textContent = isThai()
-        ? "กำลังฟัง… พูดได้เลย (กดไมค์ = ส่ง · ✕ = ยกเลิก)"
-        : "Listening… speak now (mic = send · ✕ = cancel)";
-    }
-  }
-
-  function stopListening() {
-    if (sttModel === "groq" || sttModel === "local") {
-      // listening=true signals onstop to submit; onstop will reset UI itself
-      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    } else {
-      listening = false;
-      try { recog.stop(); } catch {}
-      setMicUI(false);
-      const text = (finalBuf + " " + $("#voice-interim").textContent).trim();
-      $("#voice-interim").textContent = "";
-      if (text) {
-        const inp = $("#text-input");
-        inp.value = text;
-        inp.focus();
-        inp.select();
-        $("#voice-status").textContent = "แก้ข้อความได้ แล้วกด Enter หรือ ส่ง";
-        setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 4000);
-      } else {
-        $("#voice-status").textContent = idleStatus();
-      }
-    }
-  }
-
-  function cancelListening() {
-    listening = false; // set BEFORE stop so onstop skips submit
-    if (sttModel === "groq" || sttModel === "local") {
-      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    } else {
-      try { recog.stop(); } catch {}
-    }
-    setMicUI(false);
-    finalBuf = "";
-    $("#voice-interim").textContent = "";
-    $("#voice-status").textContent = isThai() ? "ยกเลิกแล้ว" : "Cancelled";
-    setTimeout(() => { if (!listening) $("#voice-status").textContent = idleStatus(); }, 1500);
-  }
-
-  $("#mic-btn").addEventListener("click", () => (listening ? stopListening() : startListening()));
-  $("#mic-cancel").addEventListener("click", cancelListening);
-
-  const textInput = $("#text-input");
-  function sendFromInput() {
-    const v = textInput.value.trim();
-    if (!v) return;
-    submitUserInput(v);
-    textInput.value = "";
-  }
-  textInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") sendFromInput();
-  });
-  $("#send-btn").addEventListener("click", sendFromInput);
-
-  // New chat section (tab)
-  $("#chat-tab-add").addEventListener("click", async () => {
-    const name = prompt("ชื่อแชทใหม่:", "แชทใหม่");
-    if (name === null) return;
-    const trimmed = name.trim() || "แชทใหม่";
-    await api("/api/chat-sections", "POST", { name: trimmed });
-    const launch = await api("/api/launch-claude", "POST", { section: trimmed });
-    if (launch?.ok) toast(`เปิด Claude สำหรับ "${trimmed}" แล้ว 🚀`);
-    else toast(`สร้างแชทแล้ว — เปิด claude-listen.cmd "${trimmed}" เองได้เลยครับ`);
-  });
-
-  async function submitUserInput(text) {
-    const section = localActiveSection || "main";
-    await api("/api/chat", "POST", { role: "user", text, section });
-    await api("/api/inbox", "POST", { text, section });
-    await api("/api/voice", "POST", { text });
-    toast("ส่งเข้า Claude แล้ว ✓ — ให้ Claude เรียก get_inbox เพื่อรับ");
-  }
+  // Voice (Thai) + text input → extracted to modules/voice.js (setupVoice called at bottom of file)
+  // Chat section add button → extracted to modules/chat.js (setupChat called at bottom of file)
 
   // ----------------------------------------------------------------------
   // Toolbar
@@ -3040,7 +2690,6 @@
   // ----------------------------------------------------------------------
   // Boot
   // ----------------------------------------------------------------------
-  setupVoice();
   initNotifications();
   connectWS();
   api("/api/state").then((s) => {
@@ -3532,4 +3181,16 @@
   document.getElementById("btn-toggle-objects").addEventListener("click", () => toggleObjPanel());
   document.getElementById("obj-close").addEventListener("click", () => toggleObjPanel(false));
   document.getElementById("obj-refresh").addEventListener("click", () => renderObjectPanel());
-})();
+
+// ----------------------------------------------------------------------
+// Module setup — wire extracted sections back with their dependencies
+// ----------------------------------------------------------------------
+const localActiveSectionRef = { value: localActiveSection };
+
+chatModule = setupChat({ STATE, api, toast, escapeHtml, localActiveSectionRef });
+
+setupVoice({ api, toast, localActiveSectionRef });
+
+setupExport({ STATE, view, canvas, world, toast, render, flushFx });
+
+setupCalendar({ api, toast, escapeHtml });
