@@ -6,7 +6,7 @@ from faster_whisper import WhisperModel
 
 model_name = sys.argv[1] if len(sys.argv) > 1 else "large-v3-turbo"
 print("LOADING", flush=True)
-model = WhisperModel(model_name, device="auto", compute_type="auto")
+model = WhisperModel(model_name, device="cuda", compute_type="float16")
 print("READY", flush=True)
 
 for line in sys.stdin:

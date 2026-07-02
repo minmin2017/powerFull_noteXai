@@ -260,7 +260,7 @@ server.registerTool(
   },
   async () => {
     try {
-      const v = await api("/api/voice/latest?consume=true");
+      const v = await api("/api/voice/latest?consume=true&agent=claude");
       if (!v || !v.text) return ok("ยังไม่มีข้อความเสียงใหม่");
       const age = Math.round((Date.now() - v.ts) / 1000);
       return ok(`ผู้ใช้พูดว่า (${age} วินาทีที่แล้ว):\n"${v.text}"`);
@@ -280,7 +280,7 @@ server.registerTool(
   },
   async () => {
     try {
-      const q = SECTION ? `/api/inbox?drain=true&section=${encodeURIComponent(SECTION)}` : "/api/inbox?drain=true";
+      const q = SECTION ? `/api/inbox?drain=true&section=${encodeURIComponent(SECTION)}&agent=claude` : "/api/inbox?drain=true&agent=claude";
       const { items } = await api(q);
       if (!items || !items.length)
         return ok("ยังไม่มีข้อความใหม่ในกล่องเข้า" + (SECTION ? ` (section: ${SECTION})` : ""));

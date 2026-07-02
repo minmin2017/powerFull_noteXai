@@ -10,7 +10,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import os from "node:os";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,11 +42,12 @@ function emptyState(title = "My Mind Map") {
     boxes: [], // boxes: handwriting {kind:"note",strokes:[...]} OR gallery {kind:"image",items:[{src,url,caption}]}
     boxLinks: [], // connections between boxes: {id, from, to}
     chat: [], // chat messages, each tagged with a `section` id
-    chatSections: [{ id: "main", name: "แชทหลัก" }], // chat tabs/threads
+    chatSections: [{ id: "main", name: "แชทหลัก", agentListener: "both" }], // chat tabs/threads
     activeSection: "main", // which section new messages land in + is shown
     voice: { latest: null, history: [] },
     inbox: [], // typed/spoken messages queued for Claude Code to drain
     imageInbox: [], // image refs the user sent for Claude to LOOK at: {id, src, note, ts}
+    agentListener: "both", // "claude" | "gemini" | "both" (legacy fallback)
   };
 }
 
@@ -510,13 +511,16 @@ function addChat({ role = "claude", text, section }) {
 // ----- Chat sections (multiple chat threads/tabs) -----
 function ensureSections() {
   if (!Array.isArray(state.chatSections) || !state.chatSections.length)
-    state.chatSections = [{ id: "main", name: "แชทหลัก" }];
+    state.chatSections = [{ id: "main", name: "แชทหลัก", agentListener: "both" }];
+  state.chatSections.forEach((s) => {
+    if (!s.agentListener) s.agentListener = "both";
+  });
   if (!state.chatSections.some((s) => s.id === state.activeSection))
     state.activeSection = state.chatSections[0].id;
 }
 function addSection(name) {
   ensureSections();
-  const sec = { id: uid("sec"), name: String(name || "แชทใหม่").slice(0, 40) };
+  const sec = { id: uid("sec"), name: String(name || "แชทใหม่").slice(0, 40), agentListener: "both" };
   state.chatSections.push(sec);
   state.activeSection = sec.id;
   changed();
@@ -1015,14 +1019,35 @@ app.delete("/api/chat-sections/:id", (req, res) => {
 app.post("/api/launch-claude", (req, res) => {
   const { section } = req.body || {};
   if (!section) return res.status(400).json({ error: "section name required" });
-  const cmd = path.join(__dirname, "claude-listen.cmd");
   try {
-    spawn("cmd.exe", ["/c", "start", `Claude — ${section}`, "cmd", "/k", cmd, section], {
-      detached: true,
-      stdio: "ignore",
-      cwd: __dirname,
-      windowsHide: false,
-    }).unref();
+    let child;
+    if (process.platform === "win32") {
+      const cmd = path.join(__dirname, "claude-listen.cmd");
+      child = spawn("cmd.exe", ["/c", "start", `Claude — ${section}`, "cmd", "/k", cmd, section], {
+        detached: true, stdio: "ignore", cwd: __dirname, windowsHide: false,
+      });
+    } else {
+      const script = path.join(__dirname, "claude-listen.bash");
+      const has = (cmd) => { try { execSync(`which ${cmd}`, { stdio: "ignore" }); return true; } catch { return false; } };
+      const term = process.env.TERMINAL ||
+        (has("gnome-terminal") ? "gnome-terminal" :
+         has("xfce4-terminal") ? "xfce4-terminal" :
+         has("konsole")        ? "konsole"        :
+         has("xterm")          ? "xterm"          : null);
+      if (!term) throw new Error("ไม่พบ terminal emulator (ลง xterm หรือ set TERMINAL=...)");
+      let args;
+      if (term === "gnome-terminal") {
+        args = [`--title=Claude — ${section}`, "--", "bash", script, section];
+      } else if (term === "konsole") {
+        args = ["--title", `Claude — ${section}`, "-e", "bash", script, section];
+      } else {
+        // xterm, xfce4-terminal and most others
+        args = ["-T", `Claude — ${section}`, "-e", `bash "${script}" "${section}"`];
+      }
+      child = spawn(term, args, { detached: true, stdio: "ignore", cwd: __dirname });
+    }
+    child.on("error", (err) => console.warn("[launch-claude] spawn error:", err.message));
+    child.unref();
     res.json({ ok: true, section });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1150,6 +1175,15 @@ app.post("/api/transcribe-local", express.raw({ type: "*/*", limit: "100mb" }), 
 
 app.get("/api/voice/latest", (req, res) => {
   const consume = req.query.consume === "true" || req.query.consume === "1";
+  const requester = req.query.agent;
+  if (requester) {
+    ensureSections();
+    const sec = state.chatSections.find((s) => s.id === state.activeSection);
+    const listener = sec ? (sec.agentListener || "both") : "both";
+    if (listener !== "both" && listener !== requester) {
+      return res.json(null);
+    }
+  }
   const v = state.voice.latest;
   if (consume) consumeVoice();
   res.json(v || null);
@@ -1165,6 +1199,33 @@ app.post("/api/inbox", (req, res) => {
 app.get("/api/inbox", (req, res) => {
   const drain = req.query.drain === "true" || req.query.drain === "1";
   const secKey = req.query.section;
+  const requester = req.query.agent;
+  {
+    ensureSections();
+    const secId = resolveSectionKey(secKey || state.activeSection);
+    const sec = state.chatSections.find((s) => s.id === secId);
+    const listener = sec ? (sec.agentListener || "both") : "both";
+    if (listener !== "both") {
+      if (!requester) {
+        // Anonymous poll on a section reserved for one agent: never hand out
+        // (or drain) messages — ask the caller to identify itself and explain
+        // how, so a misconfigured agent can read the hint and self-correct.
+        return res.json({
+          items: [],
+          error: "who are you?",
+          hint:
+            `This chat section is reserved for agent='${listener}'. ` +
+            `Identify yourself by adding your REAL identity to the poll URL: ` +
+            `&agent=claude or &agent=gemini (do not claim an identity that is not yours). ` +
+            `If you are not '${listener}', this section's messages are not for you — ` +
+            `poll your own section instead.`,
+        });
+      }
+      if (listener !== requester) {
+        return res.json({ items: [] });
+      }
+    }
+  }
   let secId = null;
   if (secKey !== undefined && secKey !== "") {
     secId = resolveSectionKey(secKey);
@@ -1192,6 +1253,29 @@ app.get("/api/image-inbox", (req, res) => {
   const items = state.imageInbox.slice();
   if (drain) drainImageInbox();
   res.json({ items });
+});
+
+// AI agent listener selector endpoints
+app.get("/api/agent-listener", (req, res) => {
+  ensureSections();
+  const secKey = req.query.section || state.activeSection;
+  const secId = resolveSectionKey(secKey);
+  const sec = state.chatSections.find((s) => s.id === secId);
+  res.json({ agentListener: sec ? sec.agentListener : "both" });
+});
+app.post("/api/agent-listener", (req, res) => {
+  const b = req.body || {};
+  ensureSections();
+  const secKey = b.section || state.activeSection;
+  const secId = resolveSectionKey(secKey);
+  const sec = state.chatSections.find((s) => s.id === secId);
+  if (sec && ["claude", "gemini", "both"].includes(b.agentListener)) {
+    sec.agentListener = b.agentListener;
+    changed();
+    res.json({ agentListener: sec.agentListener });
+  } else {
+    res.status(400).json({ error: "Invalid section or agentListener" });
+  }
 });
 
 // ----- Calendar cache (Claude fetches via MCP and stores here) ---------------

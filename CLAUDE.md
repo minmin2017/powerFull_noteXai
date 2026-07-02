@@ -7,11 +7,26 @@
 1. เช็คเซิร์ฟเวอร์: `curl -s -m 5 "http://localhost:4321/api/inbox?drain=true"`
    - server down → บอก Min รัน `start.cmd`
    - มี items ค้าง → ตอบก่อนเริ่มฟัง
-2. Arm Monitor (persistent) ด้วย **ws-inbox.js** (WebSocket, ไม่ poll ทุก 3s):
-   - **มี CHAT_SECTION** → `node ws-inbox.js "$CHAT_SECTION"`
-   - **ไม่มี** → `node ws-inbox.js` (ฟังทุก section)
+2. **ตรวจ section ID จริงก่อน arm** — CHAT_SECTION ใน env อาจเป็นชื่อ (`main`) แต่ ID จริงต่างกัน (เช่น `sec_mqwg4mp8nubua`)
+   - drain ไม่ใส่ section ก่อน: `curl /api/inbox?drain=true` → ดู field `section` ในแต่ละ item
+   - หรืออ่าน memory (`MEMORY.md`) — อาจบันทึก ID จริงไว้แล้ว
+   - ใช้ ID จริงเสมอ ไม่ใช่ชื่อ env ตรงๆ
+3. Arm Monitor (persistent) ด้วย **ws-inbox.js** (WebSocket, ไม่ poll ทุก 3s):
+   - `node ws-inbox.js "<SECTION_ID_จริง>"` ใน dir `powerNote_xai`
    - แต่ละ stdout line = ข้อความใหม่ 1 ข้อความ
-3. ตอบกลับผ่าน MCP `say_to_user` (env CHAT_SECTION เติมให้อัตโนมัติ)
+4. ตอบกลับผ่าน MCP `say_to_user` พร้อม `section: "<SECTION_ID_จริง>"` เสมอ
+
+### ปุ่ม Gemini — ไม่ต้องฟัง/ตอบ
+เมื่อ Min กดปุ่ม Gemini บน section ใด `agentListener` ของ section นั้นจะเปลี่ยนเป็น `"gemini"`
+Server มี built-in filter: **ส่ง `agent=claude` ใน poll URL เสมอ** — server จะคืน `items:[]` อัตโนมัติเมื่อ section อยู่ในโหมด Gemini → Claude ไม่เห็น/ไม่ drain ข้อความนั้น
+```
+curl -s -G http://localhost:4321/api/inbox \
+  --data-urlencode "section=<ID>" \
+  --data-urlencode "drain=true" \
+  --data-urlencode "agent=claude"
+```
+
+> **บทเรียน (session 2026-06-28):** arm ด้วย `section=main` แต่ข้อความอยู่ใน `sec_mqwg4mp8nubua` → Monitor ไม่จับ ต้อง drain รวมก่อนถึงเจอ — ป้องกันด้วยการตรวจ ID จริงทุก session
 
 > re-arm ทุก session — Monitor ไม่ persist ข้าม session | รายละเอียด: `docs/event-based-system.md`
 
@@ -38,11 +53,16 @@ claude-listen.cmd "งานวิจัย"   # หน้าต่าง cmd �
 - เชื่อมผ่าน MCP (`.mcp.json`) ไม่ใช่ Claude API
 
 ## Graphify — knowledge graph ของ codebase
-`graphify-out/graph.json` (493 nodes, 732 edges) — ประหยัดโทเคน ~13.8x ต่อ query
-- **ถามเรื่อง codebase** → อ่าน graph ก่อน ไม่อ่านไฟล์ทีละไฟล์
-- God nodes: `$()`, `render()`, `changed()`, `eventCanvasPos()`, `api()`
+`graphify-out/graph.json` (493 nodes, 732 edges) — ประหยัดโทเคน ~13.8x **ต่อ query เฉพาะจุด**
+- **กฎทั่วไป:** โปรเจกต์ไหนที่ Min พูดถึงถ้ามีไฟล์ `graphify-out/graph.json` → **ต้องนึกถึง/เช็คกราฟก่อน** แล้ว query เฉพาะ node/ความสัมพันธ์ที่ต้องการ ค่อยเจาะอ่านไฟล์จริงเฉพาะส่วน — ไม่ไล่อ่านไฟล์ทีละไฟล์ตั้งแต่ต้น
+- **query เฉพาะจุด ห้ามโหลดทั้งก้อน** — graph.json อาจใหญ่กว่าโค้ดจริง (powerNote ~85k tok, animation graph บวมเพราะ index ไลบรารี manim เข้าไป ~9.7M tok โหลดไม่ไหว) การประหยัดมาจาก "ดึง subgraph รอบ node ที่สนใจ" ไม่ใช่ "อ่านทั้งไฟล์แทนโค้ด"
+- **ช่วยจริงตอน:** ถามความสัมพันธ์ในโค้ดใหญ่ (ใครเรียกใคร / ลบอันนี้กระทบอะไร / โครงรวมก่อนแก้)
+- **ไม่ช่วย:** ต้องการ "เนื้อโค้ด/style จริง" → อ่านไฟล์ตรงๆ (กราฟมีแต่โครงสร้าง ไม่มีตัวโค้ด)
+- God nodes (powerNote): `$()`, `render()`, `changed()`, `eventCanvasPos()`, `api()`
 - `api()` ใน app.js = single gateway ระหว่าง canvas กับ server
 - อัปเดต graph: `/graphify --update`
+
+> **บทเรียน:** session animation_1b3b ผมลืมว่าโปรเจกต์นั้นมี graphify เลยไม่ได้เช็ค — กฎข้างบนกันไม่ให้ลืมอีก: เข้าโปรเจกต์ที่มีกราฟ = เช็คก่อนเสมอ แล้วค่อยตัดสินใจว่า query ช่วยไหม
 
 ## ฟีเจอร์กล่อง (Prototype 3)
 - **note** = ลายมือ + OCR/ส่งให้ Claude | **image** = แกลเลอรีรูป (กดเปิด URL) | **aibox** = พื้นที่งาน Claude

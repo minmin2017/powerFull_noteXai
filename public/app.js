@@ -155,8 +155,18 @@ import setupChat from './modules/chat.js';
     for (const k of Object.keys(STATE)) delete STATE[k];
     Object.assign(STATE, s);
     if (chatModule) chatModule.renderChat();
+    updateAgentSwitcherUI();
     syncTitle();
     render();
+  }
+
+  function updateAgentSwitcherUI() {
+    const activeSecId = STATE.activeSection || "main";
+    const sections = STATE.chatSections || [];
+    const sec = sections.find((x) => x.id === activeSecId);
+    const agentListener = sec ? (sec.agentListener || "both") : "both";
+    const btns = document.querySelectorAll(".agent-btn");
+    btns.forEach((b) => b.classList.toggle("active", b.dataset.agent === agentListener));
   }
 
   // Call when a drawing gesture has fully persisted: stop deferring and flush the
@@ -2668,7 +2678,7 @@ import setupChat from './modules/chat.js';
   // Model switcher
   // ----------------------------------------------------------------------
   (function setupModelSwitcher() {
-    const btns = document.querySelectorAll(".model-btn");
+    const btns = document.querySelectorAll(".model-btn:not(.agent-btn)");
     // Fetch current model from settings and mark active button.
     fetch("/api/current-model").then(r => r.json()).then(({ model }) => {
       btns.forEach(b => b.classList.toggle("active", b.dataset.model === model));
@@ -2687,6 +2697,31 @@ import setupChat from './modules/chat.js';
           toast(`เปลี่ยนเป็น ${model} แล้ว — มีผลครั้งถัดไปที่เปิด Claude Code ✓`);
         } else {
           toast("เปลี่ยนโมเดลไม่สำเร็จ");
+        }
+      });
+    });
+  })();
+
+  (function setupAgentSwitcher() {
+    const btns = document.querySelectorAll(".agent-btn");
+    // Initial sync
+    setTimeout(updateAgentSwitcherUI, 100);
+
+    btns.forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const agentListener = btn.dataset.agent;
+        const res = await fetch("/api/agent-listener", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentListener, section: STATE.activeSection || "main" }),
+        });
+        if (res.ok) {
+          btns.forEach(b => b.classList.toggle("active", b === btn));
+          let displayAgent = agentListener;
+          if (agentListener === "both") displayAgent = "ทั้งคู่";
+          toast(`เปลี่ยนผู้รับฟังคำสั่งเป็น ${displayAgent} แล้ว ✓`);
+        } else {
+          toast("เปลี่ยนผู้รับฟังคำสั่งไม่สำเร็จ");
         }
       });
     });

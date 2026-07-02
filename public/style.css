@@ -1781,3 +1781,73 @@ body.col-resizing {
   border-bottom: 1px solid var(--line);
 }
 .cal-events-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* ===================== AI Agent Switcher Styles ===================== */
+.agent-switcher {
+  border-top: 1px solid var(--line);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--panel);
+}
+
+.agent-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.agent-btn {
+  flex: 1;
+  padding: 6px 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.agent-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.agent-btn[data-agent="claude"]:hover {
+  border-color: #E06C53;
+}
+
+.agent-btn[data-agent="gemini"]:hover {
+  border-color: #9b72cb;
+}
+
+.agent-btn[data-agent="both"]:hover {
+  border-color: #34d399;
+}
+
+/* Active states with brand colors and subtle shadows */
+.agent-btn[data-agent="claude"].active {
+  background: linear-gradient(135deg, #E06C53, #AF4936);
+  border-color: #E06C53;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(224, 108, 83, 0.35);
+}
+
+.agent-btn[data-agent="gemini"].active {
+  background: linear-gradient(135deg, #4285f4, #9b72cb);
+  border-color: #8b68cb;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(155, 114, 203, 0.35);
+}
+
+.agent-btn[data-agent="both"].active {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #10b981;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+

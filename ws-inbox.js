@@ -14,8 +14,8 @@ const SECTION = (process.argv[2] || process.env.CHAT_SECTION || "").trim();
 
 async function drain() {
   const url = SECTION
-    ? `${BASE}/api/inbox?drain=true&section=${encodeURIComponent(SECTION)}`
-    : `${BASE}/api/inbox?drain=true`;
+    ? `${BASE}/api/inbox?drain=true&section=${encodeURIComponent(SECTION)}&agent=claude`
+    : `${BASE}/api/inbox?drain=true&agent=claude`;
   try {
     const r = await fetch(url);
     return (await r.json()).items || [];
@@ -25,6 +25,16 @@ async function drain() {
 }
 
 let lastInboxLen = 0;
+let resolvedSectionId = null; // canonical ID resolved from first state broadcast
+
+function resolveFromState(chatSections) {
+  if (!SECTION || !Array.isArray(chatSections)) return null;
+  const k = SECTION.trim().toLowerCase();
+  const found = chatSections.find(
+    (s) => s.id === SECTION || (s.name || "").toLowerCase() === k
+  );
+  return found ? found.id : SECTION; // fallback: treat SECTION as raw id
+}
 
 function connect() {
   const ws = new WebSocket(WS_URL);
@@ -39,9 +49,17 @@ function connect() {
     try {
       const msg = JSON.parse(data);
       if (msg.type !== "state") return;
+      // Resolve section name → ID once from the state's chatSections list
+      if (!resolvedSectionId && SECTION) {
+        resolvedSectionId = resolveFromState(msg.state?.chatSections);
+        if (resolvedSectionId) {
+          process.stderr.write(`[ws-inbox] section "${SECTION}" → id: ${resolvedSectionId}\n`);
+        }
+      }
       const inbox = msg.state?.inbox || [];
-      const mine = SECTION
-        ? inbox.filter((m) => (m.section || "main") === SECTION)
+      const secId = resolvedSectionId;
+      const mine = secId
+        ? inbox.filter((m) => (m.section || "main") === secId)
         : inbox;
       if (!mine.length) { lastInboxLen = 0; return; }
       // Only drain when count grew (new items arrived), not on unrelated broadcasts.
