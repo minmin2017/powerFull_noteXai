@@ -238,11 +238,16 @@ server.registerTool(
         .string()
         .optional()
         .describe("chat section id/ชื่อ ที่จะส่งเข้า (เว้นว่าง = ใช้ CHAT_SECTION ที่ผูกไว้ หรือ section ที่ active)"),
+      role: z
+        .string()
+        .optional()
+        .describe("บทบาทผู้ส่ง (เช่น 'claude' หรือ 'gemini')"),
     },
   },
-  async ({ text, section }) => {
+  async ({ text, section, role }) => {
     try {
-      await api("/api/chat", "POST", { role: "claude", text, section: section || SECTION || undefined });
+      const senderRole = role || process.env.AGENT || "claude";
+      await api("/api/chat", "POST", { role: senderRole, text, section: section || SECTION || undefined });
       return ok("ส่งข้อความเข้าพาเนลแล้ว" + (section || SECTION ? ` (section: ${section || SECTION})` : ""));
     } catch (e) {
       return fail(e);
@@ -572,6 +577,145 @@ server.registerTool(
       return { content: [{ type: "image", data: base64, mimeType }] };
     } catch (e) {
       return fail("ถ่ายภาพรวมไม่สำเร็จ — เปิดหน้า http://localhost:4321 ในเบราว์เซอร์ไว้ก่อนนะครับ");
+    }
+  }
+);
+
+server.registerTool(
+  "delegate_to_gemini",
+  {
+    title: "มอบงานย่อยให้ Gemini (Antigravity) ทำ (ประหยัด token Claude)",
+    description:
+      "Delegate a subtask to Gemini (Antigravity) to save Claude tokens. Gemini here is ~Sonnet-level: it CAN read files (pass file PATHS in context, no need to inline everything) and write code — treat it like a capable junior dev (sometimes gets confused, so give a clear spec and verify its result). Good for: coding a well-scoped piece, summarizing, drafting, research/lookup. Keep hard architecture/debugging judgement on Claude. Frame the task with the Thinking-Men-Men fields below. Requires the app's 🤝 handoff toggle ON and Antigravity's poller (antigravity-wait.py) running so the status dot is green.",
+    inputSchema: {
+      requirement: z.string().describe("ความต้องการ — ต้องการให้ Gemini ทำอะไรกันแน่ (บรีฟให้ชัดเหมือนสั่งรุ่นน้อง)"),
+      prohibitions: z.string().optional().describe("ข้อห้าม (ถ้ามี)"),
+      principles: z.string().optional().describe("หลักการ/แนวทางที่ต้องทำตาม (ถ้ามี)"),
+      context: z
+        .string()
+        .optional()
+        .describe("บริบท — ระบุ path ไฟล์ให้ Gemini ไปอ่านเองได้ (มันอ่านไฟล์ได้), หรือแปะเนื้อ memory ที่จำเป็นพร้อมบอกที่มา"),
+    },
+  },
+  async ({ requirement, prohibitions, principles, context }) => {
+    try {
+      const status = await api("/api/agent/status");
+      if (!status.handoff)
+        return ok("โหมด Gemini handoff ปิดอยู่ — เปิดสวิตช์ 🤝 ในแอปก่อน");
+      if (!status.gemini?.online)
+        return ok("Gemini ไม่พร้อมรับงาน (ออฟไลน์ — เปิด Antigravity + รัน antigravity-wait.py ก่อน, หรือ Gemini กำลังยุ่งกับงานอื่น)");
+
+      const { id } = await api("/api/gemini/task", "POST", {
+        requirement,
+        prohibitions,
+        principles,
+        context,
+      });
+
+      // Antigravity's first wake can take a few minutes (event wake + agent
+      // spin-up + file reads), so wait generously before giving up.
+      const deadline = Date.now() + 240_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const t = await api(`/api/gemini/task/${id}`);
+        if (t.status === "done") return ok(t.result || "(Gemini ตอบว่างเปล่า)");
+        if (t.status === "error") return fail(new Error(t.error || "Gemini เกิดข้อผิดพลาด"));
+      }
+      // Not finished in time — hand back the id so it can be checked later
+      // instead of losing the work (Gemini may still be processing).
+      return ok(
+        `Gemini ยังทำไม่เสร็จใน 4 นาที (id=${id}) — งานยังค้างอยู่ ตรวจผลภายหลังได้ที่ ` +
+        `GET /api/gemini/task/${id} หรือทำเอง`
+      );
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// LOCAL video comprehension (zero API cost). Thin wrappers over the server's
+// /api/video-* endpoints: kick off a digest, read it, and pull extra frames.
+// ---------------------------------------------------------------------------
+server.registerTool(
+  "comprehend_video",
+  {
+    title: "ย่อยวิดีโอแบบโลคอล (คีย์เฟรม + ทรานสคริปต์)",
+    description:
+      "Start LOCAL video comprehension (zero API cost) on a video FILE PATH or a http/YouTube URL. " +
+      "A background worker extracts keyframes (ffmpeg scene detection) and a timestamped transcript " +
+      "(faster-whisper, Thai+English). Returns an id immediately; poll get_video_digest(id) until " +
+      "status is 'done'. When it finishes, a '🎬 video digest ready: <id>' message is pushed into the " +
+      "chat inbox so you get woken.",
+    inputSchema: {
+      source: z.string().describe("ไฟล์วิดีโอ (path บนเครื่อง) หรือ URL (http/YouTube)"),
+      section: z
+        .string()
+        .optional()
+        .describe("chat section id/ชื่อ ที่จะให้ push ข้อความ 'พร้อมแล้ว' เข้าไป (เว้นว่าง = CHAT_SECTION/active)"),
+    },
+  },
+  async ({ source, section }) => {
+    try {
+      const r = await api("/api/video-inbox", "POST", { source, section: section || SECTION || undefined });
+      return ok(
+        `เริ่มย่อยวิดีโอแล้ว (id: ${r.id}) 🎬\n` +
+        `รอสักครู่แล้วเรียก get_video_digest("${r.id}") จนกว่า status = "done"`
+      );
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  "get_video_digest",
+  {
+    title: "อ่านผลย่อยวิดีโอ (digest)",
+    description:
+      "Fetch the digest for a video id started by comprehend_video: title, duration, keyframe list " +
+      "(each {t, file}) and the timestamped transcript. status is 'processing', 'done', or 'error: ...'. " +
+      "Keyframe/extra files are served at http://localhost:4321<file>.",
+    inputSchema: { id: z.string() },
+  },
+  async ({ id }) => {
+    try {
+      const d = await api(`/api/video-digest?id=${encodeURIComponent(id)}`);
+      if (!d || !d.status || d.status === "processing")
+        return ok(`วิดีโอ ${id} ยังย่อยไม่เสร็จ (status: ${d?.status || "processing"}) — ลองใหม่อีกครั้ง`);
+      if (String(d.status).startsWith("error"))
+        return ok(`วิดีโอ ${id} ย่อยไม่สำเร็จ: ${d.status}`);
+      const frames = (d.frames || []).map((f) => `  • t=${f.t}s → ${f.file}`).join("\n") || "  (ไม่มีคีย์เฟรม)";
+      const tx = (d.transcript || [])
+        .map((s) => `  [${s.start}–${s.end}] ${s.text}`)
+        .join("\n") || "  (ไม่มีเสียงพูด/ทรานสคริปต์ว่าง)";
+      return ok(
+        `🎬 digest ${id} — ${d.title || "(ไม่มีชื่อ)"} | ${d.duration_s ?? "?"}s\n\n` +
+        `คีย์เฟรม (${(d.frames || []).length}):\n${frames}\n\n` +
+        `ทรานสคริปต์ (${(d.transcript || []).length} ช่วง):\n${tx}\n\n` +
+        `ดึงเฟรมเพิ่มที่เวลาใดก็ได้ด้วย get_video_frame("${id}", <วินาที>)`
+      );
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  "get_video_frame",
+  {
+    title: "ดึงเฟรมวิดีโอเพิ่มที่เวลาที่ต้องการ",
+    description:
+      "Extract ONE extra frame from an already-digested video at time t (seconds) and return its served " +
+      "path (http://localhost:4321<file>). Use this to zoom into any moment beyond the auto keyframes.",
+    inputSchema: { id: z.string(), t: z.number().describe("เวลาเป็นวินาที") },
+  },
+  async ({ id, t }) => {
+    try {
+      const r = await api(`/api/video-frame?id=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`);
+      return ok(`เฟรมที่ t=${r.t}s: ${r.file}\n(เปิดดูที่ http://localhost:4321${r.file})`);
+    } catch (e) {
+      return fail(e);
     }
   }
 );

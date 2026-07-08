@@ -48,6 +48,9 @@ function emptyState(title = "My Mind Map") {
     inbox: [], // typed/spoken messages queued for Claude Code to drain
     imageInbox: [], // image refs the user sent for Claude to LOOK at: {id, src, note, ts}
     agentListener: "both", // "claude" | "gemini" | "both" (legacy fallback)
+    geminiHandoff: { enabled: false }, // UI toggle: let Claude delegate cheap subtasks to Gemini
+    geminiTasks: [], // {id,status:'pending'|'running'|'done'|'error',task,result,error,ts}
+    agentSeen: {}, // heartbeat timestamps: { gemini: <ts ms> }
   };
 }
 
@@ -517,6 +520,11 @@ function ensureSections() {
   });
   if (!state.chatSections.some((s) => s.id === state.activeSection))
     state.activeSection = state.chatSections[0].id;
+  // Upgrade old saved projects that predate the Gemini-handoff feature.
+  if (!state.geminiHandoff || typeof state.geminiHandoff !== "object")
+    state.geminiHandoff = { enabled: false };
+  if (!Array.isArray(state.geminiTasks)) state.geminiTasks = [];
+  if (!state.agentSeen || typeof state.agentSeen !== "object") state.agentSeen = {};
 }
 function addSection(name) {
   ensureSections();
@@ -550,6 +558,25 @@ function deleteSection(id) {
   if (state.activeSection === id) state.activeSection = state.chatSections[0].id;
   changed();
   return true;
+}
+
+// Clear chat messages. If `section` given, only that section's messages are
+// dropped; otherwise the whole chat log is wiped. Returns count removed.
+function clearChat(section) {
+  const before = state.chat.length;
+  if (section) {
+    const id = resolveSectionKey(section) || section;
+    state.chat = state.chat.filter((m) => (m.section || "main") !== id);
+  } else {
+    state.chat = [];
+  }
+  changed();
+  return before - state.chat.length;
+}
+
+// True if agent-brain.js's heartbeat has pinged within the last 15s.
+function geminiOnline() {
+  return Date.now() - (state.agentSeen?.gemini || 0) < 15000;
 }
 
 function setVoice(text) {
@@ -999,6 +1026,97 @@ app.post("/api/boxes/:id/to-claude", (req, res) => {
 });
 
 app.post("/api/chat", (req, res) => res.json(addChat(req.body || {})));
+app.post("/api/chat/clear", (req, res) => {
+  const cleared = clearChat((req.body || {}).section);
+  res.json({ ok: true, cleared });
+});
+
+// ---------------------------------------------------------------------------
+// Gemini handoff — a DEDICATED task queue so Claude can delegate cheap
+// subtasks to Gemini (gemini-1.5-flash) via agent-brain.js and save tokens.
+// This is completely separate from /api/inbox (the chat listener routing) —
+// do not merge the two, /api/inbox has its own agentListener + guard logic.
+// ---------------------------------------------------------------------------
+
+// agent-brain.js pings this every 5s while it's running. No changed() here —
+// a heartbeat firing every 5s would be far too chatty for the WS broadcast.
+app.post("/api/agent/heartbeat", (req, res) => {
+  const { agent } = req.body || {};
+  if (agent) state.agentSeen[agent] = Date.now();
+  res.json({ ok: true });
+});
+
+app.get("/api/agent/status", (_req, res) => {
+  res.json({
+    gemini: {
+      online: geminiOnline(),
+      busy: state.geminiTasks.some((t) => t.status === "running"),
+    },
+    handoff: !!state.geminiHandoff.enabled,
+  });
+});
+
+app.post("/api/gemini/handoff", (req, res) => {
+  state.geminiHandoff.enabled = !!(req.body || {}).enabled;
+  changed();
+  res.json({ enabled: state.geminiHandoff.enabled });
+});
+
+app.post("/api/gemini/task", (req, res) => {
+  if (!state.geminiHandoff.enabled)
+    return res.status(409).json({ error: "handoff_disabled" });
+  if (!geminiOnline())
+    return res.status(503).json({ error: "gemini_offline" });
+  const { requirement, prohibitions, principles, context } = req.body || {};
+  const t = {
+    id: uid("gt"),
+    status: "pending",
+    task: { requirement, prohibitions, principles, context },
+    result: null,
+    error: null,
+    ts: Date.now(),
+  };
+  state.geminiTasks.push(t);
+  if (state.geminiTasks.length > 100) state.geminiTasks = state.geminiTasks.slice(-100);
+  changed();
+  res.json({ id: t.id, status: t.status });
+});
+
+// agent-brain.js polls this (no changed() — it's a read).
+app.get("/api/gemini/tasks", (req, res) => {
+  const { status } = req.query;
+  const tasks = status ? state.geminiTasks.filter((t) => t.status === status) : state.geminiTasks;
+  res.json({ tasks });
+});
+
+app.get("/api/gemini/task/:id", (req, res) => {
+  const t = state.geminiTasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "not_found" });
+  res.json({ id: t.id, status: t.status, result: t.result, error: t.error });
+});
+
+app.post("/api/gemini/task/:id/claim", (req, res) => {
+  const t = state.geminiTasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "not_found" });
+  t.status = "running";
+  changed();
+  res.json(t);
+});
+
+app.post("/api/gemini/task/:id/result", (req, res) => {
+  const t = state.geminiTasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "not_found" });
+  const { result, error } = req.body || {};
+  if (error) {
+    t.status = "error";
+    t.error = error;
+  } else {
+    t.status = "done";
+    t.result = result;
+  }
+  changed();
+  res.json({ ok: true });
+});
 
 // Chat sections (tabs)
 app.post("/api/chat-sections", (req, res) => res.json(addSection((req.body || {}).name)));
@@ -1231,12 +1349,20 @@ app.get("/api/inbox", (req, res) => {
     secId = resolveSectionKey(secKey);
     if (!secId) return res.json({ items: [] }); // unknown section → nothing, never drain all
   }
-  const match = (m) => secId === null || (m.section || "main") === secId;
+  const match = (m) => {
+    if (secId !== null) return (m.section || "main") === secId;
+    // Cross-section poll (no ?section): enforce each message's OWN section
+    // listener, so an agent can never see/drain messages from a section
+    // reserved for the other agent (guard above only covers one section).
+    const msec = state.chatSections.find((s) => s.id === (m.section || "main"));
+    const ml = msec ? (msec.agentListener || "both") : "both";
+    return ml === "both" || ml === requester;
+  };
   const items = state.inbox.filter(match);
   if (drain && items.length) {
     // only mutate/broadcast when something was actually drained — otherwise every
     // ~3s poll triggered a full state broadcast + history snapshot + file write
-    state.inbox = secId === null ? [] : state.inbox.filter((m) => !match(m));
+    state.inbox = state.inbox.filter((m) => !match(m));
     changed();
   }
   res.json({ items });
@@ -1332,6 +1458,126 @@ app.post("/api/set-model", (req, res) => {
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
+});
+
+// ---------------------------------------------------------------------------
+// LOCAL video comprehension (zero API cost). A detached Python worker
+// (video-digest/video_digest.py) extracts keyframes + a timestamped transcript
+// into public/uploads/videodigest/<id>/. Additive only — this block never
+// touches the chat inbox drain/guard logic; the completion hook reuses the
+// existing addInbox() the same way handwriting does.
+// ---------------------------------------------------------------------------
+const VIDEODIGEST_DIR = path.join(__dirname, "public", "uploads", "videodigest");
+const VIDEO_WORKER = path.join(__dirname, "video-digest", "video_digest.py");
+function fmtT(t) { return String(Math.round(Number(t) * 100) / 100); }
+
+// POST /api/video-inbox {source, section} → spawn worker detached, return {id}.
+app.post("/api/video-inbox", (req, res) => {
+  const { source, section } = req.body || {};
+  if (!source || !String(source).trim())
+    return res.status(400).json({ error: "missing source (local path or http/YouTube URL)" });
+  const id = "vid_" + Date.now().toString(36);
+  const dir = path.join(VIDEODIGEST_DIR, id);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    // Write a processing stub so an immediate poll sees progress before the
+    // worker has written its own digest.json.
+    fs.writeFileSync(
+      path.join(dir, "digest.json"),
+      JSON.stringify({ id, source, status: "processing", frames: [], transcript: [] }, null, 2)
+    );
+    const sec = resolveSectionKey(section) || state.activeSection || "main";
+    const log = fs.openSync(path.join(dir, "worker.log"), "a");
+    const worker = spawn(
+      "python3",
+      [VIDEO_WORKER, "--source", String(source), "--out", dir, "--id", id,
+       "--section", sec, "--notify-url", `http://localhost:${PORT}/api/video-complete`],
+      { detached: true, stdio: ["ignore", log, log] }
+    );
+    worker.unref();
+    console.log(`[video] spawned worker ${id} (pid ${worker.pid}) section=${sec}`);
+    res.json({ id });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/video-upload (raw bytes) → save the file so it can be used as a
+// local source. Mirrors the express.raw() pattern used by /api/transcribe-local.
+app.post("/api/video-upload", express.raw({ type: "*/*", limit: "1024mb" }), (req, res) => {
+  const body = req.body;
+  if (!body || !Buffer.isBuffer(body) || body.length === 0)
+    return res.status(400).json({ error: "empty upload body" });
+  const extRaw = String(req.query.ext || "mp4").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "mp4";
+  const dir = path.join(VIDEODIGEST_DIR, "_uploads");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = `up_${Date.now().toString(36)}.${extRaw}`;
+  const full = path.join(dir, file);
+  try {
+    fs.writeFileSync(full, body);
+    res.json({ path: full, url: `/uploads/videodigest/_uploads/${file}` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/video-digest?id= → the digest.json (or a processing/error stub).
+app.get("/api/video-digest", (req, res) => {
+  const id = String(req.query.id || "");
+  if (!/^vid_[a-z0-9]+$/i.test(id)) return res.status(400).json({ error: "bad id" });
+  const p = path.join(VIDEODIGEST_DIR, id, "digest.json");
+  if (!fs.existsSync(p)) return res.json({ id, status: "processing" });
+  try {
+    res.json(JSON.parse(fs.readFileSync(p, "utf8")));
+  } catch {
+    res.json({ id, status: "processing" });
+  }
+});
+
+// GET /api/video-frame?id=&t= → extract ONE extra frame at time t on demand.
+app.get("/api/video-frame", (req, res) => {
+  const id = String(req.query.id || "");
+  const t = Number(req.query.t);
+  if (!/^vid_[a-z0-9]+$/i.test(id)) return res.status(400).json({ error: "bad id" });
+  if (!Number.isFinite(t) || t < 0) return res.status(400).json({ error: "bad t" });
+  const dir = path.join(VIDEODIGEST_DIR, id);
+  if (!fs.existsSync(dir)) return res.status(404).json({ error: "unknown id" });
+  // Find the media the worker downloaded/used, else fall back to a local source.
+  let media = null;
+  try {
+    const src = fs.existsSync(path.join(dir, "digest.json"))
+      ? (JSON.parse(fs.readFileSync(path.join(dir, "digest.json"), "utf8")).source || "")
+      : "";
+    const dl = fs.readdirSync(dir).find((f) => f.startsWith("source."));
+    if (dl) media = path.join(dir, dl);
+    else if (src && !/^https?:\/\//i.test(src) && fs.existsSync(src)) media = src;
+  } catch {}
+  if (!media) return res.status(409).json({ error: "source media not available for frame extraction" });
+  const name = `extra_${fmtT(t)}.jpg`;
+  const dest = path.join(dir, name);
+  const ff = spawn("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y",
+    "-ss", String(t), "-i", media, "-frames:v", "1", "-q:v", "3", dest]);
+  ff.on("close", (code) => {
+    if (code === 0 && fs.existsSync(dest))
+      res.json({ file: `/uploads/videodigest/${id}/${name}`, t });
+    else res.status(500).json({ error: "ffmpeg frame extraction failed" });
+  });
+  ff.on("error", (e) => res.status(500).json({ error: String(e) }));
+});
+
+// POST /api/video-complete {id, section, status, error} — the worker curls this
+// on finish so the listening Claude wakes. Reuses addInbox() exactly like the
+// handwriting-to-claude marker does.
+app.post("/api/video-complete", (req, res) => {
+  const { id, section, status, error } = req.body || {};
+  if (!id) return res.status(400).json({ error: "missing id" });
+  const done = status === "done";
+  const text = done
+    ? `🎬 video digest ready: ${id}`
+    : `🎬 video digest error: ${id}${error ? " — " + error : ""}`;
+  addInbox(text, section);
+  console.log(`[video] ${id} ${done ? "done" : "error"} → inbox (section=${section || "?"})`);
+  res.json({ ok: true });
 });
 
 // Serve uploaded image assets, then the static frontend.

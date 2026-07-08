@@ -209,6 +209,28 @@ body.col-resizing {
   color: var(--text);
   border-color: var(--accent);
 }
+.gemini-handoff {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  user-select: none;
+}
+.gemini-handoff:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.gemini-handoff input[type="checkbox"] {
+  margin: 0;
+}
 
 .chat {
   flex: 1;
@@ -229,8 +251,9 @@ body.col-resizing {
 }
 .msg.claude {
   align-self: flex-start;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-top-left-radius: 4px;
 }
 .msg.user {
@@ -241,9 +264,9 @@ body.col-resizing {
 }
 .msg.gemini {
   align-self: flex-start;
-  background: linear-gradient(135deg, #4285f4, #9b72cb);
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
   color: white;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-top-left-radius: 4px;
 }
 .msg.system {
@@ -253,6 +276,14 @@ body.col-resizing {
   font-size: 12px;
   text-align: center;
   padding: 2px 8px;
+}
+.msg-sender-label {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  opacity: 0.85;
+  letter-spacing: 0.5px;
 }
 .msg .ts {
   display: block;
@@ -490,6 +521,32 @@ body.col-resizing {
 }
 .send-btn:active {
   transform: scale(0.97);
+}
+.video-btn {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s, border-color 0.2s, background 0.2s;
+}
+.video-btn:hover {
+  border-color: var(--accent);
+  background: var(--panel);
+  transform: scale(1.06);
+}
+.video-btn:active {
+  transform: scale(0.96);
+}
+.video-notice {
+  border-left: 3px solid var(--accent);
 }
 .voice-hint {
   font-size: 11px;

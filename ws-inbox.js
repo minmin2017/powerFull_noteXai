@@ -11,11 +11,12 @@ const PORT = Number(process.env.PORT) || 4321;
 const BASE = `http://localhost:${PORT}`;
 const WS_URL = `ws://localhost:${PORT}/ws`;
 const SECTION = (process.argv[2] || process.env.CHAT_SECTION || "").trim();
+const AGENT = (process.env.AGENT || "claude").trim();
 
 async function drain() {
   const url = SECTION
-    ? `${BASE}/api/inbox?drain=true&section=${encodeURIComponent(SECTION)}&agent=claude`
-    : `${BASE}/api/inbox?drain=true&agent=claude`;
+    ? `${BASE}/api/inbox?drain=true&section=${encodeURIComponent(SECTION)}&agent=${AGENT}`
+    : `${BASE}/api/inbox?drain=true&agent=${AGENT}`;
   try {
     const r = await fetch(url);
     return (await r.json()).items || [];

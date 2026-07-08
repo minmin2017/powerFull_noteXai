@@ -31,6 +31,11 @@
         <div id="chat-tabs" class="chat-tabs">
           <div id="chat-tab-list" class="chat-tab-list"></div>
           <button id="chat-tab-add" class="chat-tab-add" title="เพิ่มแชทใหม่ (section)">＋</button>
+          <button id="chat-clear-btn" class="chat-tab-add" title="ล้างข้อความแชทนี้ (ประหยัด token)">🗑</button>
+          <label id="gemini-handoff" class="gemini-handoff" title="ส่งงานให้ Gemini เพื่อประหยัด token">
+            <input type="checkbox" id="gemini-handoff-toggle" />
+            <span id="gemini-status-dot" class="dot"></span> 🤝
+          </label>
         </div>
 
         <div id="chat" class="chat"></div>
@@ -96,7 +101,9 @@
               type="text"
               placeholder="พิมพ์ข้อความถึง Claude แล้วกด Enter / ส่ง…"
             />
+            <button id="video-btn" class="video-btn" type="button" title="ย่อยวิดีโอแบบโลคอล (ลิงก์ YouTube/URL หรือไฟล์วิดีโอ)">🎬</button>
             <button id="send-btn" class="send-btn" title="ส่งเข้า Claude Code">ส่ง ➤</button>
+            <input id="video-file-input" type="file" accept="video/*" hidden />
           </div>
           <div class="voice-hint">
             พิมพ์หรือพูดแล้วกด <b>ส่ง</b> ข้อความจะเข้าคิวให้ Claude Code โดยตรง —
