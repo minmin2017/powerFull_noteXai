@@ -19,6 +19,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none; /* no pull-to-refresh / rubber-banding on mobile */
   font-family: "Sarabun", system-ui, "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--text);
@@ -1781,3 +1782,59 @@ body.col-resizing {
   border-bottom: 1px solid var(--line);
 }
 .cal-events-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* ===================== Mobile / touch (phones, small tablets) ===================== */
+@media (max-width: 700px) {
+  /* Chat panel becomes a slide-over drawer so it never squeezes the canvas. */
+  #sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(86vw, 360px);
+    max-width: none;
+    z-index: 80;
+    box-shadow: 2px 0 22px rgba(0, 0, 0, 0.55);
+  }
+  /* No drag-to-resize on touch. */
+  #sidebar-resizer { display: none !important; }
+
+  /* Re-open button as a floating action button, clear of the toolbar. */
+  .sidebar-expand {
+    top: auto;
+    bottom: 16px;
+    left: 14px;
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+    z-index: 70;
+  }
+
+  /* Toolbar scrolls horizontally instead of wrapping into many tall rows. */
+  .toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 6px 10px;
+  }
+  .toolbar::-webkit-scrollbar { display: none; }
+  .tb-group { flex: 0 0 auto; }
+  .tb-group.right { margin-left: 0; }
+  .map-title { width: 120px; }
+
+  /* Right-side panels become overlay drawers too. */
+  .cal-panel,
+  .obj-panel {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 80;
+    box-shadow: -2px 0 22px rgba(0, 0, 0, 0.55);
+  }
+  .cal-panel.open { width: min(88vw, 340px); min-width: 0; }
+  .obj-panel.open { width: min(88vw, 340px); min-width: 0; }
+}

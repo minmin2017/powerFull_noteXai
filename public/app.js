@@ -6,6 +6,7 @@ import setupExport from './modules/export.js';
 import setupCalendar from './modules/calendar.js';
 import setupVoice from './modules/voice.js';
 import setupChat from './modules/chat.js';
+import setupGitHub from './modules/github.js';
 
 "use strict";
 
@@ -1230,6 +1231,13 @@ import setupChat from './modules/chat.js';
     if (wantPan) {
       startPan(e);
     } else if (mode === "select" && e.button === 0) {
+      // Touch has no middle-click/spacebar, so a one-finger drag on empty
+      // canvas pans (instead of marquee-selecting). Two fingers → pinch-zoom
+      // (handled below); don't start a pan once a second finger is down.
+      if (e.pointerType === "touch") {
+        if (!pinch && activeTouches.size < 2) startPan(e);
+        return;
+      }
       const p = eventCanvasPos(e);
       if (selectedStrokeIds.size > 0 && selectedIds.size === 0) {
         // stroke-only drag: move selected strokes
@@ -1521,6 +1529,56 @@ import setupChat from './modules/chat.js';
     },
     { passive: false }
   );
+
+  // ----------------------------------------------------------------------
+  // Pinch-zoom (two-finger) + touch tracking for mobile
+  // ----------------------------------------------------------------------
+  const activeTouches = new Map(); // pointerId -> {x,y} in canvas space
+  let pinch = null;                // { dist, scale } captured when the gesture starts
+  const touchVals = () => [...activeTouches.values()];
+  const touchDist = () => {
+    const [a, b] = touchVals();
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  const touchMid = () => {
+    const [a, b] = touchVals();
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
+  // Capture phase so this runs alongside the main pointerdown handler; the
+  // main handler reads `pinch`/`activeTouches.size` and bows out of panning.
+  canvas.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.pointerType !== "touch") return;
+      activeTouches.set(e.pointerId, eventCanvasPos(e));
+      if (activeTouches.size === 2) {
+        pan = null; drag = null; lasso = null;
+        canvas.classList.remove("panning");
+        pinch = { dist: touchDist() || 1, scale: view.scale };
+      }
+    },
+    true
+  );
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "touch" || !activeTouches.has(e.pointerId)) return;
+    activeTouches.set(e.pointerId, eventCanvasPos(e));
+    if (!pinch || activeTouches.size < 2) return;
+    const mid = touchMid();
+    const world = screenToWorld(mid.x, mid.y); // world point under the midpoint now
+    view.scale = Math.min(3, Math.max(0.15, pinch.scale * (touchDist() / pinch.dist)));
+    // Pin that world point under the (possibly moved) midpoint — folds
+    // zoom-toward-fingers and two-finger pan into a single update.
+    view.x = mid.x - world.x * view.scale;
+    view.y = mid.y - world.y * view.scale;
+    scheduleViewport();
+  });
+  function endTouch(e) {
+    if (e.pointerType !== "touch") return;
+    activeTouches.delete(e.pointerId);
+    if (activeTouches.size < 2) pinch = null;
+  }
+  window.addEventListener("pointerup", endTouch);
+  window.addEventListener("pointercancel", endTouch);
 
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
@@ -2807,7 +2865,14 @@ import setupChat from './modules/chat.js';
   }
   document.getElementById("sidebar-collapse")?.addEventListener("click", () => setSidebarCollapsed(true));
   sidebarExpandBtn?.addEventListener("click", () => setSidebarCollapsed(false));
-  try { if (localStorage.getItem("sidebarCollapsed") === "1") setSidebarCollapsed(true); } catch {}
+  try {
+    const savedCollapsed = localStorage.getItem("sidebarCollapsed");
+    if (savedCollapsed === "1") setSidebarCollapsed(true);
+    // On a phone, start with the chat drawer closed so the canvas is full-screen
+    // (only when the user hasn't set a preference yet).
+    else if (savedCollapsed === null && window.matchMedia("(max-width: 700px)").matches)
+      setSidebarCollapsed(true);
+  } catch {}
 
   // -------------------------------------------------------------------------
   // Object panel (พาเนล Object ฝั่งขวา) — list every object, delete by hand
@@ -2910,3 +2975,5 @@ setupVoice({ api, toast, localActiveSectionRef });
 setupExport({ STATE, view, canvas, world, toast, render, flushFx });
 
 setupCalendar({ api, toast, escapeHtml });
+
+setupGitHub({ api, toast });

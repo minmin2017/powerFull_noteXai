@@ -1250,12 +1250,83 @@ app.post("/api/set-model", (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// GitHub push — commit active project JSON (and index) to a GitHub repo.
+// Requires env: GITHUB_TOKEN, GITHUB_REPO (owner/repo), GITHUB_BRANCH (default: main)
+// ---------------------------------------------------------------------------
+async function githubPutFile(token, repo, branch, filePath, content, message) {
+  const url = `https://api.github.com/repos/${repo}/contents/${filePath}`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "Content-Type": "application/json",
+    "User-Agent": "powerfull-note",
+  };
+  // Fetch current SHA (needed to update an existing file)
+  let sha;
+  try {
+    const r = await fetch(`${url}?ref=${branch}`, { headers });
+    if (r.ok) sha = (await r.json()).sha;
+  } catch { /* new file — no sha needed */ }
+
+  const body = { message, content: Buffer.from(content).toString("base64"), branch };
+  if (sha) body.sha = sha;
+  const res = await fetch(url, { method: "PUT", headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GitHub API ${res.status}: ${err}`);
+  }
+  return await res.json();
+}
+
+app.post("/api/github/push", async (req, res) => {
+  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPO;
+  const branch = process.env.GITHUB_BRANCH || "main";
+  if (!token || !repo) {
+    return res.status(400).json({ error: "GITHUB_TOKEN และ GITHUB_REPO ยังไม่ได้ตั้งค่าใน .env" });
+  }
+  try {
+    const projectFile = path.join(PROJECTS_DIR, `${activeId}.json`);
+    const projectData = fs.readFileSync(projectFile, "utf8");
+    const indexData = fs.readFileSync(INDEX_FILE, "utf8");
+    const title = state.meta?.title || activeId;
+    const now = new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
+    const msg = `💾 บันทึก "${title}" — ${now}`;
+
+    await Promise.all([
+      githubPutFile(token, repo, branch, `data/projects/${activeId}.json`, projectData, msg),
+      githubPutFile(token, repo, branch, `data/projects.json`, indexData, msg),
+    ]);
+    res.json({ ok: true, repo, branch });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // Serve uploaded image assets, then the static frontend.
 app.use("/assets", express.static(ASSETS_DIR));
 app.use(express.static(path.join(__dirname, "public")));
 
-server.listen(PORT, () => {
+function lanIPv4s() {
+  const out = [];
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const ni of ifaces[name] || []) {
+      if (ni.family === "IPv4" && !ni.internal) out.push(ni.address);
+    }
+  }
+  return out;
+}
+
+// Bind 0.0.0.0 so other devices on the same LAN (phones, tablets) can reach it.
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`\n  Powerfull Note running:`);
-  console.log(`    →  http://localhost:${PORT}\n`);
-  console.log(`  Open it in Chrome or Edge (needed for Thai voice).`);
+  console.log(`    →  http://localhost:${PORT}   (เครื่องนี้)`);
+  for (const ip of lanIPv4s()) {
+    console.log(`    →  http://${ip}:${PORT}   (เครื่องอื่น/มือถือ ในวงแลนเดียวกัน)`);
+  }
+  console.log(`\n  Open it in Chrome or Edge (needed for Thai voice).`);
+  console.log(`  ถ้าเครื่องอื่นเข้าไม่ได้: เปิด Windows Firewall ให้ Node อนุญาต TCP port ${PORT}.`);
 });

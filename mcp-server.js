@@ -16,6 +16,20 @@ const BASE = process.env.NOTE_SERVER_URL || `http://localhost:${PORT}`;
 // then replies into that section, and get_inbox drains only that section.
 const SECTION = (process.env.CHAT_SECTION || "").trim() || null;
 
+// Self-exit if the Claude Code process that spawned us is gone — stdio
+// transports are supposed to close when the parent dies, but on Windows an
+// abrupt close (X button, sleep, reboot) can leave this process orphaned.
+// Each instance only checks its own parent, so parallel multi-section
+// windows are unaffected.
+const PARENT_PID = process.ppid;
+setInterval(() => {
+  try {
+    process.kill(PARENT_PID, 0);
+  } catch {
+    process.exit(0);
+  }
+}, 15000).unref();
+
 async function api(pathname, method = "GET", body) {
   const res = await fetch(BASE + pathname, {
     method,
