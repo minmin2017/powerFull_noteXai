@@ -23,6 +23,7 @@
           <div class="sb-title">
             <span class="dot" id="conn-dot" title="สถานะการเชื่อมต่อ"></span>
             Claude
+            <span id="claude-usage-badge" style="font-size: 11px; margin-left: 6px; cursor: help; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px;" hidden></span>
           </div>
           <div class="sb-sub">พาเนลแชท — อ่านสิ่งที่ Claude บอก</div>
           <button id="sidebar-collapse" class="sidebar-collapse" title="ย่อพาเนลแชท">⟨</button>
@@ -150,6 +151,7 @@
           <div class="tb-group">
             <button id="btn-add" class="tb-btn primary">+ หัวข้อ</button>
             <button id="btn-add-box" class="tb-btn" title="เพิ่มกล่องเขียนลายมือ">📦 กล่อง</button>
+            <button id="btn-add-video" class="tb-btn" title="เพิ่มกล่องวิดีโอ">🎞 วิดีโอ</button>
             <button id="btn-add-gallery" class="tb-btn" title="เพิ่มกล่องเก็บรูปภาพ">🖼️ กล่องรูป</button>
             <button id="btn-select" class="tb-btn active" data-mode="select">🖱 เลือก/ย้าย</button>
             <button id="btn-sel-target" class="tb-btn" title="สลับเป้าหมายของกรอบเลือก: หัวข้อ ↔ เส้นที่วาด">🎯 หัวข้อ</button>
@@ -253,6 +255,37 @@
       </div>
       <div id="box-ocr-result" class="box-ocr-result" hidden></div>
     </div>
+
+    <!-- Video Player Modal -->
+    <div id="video-modal" class="box-modal" hidden>
+      <div class="box-modal-bar">
+        <span id="video-modal-title" class="box-modal-title" style="border: none; margin-bottom: 0;">วิดีโอ</span>
+        <div class="box-modal-tools">
+          <button id="video-modal-close" class="tb-btn" title="ปิด">✕ ปิด</button>
+        </div>
+      </div>
+      <div id="video-holder" class="box-modal-stage" style="background: #000;"></div>
+    </div>
+
+    <style>
+      #video-holder video,
+      #video-holder iframe {
+        width: 80vw;
+        height: 70vh;
+        background: #000;
+        border: none;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+      }
+      .video-box-row:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .video-box-empty {
+        padding: 16px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 13px;
+      }
+    </style>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>

@@ -908,6 +908,28 @@ app.patch("/api/drawings/:id", (req, res) => {
 });
 app.delete("/api/drawings/:id", (req, res) => res.json({ removed: deleteDrawing(req.params.id) }));
 
+// Bulk persist of an erase gesture: delete touched originals and create the
+// surviving pieces in ONE mutation → one broadcast instead of dozens.
+app.post("/api/drawings/erase", (req, res) => {
+  const { del, add } = req.body || {};
+  const delSet = new Set(Array.isArray(del) ? del : []);
+  if (delSet.size) state.drawings = state.drawings.filter((d) => !delSet.has(d.id));
+  const created = [];
+  for (const s of Array.isArray(add) ? add : []) {
+    const d = {
+      id: uid("d"),
+      color: s.color || "#111827",
+      width: s.width || 3,
+      points: Array.isArray(s.points) ? s.points : [],
+      createdAt: Date.now(),
+    };
+    state.drawings.push(d);
+    created.push(d);
+  }
+  changed();
+  res.json({ removed: delSet.size, created });
+});
+
 // ----- Images ----------------------------------------------------------------
 app.post("/api/images", (req, res) => {
   const img = addImageFromDataUrl(req.body || {});
@@ -932,27 +954,122 @@ app.patch("/api/images/:id", (req, res) => {
 
 app.delete("/api/images/:id", (req, res) => res.json({ removed: deleteImage(req.params.id) }));
 
+// ---- Media & Video Player routes ----
+app.get("/api/media", (req, res) => {
+  let rawPath = req.query.path;
+  if (!rawPath) {
+    return res.status(400).json({ error: "missing path parameter" });
+  }
+
+  try {
+    rawPath = decodeURIComponent(rawPath);
+  } catch (err) {
+    // Ignore decoding error
+  }
+
+  if (rawPath.includes("..")) {
+    return res.status(403).json({ error: "path traversal detected" });
+  }
+
+  const resolvedPath = path.resolve(rawPath);
+
+  if (!resolvedPath.startsWith("/home/minmin/")) {
+    return res.status(403).json({ error: "access denied" });
+  }
+
+  if (resolvedPath.includes("..")) {
+    return res.status(403).json({ error: "access denied" });
+  }
+
+  const ext = path.extname(resolvedPath).toLowerCase();
+  const whitelist = [".mp4", ".webm", ".mkv", ".mov", ".m4v", ".mp3", ".wav"];
+  if (!whitelist.includes(ext)) {
+    return res.status(403).json({ error: "unsupported file format" });
+  }
+
+  if (!fs.existsSync(resolvedPath)) {
+    return res.status(404).json({ error: "file not found" });
+  }
+
+  res.sendFile(resolvedPath);
+});
+
+app.post("/api/videos/add", (req, res) => {
+  const b = req.body || {};
+  let url = b.url;
+  const filePath = b.path;
+  const title = b.title;
+  const boxId = b.boxId;
+
+  if (filePath) {
+    if (!fs.existsSync(filePath)) {
+      return res.status(400).json({ error: "local file does not exist" });
+    }
+    url = `/api/media?path=${encodeURIComponent(filePath)}`;
+  }
+
+  if (!url) {
+    return res.status(400).json({ error: "missing url or path" });
+  }
+
+  let box;
+  if (boxId) {
+    box = (state.boxes || []).find((x) => x.id === boxId);
+    if (!box) {
+      return res.status(404).json({ error: "specified box not found" });
+    }
+  } else {
+    box = (state.boxes || []).find((x) => x.kind === "video");
+  }
+
+  if (!box) {
+    box = {
+      id: uid("box"),
+      kind: "video",
+      x: 200,
+      y: 200,
+      w: 340,
+      h: 280,
+      title: "วิดีโอ",
+      strokes: [],
+      items: [],
+      createdAt: Date.now()
+    };
+    if (!Array.isArray(state.boxes)) state.boxes = [];
+    state.boxes.push(box);
+  }
+
+  const item = { url, title: title || url };
+  if (!Array.isArray(box.items)) box.items = [];
+  box.items.push(item);
+
+  changed();
+  res.json({ boxId: box.id, item });
+});
+
 // ---- Handwriting boxes ----
 app.post("/api/boxes", (req, res) => {
   const b = req.body || {};
   const kind =
     b.kind === "image" ? "image" :
     b.kind === "portal" ? "portal" :
-    b.kind === "aibox" ? "aibox" : "note";
+    b.kind === "aibox" ? "aibox" :
+    b.kind === "video" ? "video" : "note";
   // aibox = an AI working-region rectangle. It scopes voice commands: the user
   // draws it, then tells Claude what to do "inside this box". Claude reads its
   // bounds via list_aiboxes and places nodes within them.
   const defaultTitle =
     kind === "image" ? "คลังรูปภาพ" :
     kind === "portal" ? "Portal" :
-    kind === "aibox" ? "AI Box" : "บันทึกลายมือ";
+    kind === "aibox" ? "AI Box" :
+    kind === "video" ? "วิดีโอ" : "บันทึกลายมือ";
   const box = {
     id: uid("box"),
     kind,
     x: Number.isFinite(b.x) ? b.x : 160,
     y: Number.isFinite(b.y) ? b.y : 160,
     w: Number.isFinite(b.w) ? b.w : 200,
-    h: Number.isFinite(b.h) ? b.h : (kind === "aibox" ? 200 : 80),
+    h: Number.isFinite(b.h) ? b.h : (kind === "aibox" || kind === "video" ? 200 : 80),
     title: typeof b.title === "string" ? b.title : defaultTitle,
     strokes: kind === "portal" || kind === "aibox" ? [] : Array.isArray(b.strokes) ? b.strokes : [],
     items: kind === "portal" || kind === "aibox" ? [] : Array.isArray(b.items) ? b.items : [],
@@ -1020,8 +1137,10 @@ app.post("/api/boxes/:id/to-claude", (req, res) => {
   const mime = m[1] || "image/png";
   const buffer = Buffer.from(decodeURIComponent(m[3]), m[2] ? "base64" : "utf8");
   const src = saveAsset(buffer, mime);
-  const entry = addImageInbox({ src, note: note || "ลายมือจาก Box" });
-  addInbox(`[ลายมือ] ผู้ใช้ส่งบันทึกลายมือมาให้ดู — เรียก get_user_images เพื่ออ่าน`);
+  const box = (state.boxes || []).find((b) => b.id === req.params.id);
+  const boxTitle = (box && box.title) || req.params.id;
+  const entry = addImageInbox({ src, note: note || `ลายมือจาก Box "${boxTitle}" (${req.params.id})` });
+  addInbox(`[ลายมือ] box "${boxTitle}" (id: ${req.params.id}) — เรียก get_user_images เพื่ออ่าน แล้วบันทึกเป็น MD ใน notes/`);
   res.json({ ok: true, entry });
 });
 
@@ -1460,8 +1579,43 @@ app.post("/api/set-model", (req, res) => {
   }
 });
 
+let claudeUsageCache = { data: null, ts: 0 };
+app.get("/api/claude-usage", async (req, res) => {
+  const now = Date.now();
+  if (now - claudeUsageCache.ts < 60000 && claudeUsageCache.data) {
+    return res.json(claudeUsageCache.data);
+  }
+  try {
+    const credsPath = path.join(os.homedir(), ".claude", ".credentials.json");
+    if (!fs.existsSync(credsPath)) throw new Error("no credentials file");
+    const creds = JSON.parse(fs.readFileSync(credsPath, "utf8"));
+    const token = creds?.claudeAiOauth?.accessToken;
+    if (!token) throw new Error("no access token");
+    const r = await fetch("https://api.anthropic.com/api/oauth/usage", {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "anthropic-beta": "oauth-2025-04-20"
+      }
+    });
+    if (!r.ok) throw new Error("fetch usage failed: " + r.status);
+    const data = await r.json();
+    let session = null, weekly = null, weekly_model = null;
+    for (const lim of (data.limits || [])) {
+      if (lim.kind === "session") session = { percent: lim.percent, severity: lim.severity, resets_at: lim.resets_at };
+      else if (lim.kind === "weekly_all") weekly = { percent: lim.percent, severity: lim.severity, resets_at: lim.resets_at };
+      else if (lim.kind === "weekly_scoped") weekly_model = { percent: lim.percent, name: lim.scope?.model?.display_name, resets_at: lim.resets_at };
+    }
+    const result = { session, weekly, weekly_model, fetched_at: new Date().toISOString() };
+    claudeUsageCache = { data: result, ts: now };
+    res.json(result);
+  } catch (err) {
+    res.json({ error: "unavailable", detail: String(err.message) });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // LOCAL video comprehension (zero API cost). A detached Python worker
+
 // (video-digest/video_digest.py) extracts keyframes + a timestamped transcript
 // into public/uploads/videodigest/<id>/. Additive only — this block never
 // touches the chat inbox drain/guard logic; the completion hook reuses the

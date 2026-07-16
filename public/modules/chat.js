@@ -141,6 +141,49 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
     setInterval(pollGeminiStatus, 5000);
   }
 
+  // Claude Usage Badge polling
+  const usageBadge = document.getElementById("claude-usage-badge");
+  async function pollClaudeUsage() {
+    if (!usageBadge) return;
+    try {
+      const res = await api("/api/claude-usage");
+      usageBadge.hidden = false;
+      if (!res || res.error) {
+        usageBadge.textContent = "⚡ —";
+        usageBadge.style.color = "inherit";
+        usageBadge.title = res?.detail || "Unavailable";
+        return;
+      }
+      let text = "";
+      if (res.session) text += `⚡ ${Math.round(res.session.percent)}%`;
+      if (res.weekly) text += ` · W ${Math.round(res.weekly.percent)}%`;
+      usageBadge.textContent = text || "⚡ —";
+      
+      let maxPct = 0;
+      if (res.session) maxPct = Math.max(maxPct, res.session.percent);
+      
+      if (maxPct >= 90) usageBadge.style.color = "#ef4444";
+      else if (maxPct >= 70) usageBadge.style.color = "#f59e0b";
+      else usageBadge.style.color = "#22c55e";
+      
+      let title = "Claude API Usage\n";
+      const fmtTime = (ts) => ts ? new Date(ts).toLocaleString() : "N/A";
+      if (res.session) title += `- Session: ${res.session.percent}% (reset: ${fmtTime(res.session.resets_at)})\n`;
+      if (res.weekly) title += `- Weekly: ${res.weekly.percent}% (reset: ${fmtTime(res.weekly.resets_at)})\n`;
+      if (res.weekly_model) title += `- Weekly (${res.weekly_model.name || 'Model'}): ${res.weekly_model.percent}% (reset: ${fmtTime(res.weekly_model.resets_at)})\n`;
+      usageBadge.title = title.trim();
+    } catch (e) {
+      usageBadge.hidden = false;
+      usageBadge.textContent = "⚡ —";
+      usageBadge.title = String(e);
+    }
+  }
+
+  if (usageBadge) {
+    pollClaudeUsage();
+    setInterval(pollClaudeUsage, 60000);
+  }
+
   // 🎬 Local video comprehension — drop a URL or pick a video file. The machine
   // extracts keyframes + a transcript locally (zero API cost); when ready the
   // server pushes a "🎬 video digest ready" message into this section's inbox so
