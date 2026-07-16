@@ -10,7 +10,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import os from "node:os";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,11 +42,15 @@ function emptyState(title = "My Mind Map") {
     boxes: [], // boxes: handwriting {kind:"note",strokes:[...]} OR gallery {kind:"image",items:[{src,url,caption}]}
     boxLinks: [], // connections between boxes: {id, from, to}
     chat: [], // chat messages, each tagged with a `section` id
-    chatSections: [{ id: "main", name: "แชทหลัก" }], // chat tabs/threads
+    chatSections: [{ id: "main", name: "แชทหลัก", agentListener: "both" }], // chat tabs/threads
     activeSection: "main", // which section new messages land in + is shown
     voice: { latest: null, history: [] },
     inbox: [], // typed/spoken messages queued for Claude Code to drain
     imageInbox: [], // image refs the user sent for Claude to LOOK at: {id, src, note, ts}
+    agentListener: "both", // "claude" | "gemini" | "both" (legacy fallback)
+    geminiHandoff: { enabled: false }, // UI toggle: let Claude delegate cheap subtasks to Gemini
+    geminiTasks: [], // {id,status:'pending'|'running'|'done'|'error',task,result,error,ts}
+    agentSeen: {}, // heartbeat timestamps: { gemini: <ts ms> }
   };
 }
 
@@ -510,13 +514,21 @@ function addChat({ role = "claude", text, section }) {
 // ----- Chat sections (multiple chat threads/tabs) -----
 function ensureSections() {
   if (!Array.isArray(state.chatSections) || !state.chatSections.length)
-    state.chatSections = [{ id: "main", name: "แชทหลัก" }];
+    state.chatSections = [{ id: "main", name: "แชทหลัก", agentListener: "both" }];
+  state.chatSections.forEach((s) => {
+    if (!s.agentListener) s.agentListener = "both";
+  });
   if (!state.chatSections.some((s) => s.id === state.activeSection))
     state.activeSection = state.chatSections[0].id;
+  // Upgrade old saved projects that predate the Gemini-handoff feature.
+  if (!state.geminiHandoff || typeof state.geminiHandoff !== "object")
+    state.geminiHandoff = { enabled: false };
+  if (!Array.isArray(state.geminiTasks)) state.geminiTasks = [];
+  if (!state.agentSeen || typeof state.agentSeen !== "object") state.agentSeen = {};
 }
 function addSection(name) {
   ensureSections();
-  const sec = { id: uid("sec"), name: String(name || "แชทใหม่").slice(0, 40) };
+  const sec = { id: uid("sec"), name: String(name || "แชทใหม่").slice(0, 40), agentListener: "both" };
   state.chatSections.push(sec);
   state.activeSection = sec.id;
   changed();
@@ -546,6 +558,25 @@ function deleteSection(id) {
   if (state.activeSection === id) state.activeSection = state.chatSections[0].id;
   changed();
   return true;
+}
+
+// Clear chat messages. If `section` given, only that section's messages are
+// dropped; otherwise the whole chat log is wiped. Returns count removed.
+function clearChat(section) {
+  const before = state.chat.length;
+  if (section) {
+    const id = resolveSectionKey(section) || section;
+    state.chat = state.chat.filter((m) => (m.section || "main") !== id);
+  } else {
+    state.chat = [];
+  }
+  changed();
+  return before - state.chat.length;
+}
+
+// True if agent-brain.js's heartbeat has pinged within the last 15s.
+function geminiOnline() {
+  return Date.now() - (state.agentSeen?.gemini || 0) < 15000;
 }
 
 function setVoice(text) {
@@ -877,6 +908,28 @@ app.patch("/api/drawings/:id", (req, res) => {
 });
 app.delete("/api/drawings/:id", (req, res) => res.json({ removed: deleteDrawing(req.params.id) }));
 
+// Bulk persist of an erase gesture: delete touched originals and create the
+// surviving pieces in ONE mutation → one broadcast instead of dozens.
+app.post("/api/drawings/erase", (req, res) => {
+  const { del, add } = req.body || {};
+  const delSet = new Set(Array.isArray(del) ? del : []);
+  if (delSet.size) state.drawings = state.drawings.filter((d) => !delSet.has(d.id));
+  const created = [];
+  for (const s of Array.isArray(add) ? add : []) {
+    const d = {
+      id: uid("d"),
+      color: s.color || "#111827",
+      width: s.width || 3,
+      points: Array.isArray(s.points) ? s.points : [],
+      createdAt: Date.now(),
+    };
+    state.drawings.push(d);
+    created.push(d);
+  }
+  changed();
+  res.json({ removed: delSet.size, created });
+});
+
 // ----- Images ----------------------------------------------------------------
 app.post("/api/images", (req, res) => {
   const img = addImageFromDataUrl(req.body || {});
@@ -901,27 +954,122 @@ app.patch("/api/images/:id", (req, res) => {
 
 app.delete("/api/images/:id", (req, res) => res.json({ removed: deleteImage(req.params.id) }));
 
+// ---- Media & Video Player routes ----
+app.get("/api/media", (req, res) => {
+  let rawPath = req.query.path;
+  if (!rawPath) {
+    return res.status(400).json({ error: "missing path parameter" });
+  }
+
+  try {
+    rawPath = decodeURIComponent(rawPath);
+  } catch (err) {
+    // Ignore decoding error
+  }
+
+  if (rawPath.includes("..")) {
+    return res.status(403).json({ error: "path traversal detected" });
+  }
+
+  const resolvedPath = path.resolve(rawPath);
+
+  if (!resolvedPath.startsWith("/home/minmin/")) {
+    return res.status(403).json({ error: "access denied" });
+  }
+
+  if (resolvedPath.includes("..")) {
+    return res.status(403).json({ error: "access denied" });
+  }
+
+  const ext = path.extname(resolvedPath).toLowerCase();
+  const whitelist = [".mp4", ".webm", ".mkv", ".mov", ".m4v", ".mp3", ".wav"];
+  if (!whitelist.includes(ext)) {
+    return res.status(403).json({ error: "unsupported file format" });
+  }
+
+  if (!fs.existsSync(resolvedPath)) {
+    return res.status(404).json({ error: "file not found" });
+  }
+
+  res.sendFile(resolvedPath);
+});
+
+app.post("/api/videos/add", (req, res) => {
+  const b = req.body || {};
+  let url = b.url;
+  const filePath = b.path;
+  const title = b.title;
+  const boxId = b.boxId;
+
+  if (filePath) {
+    if (!fs.existsSync(filePath)) {
+      return res.status(400).json({ error: "local file does not exist" });
+    }
+    url = `/api/media?path=${encodeURIComponent(filePath)}`;
+  }
+
+  if (!url) {
+    return res.status(400).json({ error: "missing url or path" });
+  }
+
+  let box;
+  if (boxId) {
+    box = (state.boxes || []).find((x) => x.id === boxId);
+    if (!box) {
+      return res.status(404).json({ error: "specified box not found" });
+    }
+  } else {
+    box = (state.boxes || []).find((x) => x.kind === "video");
+  }
+
+  if (!box) {
+    box = {
+      id: uid("box"),
+      kind: "video",
+      x: 200,
+      y: 200,
+      w: 340,
+      h: 280,
+      title: "วิดีโอ",
+      strokes: [],
+      items: [],
+      createdAt: Date.now()
+    };
+    if (!Array.isArray(state.boxes)) state.boxes = [];
+    state.boxes.push(box);
+  }
+
+  const item = { url, title: title || url };
+  if (!Array.isArray(box.items)) box.items = [];
+  box.items.push(item);
+
+  changed();
+  res.json({ boxId: box.id, item });
+});
+
 // ---- Handwriting boxes ----
 app.post("/api/boxes", (req, res) => {
   const b = req.body || {};
   const kind =
     b.kind === "image" ? "image" :
     b.kind === "portal" ? "portal" :
-    b.kind === "aibox" ? "aibox" : "note";
+    b.kind === "aibox" ? "aibox" :
+    b.kind === "video" ? "video" : "note";
   // aibox = an AI working-region rectangle. It scopes voice commands: the user
   // draws it, then tells Claude what to do "inside this box". Claude reads its
   // bounds via list_aiboxes and places nodes within them.
   const defaultTitle =
     kind === "image" ? "คลังรูปภาพ" :
     kind === "portal" ? "Portal" :
-    kind === "aibox" ? "AI Box" : "บันทึกลายมือ";
+    kind === "aibox" ? "AI Box" :
+    kind === "video" ? "วิดีโอ" : "บันทึกลายมือ";
   const box = {
     id: uid("box"),
     kind,
     x: Number.isFinite(b.x) ? b.x : 160,
     y: Number.isFinite(b.y) ? b.y : 160,
     w: Number.isFinite(b.w) ? b.w : 200,
-    h: Number.isFinite(b.h) ? b.h : (kind === "aibox" ? 200 : 80),
+    h: Number.isFinite(b.h) ? b.h : (kind === "aibox" || kind === "video" ? 200 : 80),
     title: typeof b.title === "string" ? b.title : defaultTitle,
     strokes: kind === "portal" || kind === "aibox" ? [] : Array.isArray(b.strokes) ? b.strokes : [],
     items: kind === "portal" || kind === "aibox" ? [] : Array.isArray(b.items) ? b.items : [],
@@ -989,12 +1137,105 @@ app.post("/api/boxes/:id/to-claude", (req, res) => {
   const mime = m[1] || "image/png";
   const buffer = Buffer.from(decodeURIComponent(m[3]), m[2] ? "base64" : "utf8");
   const src = saveAsset(buffer, mime);
-  const entry = addImageInbox({ src, note: note || "ลายมือจาก Box" });
-  addInbox(`[ลายมือ] ผู้ใช้ส่งบันทึกลายมือมาให้ดู — เรียก get_user_images เพื่ออ่าน`);
+  const box = (state.boxes || []).find((b) => b.id === req.params.id);
+  const boxTitle = (box && box.title) || req.params.id;
+  const entry = addImageInbox({ src, note: note || `ลายมือจาก Box "${boxTitle}" (${req.params.id})` });
+  addInbox(`[ลายมือ] box "${boxTitle}" (id: ${req.params.id}) — เรียก get_user_images เพื่ออ่าน แล้วบันทึกเป็น MD ใน notes/`);
   res.json({ ok: true, entry });
 });
 
 app.post("/api/chat", (req, res) => res.json(addChat(req.body || {})));
+app.post("/api/chat/clear", (req, res) => {
+  const cleared = clearChat((req.body || {}).section);
+  res.json({ ok: true, cleared });
+});
+
+// ---------------------------------------------------------------------------
+// Gemini handoff — a DEDICATED task queue so Claude can delegate cheap
+// subtasks to Gemini (gemini-1.5-flash) via agent-brain.js and save tokens.
+// This is completely separate from /api/inbox (the chat listener routing) —
+// do not merge the two, /api/inbox has its own agentListener + guard logic.
+// ---------------------------------------------------------------------------
+
+// agent-brain.js pings this every 5s while it's running. No changed() here —
+// a heartbeat firing every 5s would be far too chatty for the WS broadcast.
+app.post("/api/agent/heartbeat", (req, res) => {
+  const { agent } = req.body || {};
+  if (agent) state.agentSeen[agent] = Date.now();
+  res.json({ ok: true });
+});
+
+app.get("/api/agent/status", (_req, res) => {
+  res.json({
+    gemini: {
+      online: geminiOnline(),
+      busy: state.geminiTasks.some((t) => t.status === "running"),
+    },
+    handoff: !!state.geminiHandoff.enabled,
+  });
+});
+
+app.post("/api/gemini/handoff", (req, res) => {
+  state.geminiHandoff.enabled = !!(req.body || {}).enabled;
+  changed();
+  res.json({ enabled: state.geminiHandoff.enabled });
+});
+
+app.post("/api/gemini/task", (req, res) => {
+  if (!state.geminiHandoff.enabled)
+    return res.status(409).json({ error: "handoff_disabled" });
+  if (!geminiOnline())
+    return res.status(503).json({ error: "gemini_offline" });
+  const { requirement, prohibitions, principles, context } = req.body || {};
+  const t = {
+    id: uid("gt"),
+    status: "pending",
+    task: { requirement, prohibitions, principles, context },
+    result: null,
+    error: null,
+    ts: Date.now(),
+  };
+  state.geminiTasks.push(t);
+  if (state.geminiTasks.length > 100) state.geminiTasks = state.geminiTasks.slice(-100);
+  changed();
+  res.json({ id: t.id, status: t.status });
+});
+
+// agent-brain.js polls this (no changed() — it's a read).
+app.get("/api/gemini/tasks", (req, res) => {
+  const { status } = req.query;
+  const tasks = status ? state.geminiTasks.filter((t) => t.status === status) : state.geminiTasks;
+  res.json({ tasks });
+});
+
+app.get("/api/gemini/task/:id", (req, res) => {
+  const t = state.geminiTasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "not_found" });
+  res.json({ id: t.id, status: t.status, result: t.result, error: t.error });
+});
+
+app.post("/api/gemini/task/:id/claim", (req, res) => {
+  const t = state.geminiTasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "not_found" });
+  t.status = "running";
+  changed();
+  res.json(t);
+});
+
+app.post("/api/gemini/task/:id/result", (req, res) => {
+  const t = state.geminiTasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "not_found" });
+  const { result, error } = req.body || {};
+  if (error) {
+    t.status = "error";
+    t.error = error;
+  } else {
+    t.status = "done";
+    t.result = result;
+  }
+  changed();
+  res.json({ ok: true });
+});
 
 // Chat sections (tabs)
 app.post("/api/chat-sections", (req, res) => res.json(addSection((req.body || {}).name)));
@@ -1015,14 +1256,35 @@ app.delete("/api/chat-sections/:id", (req, res) => {
 app.post("/api/launch-claude", (req, res) => {
   const { section } = req.body || {};
   if (!section) return res.status(400).json({ error: "section name required" });
-  const cmd = path.join(__dirname, "claude-listen.cmd");
   try {
-    spawn("cmd.exe", ["/c", "start", `Claude — ${section}`, "cmd", "/k", cmd, section], {
-      detached: true,
-      stdio: "ignore",
-      cwd: __dirname,
-      windowsHide: false,
-    }).unref();
+    let child;
+    if (process.platform === "win32") {
+      const cmd = path.join(__dirname, "claude-listen.cmd");
+      child = spawn("cmd.exe", ["/c", "start", `Claude — ${section}`, "cmd", "/k", cmd, section], {
+        detached: true, stdio: "ignore", cwd: __dirname, windowsHide: false,
+      });
+    } else {
+      const script = path.join(__dirname, "claude-listen.bash");
+      const has = (cmd) => { try { execSync(`which ${cmd}`, { stdio: "ignore" }); return true; } catch { return false; } };
+      const term = process.env.TERMINAL ||
+        (has("gnome-terminal") ? "gnome-terminal" :
+         has("xfce4-terminal") ? "xfce4-terminal" :
+         has("konsole")        ? "konsole"        :
+         has("xterm")          ? "xterm"          : null);
+      if (!term) throw new Error("ไม่พบ terminal emulator (ลง xterm หรือ set TERMINAL=...)");
+      let args;
+      if (term === "gnome-terminal") {
+        args = [`--title=Claude — ${section}`, "--", "bash", script, section];
+      } else if (term === "konsole") {
+        args = ["--title", `Claude — ${section}`, "-e", "bash", script, section];
+      } else {
+        // xterm, xfce4-terminal and most others
+        args = ["-T", `Claude — ${section}`, "-e", `bash "${script}" "${section}"`];
+      }
+      child = spawn(term, args, { detached: true, stdio: "ignore", cwd: __dirname });
+    }
+    child.on("error", (err) => console.warn("[launch-claude] spawn error:", err.message));
+    child.unref();
     res.json({ ok: true, section });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1150,6 +1412,15 @@ app.post("/api/transcribe-local", express.raw({ type: "*/*", limit: "100mb" }), 
 
 app.get("/api/voice/latest", (req, res) => {
   const consume = req.query.consume === "true" || req.query.consume === "1";
+  const requester = req.query.agent;
+  if (requester) {
+    ensureSections();
+    const sec = state.chatSections.find((s) => s.id === state.activeSection);
+    const listener = sec ? (sec.agentListener || "both") : "both";
+    if (listener !== "both" && listener !== requester) {
+      return res.json(null);
+    }
+  }
   const v = state.voice.latest;
   if (consume) consumeVoice();
   res.json(v || null);
@@ -1165,17 +1436,52 @@ app.post("/api/inbox", (req, res) => {
 app.get("/api/inbox", (req, res) => {
   const drain = req.query.drain === "true" || req.query.drain === "1";
   const secKey = req.query.section;
+  const requester = req.query.agent;
+  {
+    ensureSections();
+    const secId = resolveSectionKey(secKey || state.activeSection);
+    const sec = state.chatSections.find((s) => s.id === secId);
+    const listener = sec ? (sec.agentListener || "both") : "both";
+    if (listener !== "both") {
+      if (!requester) {
+        // Anonymous poll on a section reserved for one agent: never hand out
+        // (or drain) messages — ask the caller to identify itself and explain
+        // how, so a misconfigured agent can read the hint and self-correct.
+        return res.json({
+          items: [],
+          error: "who are you?",
+          hint:
+            `This chat section is reserved for agent='${listener}'. ` +
+            `Identify yourself by adding your REAL identity to the poll URL: ` +
+            `&agent=claude or &agent=gemini (do not claim an identity that is not yours). ` +
+            `If you are not '${listener}', this section's messages are not for you — ` +
+            `poll your own section instead.`,
+        });
+      }
+      if (listener !== requester) {
+        return res.json({ items: [] });
+      }
+    }
+  }
   let secId = null;
   if (secKey !== undefined && secKey !== "") {
     secId = resolveSectionKey(secKey);
     if (!secId) return res.json({ items: [] }); // unknown section → nothing, never drain all
   }
-  const match = (m) => secId === null || (m.section || "main") === secId;
+  const match = (m) => {
+    if (secId !== null) return (m.section || "main") === secId;
+    // Cross-section poll (no ?section): enforce each message's OWN section
+    // listener, so an agent can never see/drain messages from a section
+    // reserved for the other agent (guard above only covers one section).
+    const msec = state.chatSections.find((s) => s.id === (m.section || "main"));
+    const ml = msec ? (msec.agentListener || "both") : "both";
+    return ml === "both" || ml === requester;
+  };
   const items = state.inbox.filter(match);
   if (drain && items.length) {
     // only mutate/broadcast when something was actually drained — otherwise every
     // ~3s poll triggered a full state broadcast + history snapshot + file write
-    state.inbox = secId === null ? [] : state.inbox.filter((m) => !match(m));
+    state.inbox = state.inbox.filter((m) => !match(m));
     changed();
   }
   res.json({ items });
@@ -1192,6 +1498,29 @@ app.get("/api/image-inbox", (req, res) => {
   const items = state.imageInbox.slice();
   if (drain) drainImageInbox();
   res.json({ items });
+});
+
+// AI agent listener selector endpoints
+app.get("/api/agent-listener", (req, res) => {
+  ensureSections();
+  const secKey = req.query.section || state.activeSection;
+  const secId = resolveSectionKey(secKey);
+  const sec = state.chatSections.find((s) => s.id === secId);
+  res.json({ agentListener: sec ? sec.agentListener : "both" });
+});
+app.post("/api/agent-listener", (req, res) => {
+  const b = req.body || {};
+  ensureSections();
+  const secKey = b.section || state.activeSection;
+  const secId = resolveSectionKey(secKey);
+  const sec = state.chatSections.find((s) => s.id === secId);
+  if (sec && ["claude", "gemini", "both"].includes(b.agentListener)) {
+    sec.agentListener = b.agentListener;
+    changed();
+    res.json({ agentListener: sec.agentListener });
+  } else {
+    res.status(400).json({ error: "Invalid section or agentListener" });
+  }
 });
 
 // ----- Calendar cache (Claude fetches via MCP and stores here) ---------------
@@ -1303,6 +1632,161 @@ app.post("/api/github/push", async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
+});
+
+let claudeUsageCache = { data: null, ts: 0 };
+app.get("/api/claude-usage", async (req, res) => {
+  const now = Date.now();
+  if (now - claudeUsageCache.ts < 60000 && claudeUsageCache.data) {
+    return res.json(claudeUsageCache.data);
+  }
+  try {
+    const credsPath = path.join(os.homedir(), ".claude", ".credentials.json");
+    if (!fs.existsSync(credsPath)) throw new Error("no credentials file");
+    const creds = JSON.parse(fs.readFileSync(credsPath, "utf8"));
+    const token = creds?.claudeAiOauth?.accessToken;
+    if (!token) throw new Error("no access token");
+    const r = await fetch("https://api.anthropic.com/api/oauth/usage", {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "anthropic-beta": "oauth-2025-04-20"
+      }
+    });
+    if (!r.ok) throw new Error("fetch usage failed: " + r.status);
+    const data = await r.json();
+    let session = null, weekly = null, weekly_model = null;
+    for (const lim of (data.limits || [])) {
+      if (lim.kind === "session") session = { percent: lim.percent, severity: lim.severity, resets_at: lim.resets_at };
+      else if (lim.kind === "weekly_all") weekly = { percent: lim.percent, severity: lim.severity, resets_at: lim.resets_at };
+      else if (lim.kind === "weekly_scoped") weekly_model = { percent: lim.percent, name: lim.scope?.model?.display_name, resets_at: lim.resets_at };
+    }
+    const result = { session, weekly, weekly_model, fetched_at: new Date().toISOString() };
+    claudeUsageCache = { data: result, ts: now };
+    res.json(result);
+  } catch (err) {
+    res.json({ error: "unavailable", detail: String(err.message) });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// LOCAL video comprehension (zero API cost). A detached Python worker
+
+// (video-digest/video_digest.py) extracts keyframes + a timestamped transcript
+// into public/uploads/videodigest/<id>/. Additive only — this block never
+// touches the chat inbox drain/guard logic; the completion hook reuses the
+// existing addInbox() the same way handwriting does.
+// ---------------------------------------------------------------------------
+const VIDEODIGEST_DIR = path.join(__dirname, "public", "uploads", "videodigest");
+const VIDEO_WORKER = path.join(__dirname, "video-digest", "video_digest.py");
+function fmtT(t) { return String(Math.round(Number(t) * 100) / 100); }
+
+// POST /api/video-inbox {source, section} → spawn worker detached, return {id}.
+app.post("/api/video-inbox", (req, res) => {
+  const { source, section } = req.body || {};
+  if (!source || !String(source).trim())
+    return res.status(400).json({ error: "missing source (local path or http/YouTube URL)" });
+  const id = "vid_" + Date.now().toString(36);
+  const dir = path.join(VIDEODIGEST_DIR, id);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    // Write a processing stub so an immediate poll sees progress before the
+    // worker has written its own digest.json.
+    fs.writeFileSync(
+      path.join(dir, "digest.json"),
+      JSON.stringify({ id, source, status: "processing", frames: [], transcript: [] }, null, 2)
+    );
+    const sec = resolveSectionKey(section) || state.activeSection || "main";
+    const log = fs.openSync(path.join(dir, "worker.log"), "a");
+    const worker = spawn(
+      "python3",
+      [VIDEO_WORKER, "--source", String(source), "--out", dir, "--id", id,
+       "--section", sec, "--notify-url", `http://localhost:${PORT}/api/video-complete`],
+      { detached: true, stdio: ["ignore", log, log] }
+    );
+    worker.unref();
+    console.log(`[video] spawned worker ${id} (pid ${worker.pid}) section=${sec}`);
+    res.json({ id });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/video-upload (raw bytes) → save the file so it can be used as a
+// local source. Mirrors the express.raw() pattern used by /api/transcribe-local.
+app.post("/api/video-upload", express.raw({ type: "*/*", limit: "1024mb" }), (req, res) => {
+  const body = req.body;
+  if (!body || !Buffer.isBuffer(body) || body.length === 0)
+    return res.status(400).json({ error: "empty upload body" });
+  const extRaw = String(req.query.ext || "mp4").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "mp4";
+  const dir = path.join(VIDEODIGEST_DIR, "_uploads");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = `up_${Date.now().toString(36)}.${extRaw}`;
+  const full = path.join(dir, file);
+  try {
+    fs.writeFileSync(full, body);
+    res.json({ path: full, url: `/uploads/videodigest/_uploads/${file}` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/video-digest?id= → the digest.json (or a processing/error stub).
+app.get("/api/video-digest", (req, res) => {
+  const id = String(req.query.id || "");
+  if (!/^vid_[a-z0-9]+$/i.test(id)) return res.status(400).json({ error: "bad id" });
+  const p = path.join(VIDEODIGEST_DIR, id, "digest.json");
+  if (!fs.existsSync(p)) return res.json({ id, status: "processing" });
+  try {
+    res.json(JSON.parse(fs.readFileSync(p, "utf8")));
+  } catch {
+    res.json({ id, status: "processing" });
+  }
+});
+
+// GET /api/video-frame?id=&t= → extract ONE extra frame at time t on demand.
+app.get("/api/video-frame", (req, res) => {
+  const id = String(req.query.id || "");
+  const t = Number(req.query.t);
+  if (!/^vid_[a-z0-9]+$/i.test(id)) return res.status(400).json({ error: "bad id" });
+  if (!Number.isFinite(t) || t < 0) return res.status(400).json({ error: "bad t" });
+  const dir = path.join(VIDEODIGEST_DIR, id);
+  if (!fs.existsSync(dir)) return res.status(404).json({ error: "unknown id" });
+  // Find the media the worker downloaded/used, else fall back to a local source.
+  let media = null;
+  try {
+    const src = fs.existsSync(path.join(dir, "digest.json"))
+      ? (JSON.parse(fs.readFileSync(path.join(dir, "digest.json"), "utf8")).source || "")
+      : "";
+    const dl = fs.readdirSync(dir).find((f) => f.startsWith("source."));
+    if (dl) media = path.join(dir, dl);
+    else if (src && !/^https?:\/\//i.test(src) && fs.existsSync(src)) media = src;
+  } catch {}
+  if (!media) return res.status(409).json({ error: "source media not available for frame extraction" });
+  const name = `extra_${fmtT(t)}.jpg`;
+  const dest = path.join(dir, name);
+  const ff = spawn("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y",
+    "-ss", String(t), "-i", media, "-frames:v", "1", "-q:v", "3", dest]);
+  ff.on("close", (code) => {
+    if (code === 0 && fs.existsSync(dest))
+      res.json({ file: `/uploads/videodigest/${id}/${name}`, t });
+    else res.status(500).json({ error: "ffmpeg frame extraction failed" });
+  });
+  ff.on("error", (e) => res.status(500).json({ error: String(e) }));
+});
+
+// POST /api/video-complete {id, section, status, error} — the worker curls this
+// on finish so the listening Claude wakes. Reuses addInbox() exactly like the
+// handwriting-to-claude marker does.
+app.post("/api/video-complete", (req, res) => {
+  const { id, section, status, error } = req.body || {};
+  if (!id) return res.status(400).json({ error: "missing id" });
+  const done = status === "done";
+  const text = done
+    ? `🎬 video digest ready: ${id}`
+    : `🎬 video digest error: ${id}${error ? " — " + error : ""}`;
+  addInbox(text, section);
+  console.log(`[video] ${id} ${done ? "done" : "error"} → inbox (section=${section || "?"})`);
+  res.json({ ok: true });
 });
 
 // Serve uploaded image assets, then the static frontend.

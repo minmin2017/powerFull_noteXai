@@ -156,8 +156,18 @@ import setupGitHub from './modules/github.js';
     for (const k of Object.keys(STATE)) delete STATE[k];
     Object.assign(STATE, s);
     if (chatModule) chatModule.renderChat();
+    updateAgentSwitcherUI();
     syncTitle();
     render();
+  }
+
+  function updateAgentSwitcherUI() {
+    const activeSecId = STATE.activeSection || "main";
+    const sections = STATE.chatSections || [];
+    const sec = sections.find((x) => x.id === activeSecId);
+    const agentListener = sec ? (sec.agentListener || "both") : "both";
+    const btns = document.querySelectorAll(".agent-btn");
+    btns.forEach((b) => b.classList.toggle("active", b.dataset.agent === agentListener));
   }
 
   // Call when a drawing gesture has fully persisted: stop deferring and flush the
@@ -1238,6 +1248,10 @@ import setupGitHub from './modules/github.js';
         if (!pinch && activeTouches.size < 2) startPan(e);
         return;
       }
+      // Clicks that start inside a box belong to the box (play a video, open a
+      // link…). Starting a lasso here re-rendered box bodies on pointerup,
+      // which destroyed the pressed element mid-gesture and swallowed the click.
+      if (e.target.closest(".hbox")) return;
       const p = eventCanvasPos(e);
       if (selectedStrokeIds.size > 0 && selectedIds.size === 0) {
         // stroke-only drag: move selected strokes
@@ -1787,18 +1801,23 @@ import setupGitHub from './modules/github.js';
     stroke = null;
     lastEraseW = null;
     window.removeEventListener("pointermove", onEraseMove);
-    // Persist the erase: delete touched originals, create the surviving pieces.
+    // Persist the erase in ONE bulk call — per-stroke round-trips made big erases
+    // crawl and every broadcast in between repainted half-done state (flicker).
     const dels = [...eraseDelete];
     eraseDelete = new Set();
     const news = STATE.drawings.filter((d) => d._new);
     try {
-      for (const id of dels) await api(`/api/drawings/${id}`, "DELETE");
-      for (const d of news) {
-        await api("/api/drawings", "POST", {
-          color: d.color,
-          width: d.width,
-          points: d.points,
+      if (dels.length || news.length) {
+        const r = await api("/api/drawings/erase", "POST", {
+          del: dels,
+          add: news.map((d) => ({ color: d.color, width: d.width, points: d.points })),
         });
+        // Adopt server ids so the confirming broadcast matches these objects.
+        if (r && Array.isArray(r.created)) {
+          news.forEach((d, i) => {
+            if (r.created[i]) { d.id = r.created[i].id; delete d._new; }
+          });
+        }
       }
     } finally {
       endDrawBusy();
@@ -2123,11 +2142,14 @@ import setupGitHub from './modules/github.js';
       el.style.width = b.w + "px";
       el.classList.toggle("selected", b.id === selectedBoxId);
       el.querySelector(".box-title").textContent =
-        b.title || (b.kind === "image" ? "คลังรูปภาพ" : b.kind === "portal" ? "Portal" : "บันทึกลายมือ");
+        b.title || (b.kind === "image" ? "คลังรูปภาพ" : b.kind === "portal" ? "Portal" : b.kind === "video" ? "วิดีโอ" : "บันทึกลายมือ");
       if (b.kind === "portal") {
         el.style.height = (b.h || 80) + "px";
       } else if (b.kind === "aibox") {
         el.style.height = (b.h || 200) + "px";
+      } else if (b.kind === "video") {
+        el.style.height = (b.h || 280) + "px";
+        renderVideoBox(el, b);
       } else if (b.kind === "image") {
         el.style.height = (b.h || 240) + "px";
         renderGallery(el, b);
@@ -2200,15 +2222,192 @@ import setupGitHub from './modules/github.js';
     document.body.appendChild(backdrop);
   }
 
+  // Render a video box, listing all items
+  function renderVideoBox(el, b) {
+    const body = el.querySelector(".video-box-body");
+    if (!body) return;
+    const items = b.items || [];
+    // Skip the rebuild when items are unchanged — renderBoxes runs on every
+    // broadcast/selection repaint, and replacing the rows mid-click would
+    // swallow the user's tap on ▶.
+    const sig = JSON.stringify(items.map((it) => [it.url, it.title]));
+    if (el.dataset.vsig === sig) return;
+    el.dataset.vsig = sig;
+    body.innerHTML = "";
+
+    const listDiv = document.createElement("div");
+    listDiv.className = "video-box-list";
+    listDiv.style.flex = "1";
+    listDiv.style.display = "flex";
+    listDiv.style.flexDirection = "column";
+
+    if (!items.length) {
+      listDiv.innerHTML = `<div class="video-box-empty">ยังไม่มีลิงก์วิดีโอ</div>`;
+    } else {
+      items.forEach((it, i) => {
+        const row = document.createElement("div");
+        row.className = "video-box-row";
+        row.style.cursor = "pointer";
+        row.style.padding = "6px 10px";
+        row.style.display = "flex";
+        row.style.justifyContent = "space-between";
+        row.style.alignItems = "center";
+        row.style.borderBottom = "1px solid var(--line)";
+        row.style.fontSize = "13px";
+
+        const textSpan = document.createElement("span");
+        textSpan.textContent = `▶ ${it.title || it.url}`;
+        textSpan.style.flex = "1";
+        textSpan.style.overflow = "hidden";
+        textSpan.style.textOverflow = "ellipsis";
+        textSpan.style.whiteSpace = "nowrap";
+
+        row.appendChild(textSpan);
+
+        const delBtn = document.createElement("button");
+        delBtn.innerHTML = "×";
+        delBtn.style.border = "none";
+        delBtn.style.background = "transparent";
+        delBtn.style.color = "var(--muted)";
+        delBtn.style.cursor = "pointer";
+        delBtn.style.fontSize = "16px";
+        delBtn.style.padding = "0 6px";
+
+        delBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        delBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (confirm("ลบลิงก์วิดีโอนี้?")) {
+            const next = (b.items || []).slice();
+            next.splice(i, 1);
+            api(`/api/boxes/${b.id}`, "PATCH", { items: next });
+          }
+        });
+
+        row.appendChild(delBtn);
+
+        row.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openVideoModal(it.url, it.title);
+        });
+
+        listDiv.appendChild(row);
+      });
+    }
+    body.appendChild(listDiv);
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "tb-btn";
+    addBtn.style.margin = "8px";
+    addBtn.style.alignSelf = "flex-start";
+    addBtn.style.fontSize = "12px";
+    addBtn.style.padding = "4px 10px";
+    addBtn.textContent = "＋ เพิ่มลิงก์";
+    addBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const url = prompt("กรอก URL วิดีโอ (YouTube หรือไฟล์วิดีโอโลคอล):");
+      if (!url) return;
+      const title = prompt("กรอกชื่อวิดีโอ (เลือกได้):", url);
+      const next = (b.items || []).slice();
+      next.push({ url, title: title || url });
+      api(`/api/boxes/${b.id}`, "PATCH", { items: next });
+    });
+    body.appendChild(addBtn);
+  }
+
+  // Open video player modal
+  function openVideoModal(url, title) {
+    const modal = document.getElementById("video-modal");
+    const titleEl = document.getElementById("video-modal-title");
+    const holder = document.getElementById("video-holder");
+    if (!modal || !holder) return;
+
+    titleEl.textContent = title || "วิดีโอ";
+    holder.innerHTML = "";
+
+    const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = url.match(ytRegex);
+
+    if (match && match[1]) {
+      const videoId = match[1];
+      const iframe = document.createElement("iframe");
+      iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`;
+      iframe.setAttribute("allow", "autoplay; fullscreen");
+      iframe.setAttribute("allowfullscreen", "");
+      holder.appendChild(iframe);
+    } else {
+      const video = document.createElement("video");
+      video.controls = true;
+      video.autoplay = true;
+      video.src = url;
+      holder.appendChild(video);
+    }
+
+    modal.hidden = false;
+  }
+
+  const closeVideoModal = () => {
+    const modal = document.getElementById("video-modal");
+    const holder = document.getElementById("video-holder");
+    if (modal) modal.hidden = true;
+    if (holder) holder.innerHTML = "";
+  };
+
+  document.getElementById("video-modal-close")?.addEventListener("click", closeVideoModal);
+
+  document.getElementById("video-modal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget || e.target.id === "video-modal") {
+      closeVideoModal();
+    }
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeVideoModal();
+    }
+  });
+
   function createBoxEl(b) {
     const el = document.createElement("div");
     el.className =
       "hbox" +
       (b.kind === "image" ? " hbox-image" :
        b.kind === "portal" ? " hbox-portal" :
-       b.kind === "aibox" ? " hbox-aibox" : "");
+       b.kind === "aibox" ? " hbox-aibox" :
+       b.kind === "video" ? " hbox-video" : "");
     el.dataset.id = b.id;
     el.dataset.kind = b.kind || "note";
+
+    // Video Box - displays a list of playable video files or YouTube links
+    if (b.kind === "video") {
+      el.innerHTML =
+        `<div class="box-head">
+           <span class="box-title"></span>
+           <button class="box-btn b-link" title="โยงไปกล่องอื่น">🔗</button>
+           <button class="box-btn b-del" title="ลบกล่อง">×</button>
+         </div>
+         <div class="video-box-body" style="flex: 1; display: flex; flex-direction: column; overflow-y: auto;"></div>
+         <div class="box-resize" title="ปรับขนาด"></div>`;
+
+      const head = el.querySelector(".box-head");
+      head.addEventListener("pointerdown", (e) => {
+        if (mode !== "select") return;
+        if (e.target.closest(".box-btn")) return;
+        e.stopPropagation();
+        selectedBoxId = b.id;
+        startBoxMove(e, b.id);
+      });
+      el.querySelector(".b-link").addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        startLinkDrag(e, b.id);
+      });
+      el.querySelector(".b-del").addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm("ลบกล่องวิดีโอนี้?")) api(`/api/boxes/${b.id}`, "DELETE");
+      });
+      el.querySelector(".box-resize").addEventListener("pointerdown", (e) => { e.stopPropagation(); startBoxResize(e, b.id); });
+      return el;
+    }
 
     // AI Box — a translucent region rectangle. Its body lets clicks pass through
     // to the nodes inside; only the header bar and resize handle are interactive.
@@ -2463,7 +2662,7 @@ import setupGitHub from './modules/github.js';
     const pt = bmodalPt(e);
     if (modalState.eraser) {
       lastBoxEraseW = pt;
-      eraseBoxAt(pt);
+      if (eraseBoxAt(pt)) bmodalRedraw();
       bcanvas.addEventListener("pointermove", onBoxErase);
       window.addEventListener("pointerup", () => { bcanvas.removeEventListener("pointermove", onBoxErase); lastBoxEraseW = null; }, { once: true });
       return;
@@ -2498,22 +2697,27 @@ import setupGitHub from './modules/github.js';
       changed = true;
       for (const p of pieces) next.push({ color: s.color, width: s.width, points: p });
     }
-    if (changed) { modalState.strokes = next; modalState.dirty = true; bmodalRedraw(); }
+    if (changed) { modalState.strokes = next; modalState.dirty = true; }
+    return changed;
   }
   function onBoxErase(e) {
     const pt = bmodalPt(e);
     const thr = 0.015 + Number($("#box-pen-size").value) / 500;
     // Interpolate so a fast drag erases a continuous path, not spaced-out dots.
+    // Redraw ONCE at the end — a full repaint per interpolation step made the
+    // eraser crawl and flicker on stroke-heavy pages.
+    let hit = false;
     if (lastBoxEraseW) {
       const dist = Math.hypot(pt.x - lastBoxEraseW.x, pt.y - lastBoxEraseW.y);
       const steps = Math.max(1, Math.ceil(dist / Math.max(thr * 0.5, 0.004)));
       for (let k = 1; k <= steps; k++) {
         const t = k / steps;
-        eraseBoxAt({ x: lastBoxEraseW.x + (pt.x - lastBoxEraseW.x) * t, y: lastBoxEraseW.y + (pt.y - lastBoxEraseW.y) * t });
+        if (eraseBoxAt({ x: lastBoxEraseW.x + (pt.x - lastBoxEraseW.x) * t, y: lastBoxEraseW.y + (pt.y - lastBoxEraseW.y) * t })) hit = true;
       }
     } else {
-      eraseBoxAt(pt);
+      hit = eraseBoxAt(pt);
     }
+    if (hit) bmodalRedraw();
     lastBoxEraseW = pt;
   }
 
@@ -2577,6 +2781,14 @@ import setupGitHub from './modules/github.js';
     const c = screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2);
     const box = await api("/api/boxes", "POST", { x: Math.round(c.x - 160), y: Math.round(c.y - 100), w: 320 });
     if (box) setTimeout(() => openBox(box.id), 80);
+  });
+
+  $("#btn-add-video").addEventListener("click", async () => {
+    const c = screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2);
+    const box = await api("/api/boxes", "POST", {
+      kind: "video", x: Math.round(c.x - 170), y: Math.round(c.y - 140), w: 340, h: 280, title: "วิดีโอ",
+    });
+    if (box) { selectedBoxId = box.id; toast("สร้างกล่องวิดีโอแล้ว 🎞"); }
   });
 
   $("#btn-add-gallery").addEventListener("click", async () => {
@@ -2726,7 +2938,7 @@ import setupGitHub from './modules/github.js';
   // Model switcher
   // ----------------------------------------------------------------------
   (function setupModelSwitcher() {
-    const btns = document.querySelectorAll(".model-btn");
+    const btns = document.querySelectorAll(".model-btn:not(.agent-btn)");
     // Fetch current model from settings and mark active button.
     fetch("/api/current-model").then(r => r.json()).then(({ model }) => {
       btns.forEach(b => b.classList.toggle("active", b.dataset.model === model));
@@ -2745,6 +2957,31 @@ import setupGitHub from './modules/github.js';
           toast(`เปลี่ยนเป็น ${model} แล้ว — มีผลครั้งถัดไปที่เปิด Claude Code ✓`);
         } else {
           toast("เปลี่ยนโมเดลไม่สำเร็จ");
+        }
+      });
+    });
+  })();
+
+  (function setupAgentSwitcher() {
+    const btns = document.querySelectorAll(".agent-btn");
+    // Initial sync
+    setTimeout(updateAgentSwitcherUI, 100);
+
+    btns.forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const agentListener = btn.dataset.agent;
+        const res = await fetch("/api/agent-listener", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentListener, section: STATE.activeSection || "main" }),
+        });
+        if (res.ok) {
+          btns.forEach(b => b.classList.toggle("active", b === btn));
+          let displayAgent = agentListener;
+          if (agentListener === "both") displayAgent = "ทั้งคู่";
+          toast(`เปลี่ยนผู้รับฟังคำสั่งเป็น ${displayAgent} แล้ว ✓`);
+        } else {
+          toast("เปลี่ยนผู้รับฟังคำสั่งไม่สำเร็จ");
         }
       });
     });

@@ -1,0 +1,15 @@
+manim-community/
+videos/
+media/
+public/uploads/
+public/vendor/
+node_modules/
+graphify-out/
+demo-output/
+simulation/
+*.jpg
+*.png
+*.jpeg
+*.wav
+*.mp3
+*.mp4
