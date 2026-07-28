@@ -209,6 +209,9 @@ body.col-resizing {
   color: var(--text);
   border-color: var(--accent);
 }
+#tts-toggle-btn.tts-off {
+  opacity: 0.45;
+}
 .gemini-handoff {
   flex: 0 0 auto;
   display: flex;
