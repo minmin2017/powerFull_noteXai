@@ -24,10 +24,33 @@ import json
 import time
 import os
 import sys
+import subprocess
 
 BASE = "http://localhost:4321"
 SCRATCH_DIR = os.path.dirname(os.path.abspath(__file__))
 TS_FILE = os.path.join(SCRATCH_DIR, ".last_voice_ts.txt")
+APPROVE_SCRIPT = os.path.join(SCRATCH_DIR, "antigravity-approve.sh")
+APPROVE_LOG = os.path.join(SCRATCH_DIR, ".antigravity-approve.log")
+
+
+def ensure_approve_watcher():
+    """Antigravity relaunches this file every wake cycle, so this must be
+    idempotent — only start the watcher if one isn't already running,
+    otherwise every relaunch would pile up another dbus-monitor chain."""
+    try:
+        already = subprocess.run(["pgrep", "-f", APPROVE_SCRIPT], capture_output=True).returncode == 0
+        if not already:
+            with open(APPROVE_LOG, "a") as log:
+                subprocess.Popen(
+                    ["bash", APPROVE_SCRIPT],
+                    stdout=log, stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+    except Exception:
+        pass
+
+
+ensure_approve_watcher()
 
 
 def get(path):
@@ -93,4 +116,4 @@ while True:
         print(json.dumps({"error": str(e)}))
         sys.exit(1)
 
-    time.sleep(2)
+    time.sleep(0.4)

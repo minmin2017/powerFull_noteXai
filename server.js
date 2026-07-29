@@ -10,7 +10,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execSync, execFile } from "node:child_process";
 import os from "node:os";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -992,6 +992,44 @@ app.get("/api/media", (req, res) => {
   }
 
   res.sendFile(resolvedPath);
+});
+
+// ---- Text-to-Speech (edge-tts, Thai neural voice) ----
+// Resolves the CLI to an absolute path since `pip install --user` puts it in
+// ~/.local/bin, which may not be on the PATH the server process inherited.
+const EDGE_TTS_BIN = (() => {
+  const candidate = path.join(os.homedir(), ".local", "bin", "edge-tts");
+  try {
+    if (fs.existsSync(candidate)) return candidate;
+  } catch {}
+  return "edge-tts"; // fall back to PATH lookup
+})();
+
+// GET /api/tts?text=... → synthesize Thai speech via edge-tts CLI and stream
+// back an mp3. Text is passed through execFile's args array (never a shell
+// string) so it can never be interpreted as a shell command.
+app.get("/api/tts", (req, res) => {
+  const text = String(req.query.text || "").slice(0, 3000);
+  if (!text.trim()) return res.status(400).json({ error: "missing text" });
+
+  const tmpFile = path.join(os.tmpdir(), `pn_tts_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.mp3`);
+  const args = ["--voice", "th-TH-PremwadeeNeural", "--text", text, "--write-media", tmpFile];
+  execFile(EDGE_TTS_BIN, args, { timeout: 60000 }, (err, stdout, stderr) => {
+    if (err) {
+      console.error("[tts] edge-tts failed:", err.message, stderr || "");
+      try { fs.unlinkSync(tmpFile); } catch {}
+      return res.status(500).json({ error: "tts generation failed" });
+    }
+    if (!fs.existsSync(tmpFile)) {
+      return res.status(500).json({ error: "tts produced no output" });
+    }
+    res.setHeader("Content-Type", "audio/mpeg");
+    const stream = fs.createReadStream(tmpFile);
+    const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch {} };
+    stream.on("close", cleanup);
+    stream.on("error", cleanup);
+    stream.pipe(res);
+  });
 });
 
 app.post("/api/videos/add", (req, res) => {

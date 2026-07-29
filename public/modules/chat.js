@@ -57,6 +57,7 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
 
   function renderChat() {
     renderChatTabs();
+    checkForNewClaudeMessages();
     const box = document.getElementById("chat");
     const active = STATE.activeSection || "main";
     const msgs = (STATE.chat || []).filter((m) => (m.section || "main") === active);
@@ -243,6 +244,177 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
     if (trimmed) startVideoDigest(trimmed);
     else videoFileInput?.click();
   });
+
+  // ---------------------------------------------------------------------
+  // 🔊 Text-to-speech — speaks new Claude messages in Thai as they arrive.
+  // Toggle state lives in localStorage so it persists across reloads.
+  // seenChatIds starts as `null`; the FIRST renderChat() call (page load,
+  // whatever history the server sends) only records ids as a baseline —
+  // it never speaks. Only ids that show up in a LATER render are new.
+  // ---------------------------------------------------------------------
+  let ttsEnabled = localStorage.getItem("ttsEnabled") !== "false"; // default ON
+  let seenChatIds = null;
+  const ttsQueue = [];
+  let ttsPlaying = false;
+  let currentAudioEl = null;
+  const ttsToggleBtn = document.getElementById("tts-toggle-btn");
+
+  function updateTtsButton() {
+    if (!ttsToggleBtn) return;
+    ttsToggleBtn.textContent = ttsEnabled ? "🔊" : "🔇";
+    ttsToggleBtn.title = ttsEnabled ? "ปิดเสียงอ่านข้อความ Claude" : "เปิดเสียงอ่านข้อความ Claude";
+    ttsToggleBtn.classList.toggle("tts-off", !ttsEnabled);
+  }
+
+  function setTtsEnabled(v) {
+    ttsEnabled = v;
+    localStorage.setItem("ttsEnabled", v ? "true" : "false");
+    updateTtsButton();
+    if (!v) {
+      // Stop whatever is speaking right now and drop anything queued.
+      ttsQueue.length = 0;
+      if (currentAudioEl) {
+        try { currentAudioEl.pause(); } catch {}
+        currentAudioEl = null;
+      }
+      try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch {}
+      ttsPlaying = false;
+    }
+  }
+
+  ttsToggleBtn?.addEventListener("click", () => setTtsEnabled(!ttsEnabled));
+  updateTtsButton();
+
+  // Strip markdown noise so the voice doesn't read out symbols/URLs/code.
+  function sanitizeForSpeech(text) {
+    let t = String(text || "");
+    t = t.replace(/```[\s\S]*?```/g, " "); // fenced code blocks
+    t = t.replace(/`[^`]*`/g, " "); // inline code
+    t = t.replace(/\[([^\]]*)\]\(([^)]*)\)/g, "$1"); // [label](url) -> label
+    t = t.replace(/https?:\/\/\S+/g, " "); // bare URLs
+    t = t.replace(/[#*_~>`]+/g, ""); // markdown symbols
+    t = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
+    return t;
+  }
+
+  // Fallback: browser's own speech synthesis, only if a Thai voice exists.
+  function speakFallback(text, done) {
+    try {
+      if ("speechSynthesis" in window) {
+        const voices = window.speechSynthesis.getVoices();
+        const thVoice = voices.find((v) => /^th(-|_)?TH/i.test(v.lang) || /thai/i.test(v.name));
+        if (thVoice) {
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.voice = thVoice;
+          utter.lang = thVoice.lang;
+          utter.onend = done;
+          utter.onerror = done;
+          window.speechSynthesis.speak(utter);
+          return;
+        }
+      }
+    } catch {}
+    done(); // no Thai voice available — stay silent, no error popups
+  }
+
+  function playNextTts() {
+    if (ttsPlaying || !ttsEnabled) return;
+    const text = ttsQueue.shift();
+    if (text === undefined) return;
+    ttsPlaying = true;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      ttsPlaying = false;
+      currentAudioEl = null;
+      playNextTts();
+    };
+    try {
+      const audio = new Audio(`/api/tts?text=${encodeURIComponent(text)}`);
+      currentAudioEl = audio;
+      audio.addEventListener("ended", finish);
+      audio.addEventListener("error", () => speakFallback(text, finish));
+      audio.play().catch(() => speakFallback(text, finish));
+    } catch {
+      speakFallback(text, finish);
+    }
+  }
+
+  function splitTextForSpeech(text) {
+    const rawChunks = text.split(/[\n|.!?;]/);
+    const chunks = [];
+    for (let chunk of rawChunks) {
+      chunk = chunk.trim();
+      if (!chunk) continue;
+      if (chunk.length > 150) {
+        const subChunks = chunk.split(/[,，、\s]+/);
+        let currentSub = "";
+        for (const sub of subChunks) {
+          if ((currentSub + " " + sub).length > 150) {
+            if (currentSub.trim()) chunks.push(currentSub.trim());
+            currentSub = sub;
+          } else {
+            currentSub = currentSub ? currentSub + " " + sub : sub;
+          }
+        }
+        if (currentSub.trim()) chunks.push(currentSub.trim());
+      } else {
+        chunks.push(chunk);
+      }
+    }
+    return chunks;
+  }
+
+  function enqueueSpeech(text) {
+    if (!ttsEnabled) return;
+    const clean = sanitizeForSpeech(text);
+    if (!clean) return;
+    const chunks = splitTextForSpeech(clean);
+    for (const chunk of chunks) {
+      ttsQueue.push(chunk);
+    }
+    playNextTts();
+  }
+
+  // Cross-tab mutex: only the first same-origin tab to see a message id
+  // speaks it — prevents every open tab from playing the same audio.
+  const TTS_CLAIM_KEY = "pn_tts_claimed_ids";
+  function claimForSpeech(id) {
+    let claimed;
+    try {
+      claimed = JSON.parse(localStorage.getItem(TTS_CLAIM_KEY) || "[]");
+      if (!Array.isArray(claimed)) claimed = [];
+    } catch {
+      claimed = [];
+    }
+    if (claimed.includes(id)) return false;
+    claimed.push(id);
+    if (claimed.length > 300) claimed = claimed.slice(claimed.length - 300);
+    try {
+      localStorage.setItem(TTS_CLAIM_KEY, JSON.stringify(claimed));
+    } catch {}
+    return true;
+  }
+
+  // Called from renderChat() on every state broadcast. Diffs STATE.chat
+  // against ids already seen; speaks new role:"claude" messages only,
+  // scoped to this tab's active section and claimed cross-tab.
+  function checkForNewClaudeMessages() {
+    const all = STATE.chat || [];
+    if (seenChatIds === null) {
+      // First render after page load — record the baseline, speak nothing.
+      seenChatIds = new Set(all.map((m) => m.id));
+      return;
+    }
+    const active = STATE.activeSection || "main";
+    for (const m of all) {
+      if (!m || seenChatIds.has(m.id)) continue;
+      seenChatIds.add(m.id);
+      if (m.role === "claude" && (m.section || "main") === active && claimForSpeech(m.id))
+        enqueueSpeech(m.text);
+    }
+  }
 
   return { renderChat, renderChatTabs };
 }
