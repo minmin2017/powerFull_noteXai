@@ -1,13 +1,13 @@
 {
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\.mcp.json": {
-    "mtime": 1781526260.7162368,
-    "ast_hash": "b17b851fdc243530d86fa3362951956f",
-    "semantic_hash": "b17b851fdc243530d86fa3362951956f"
+    "mtime": 1785653455.0494463,
+    "ast_hash": "4a9278708386ce6e002be8ec2ef19521",
+    "semantic_hash": "4a9278708386ce6e002be8ec2ef19521"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\agent-brain.js": {
-    "mtime": 1781584891.1510174,
-    "ast_hash": "87e9ffe267129353ebd26313110ab0a2",
-    "semantic_hash": "87e9ffe267129353ebd26313110ab0a2"
+    "mtime": 1784183454.0483687,
+    "ast_hash": "4e8392b7837cb0af4b7e6277187f8192",
+    "semantic_hash": "4e8392b7837cb0af4b7e6277187f8192"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\gemini-loop.ps1": {
     "mtime": 1781584892.6934564,
@@ -25,34 +25,34 @@
     "semantic_hash": "fb1b918a95b188310d51cbee347dd301"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\mcp-server.js": {
-    "mtime": 1781802038.528936,
-    "ast_hash": "14c5537a64f75fe297d833177a6fed25",
-    "semantic_hash": "14c5537a64f75fe297d833177a6fed25"
+    "mtime": 1784183454.0850763,
+    "ast_hash": "4a868fa73a461d6417270d0e8dad9457",
+    "semantic_hash": "4a868fa73a461d6417270d0e8dad9457"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\package.json": {
-    "mtime": 1781600882.5143902,
-    "ast_hash": "30fb183a98fbeed1e65ee94eab8b1045",
-    "semantic_hash": "30fb183a98fbeed1e65ee94eab8b1045"
+    "mtime": 1784182031.6451354,
+    "ast_hash": "6a1bd6fc9b33ae51cf7c90623ab8deeb",
+    "semantic_hash": "6a1bd6fc9b33ae51cf7c90623ab8deeb"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\server.js": {
-    "mtime": 1781802072.142317,
-    "ast_hash": "6a5792cff1d6a70dafe714a42190ef51",
-    "semantic_hash": "6a5792cff1d6a70dafe714a42190ef51"
+    "mtime": 1785597535.9089737,
+    "ast_hash": "b3bc4139fd1b760134f96dea8ec0e7f7",
+    "semantic_hash": "b3bc4139fd1b760134f96dea8ec0e7f7"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\whisper_transcribe.py": {
-    "mtime": 1781770816.9751458,
-    "ast_hash": "2ccb0099e980389aa8f3c0d2af0856d5",
-    "semantic_hash": "2ccb0099e980389aa8f3c0d2af0856d5"
+    "mtime": 1784182031.6567593,
+    "ast_hash": "fb6a6f3e30f668491e3685c8754c7516",
+    "semantic_hash": "fb6a6f3e30f668491e3685c8754c7516"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\whisper_worker.py": {
-    "mtime": 1781793642.338648,
-    "ast_hash": "5f3736ba8f235e28a9353a21028c2538",
-    "semantic_hash": "5f3736ba8f235e28a9353a21028c2538"
+    "mtime": 1784183454.2436304,
+    "ast_hash": "8cf1c02a88f0331c3a04640e0a95378e",
+    "semantic_hash": "8cf1c02a88f0331c3a04640e0a95378e"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\app.js": {
-    "mtime": 1781835385.914395,
-    "ast_hash": "031b6ba89225bb9b0434f6cf2ed9f56e",
-    "semantic_hash": "031b6ba89225bb9b0434f6cf2ed9f56e"
+    "mtime": 1785585323.5006888,
+    "ast_hash": "359ddb681fe502ae99fa4a9cbdd813ef",
+    "semantic_hash": "359ddb681fe502ae99fa4a9cbdd813ef"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\coordinator.js": {
     "mtime": 1781712557.264857,
@@ -145,14 +145,14 @@
     "semantic_hash": "f09344a556eb0c8d7d1f5e4737a01a6b"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\CLAUDE.md": {
-    "mtime": 1781834198.8892667,
-    "ast_hash": "70ec10b46caaa48833a91d29414ce339",
-    "semantic_hash": "70ec10b46caaa48833a91d29414ce339"
+    "mtime": 1784183454.043366,
+    "ast_hash": "4aa91e62f6580e37e104945589828fc1",
+    "semantic_hash": "4aa91e62f6580e37e104945589828fc1"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\README.md": {
-    "mtime": 1781526312.9429474,
-    "ast_hash": "2ccf485b923c2de57d4f62a62b9c99ef",
-    "semantic_hash": "2ccf485b923c2de57d4f62a62b9c99ef"
+    "mtime": 1785691055.4322932,
+    "ast_hash": "58bccdbfb519f10d7c69932f94e83360",
+    "semantic_hash": "58bccdbfb519f10d7c69932f94e83360"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\docs\\Digital Twin.md": {
     "mtime": 1781621874.638581,
@@ -170,9 +170,9 @@
     "semantic_hash": "2d51c293830d9c3d344e895d2d322941"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\index.html": {
-    "mtime": 1781833482.697138,
-    "ast_hash": "56d0b3850fb5b7e615ae94bbfe79afa0",
-    "semantic_hash": "56d0b3850fb5b7e615ae94bbfe79afa0"
+    "mtime": 1785583979.308574,
+    "ast_hash": "7b8877895765d3fd315eddad2d408a31",
+    "semantic_hash": "7b8877895765d3fd315eddad2d408a31"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\simulation\\scenarios\\anthropic-ipo.md": {
     "mtime": 1781710030.9365554,
@@ -195,9 +195,9 @@
     "semantic_hash": "004d488ac8e79dcc8de7fe5c0cb02455"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\ws-inbox.js": {
-    "mtime": 1781803525.000722,
-    "ast_hash": "f891f3652fca02d9b649c7eca36a936e",
-    "semantic_hash": "f891f3652fca02d9b649c7eca36a936e"
+    "mtime": 1784183454.246631,
+    "ast_hash": "6f7cdb2cfa8084153f271269a96dfcb8",
+    "semantic_hash": "6f7cdb2cfa8084153f271269a96dfcb8"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\calendar.js": {
     "mtime": 1781804075.1126225,
@@ -205,9 +205,9 @@
     "semantic_hash": "f334cbbde57601289ca8c2dd6580c939"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\chat.js": {
-    "mtime": 1781804151.008914,
-    "ast_hash": "e44e00dbafbd2d56e2178a9579ba150f",
-    "semantic_hash": "e44e00dbafbd2d56e2178a9579ba150f"
+    "mtime": 1785604910.1371393,
+    "ast_hash": "ba82adf9da0ecd8095316b604b066ddd",
+    "semantic_hash": "ba82adf9da0ecd8095316b604b066ddd"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\export.js": {
     "mtime": 1781804044.4305046,
@@ -215,8 +215,148 @@
     "semantic_hash": "acf6eef5b66e7025c632ba567b8343b4"
   },
   "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\voice.js": {
-    "mtime": 1781804125.0254457,
-    "ast_hash": "4b3740abd2642a5fd2d7a191759e6407",
-    "semantic_hash": "4b3740abd2642a5fd2d7a191759e6407"
+    "mtime": 1785428707.1452992,
+    "ast_hash": "3a1bf86caa68905c7865089ef2df456c",
+    "semantic_hash": "3a1bf86caa68905c7865089ef2df456c"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\add_mindmap.js": {
+    "mtime": 1784791864.9821887,
+    "ast_hash": "f0c8b3eedefed1391f7aa3c96052b8fb",
+    "semantic_hash": "f0c8b3eedefed1391f7aa3c96052b8fb"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\antigravity-approve.sh": {
+    "mtime": 1785329279.5470507,
+    "ast_hash": "19d8ab58604708aff11c030ae625f029",
+    "semantic_hash": "19d8ab58604708aff11c030ae625f029"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\antigravity-wait.py": {
+    "mtime": 1785597762.6481986,
+    "ast_hash": "33efa8d61d885452556133d4dbfc59d8",
+    "semantic_hash": "33efa8d61d885452556133d4dbfc59d8"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\claude-listen.bash": {
+    "mtime": 1784183454.053367,
+    "ast_hash": "460959ddf5915ae1a3d7b3839370e38c",
+    "semantic_hash": "460959ddf5915ae1a3d7b3839370e38c"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\claude-wake.bash": {
+    "mtime": 1784183454.0552335,
+    "ast_hash": "84a0aa102828f6ae570187c969e96800",
+    "semantic_hash": "84a0aa102828f6ae570187c969e96800"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\export_project_pdf.py": {
+    "mtime": 1785234750.689788,
+    "ast_hash": "c4cb662b941f4dcb53fd86c13e192bc0",
+    "semantic_hash": "c4cb662b941f4dcb53fd86c13e192bc0"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\global_ptt.py": {
+    "mtime": 1785597760.2932472,
+    "ast_hash": "c2aceb4da9371982488f4e533e06f318",
+    "semantic_hash": "c2aceb4da9371982488f4e533e06f318"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\notify_daemon.py": {
+    "mtime": 1785597764.7548475,
+    "ast_hash": "c9f76a918ca31b5b0892a4ace71cffd9",
+    "semantic_hash": "c9f76a918ca31b5b0892a4ace71cffd9"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\play_audio.ps1": {
+    "mtime": 1785329503.7804003,
+    "ast_hash": "b0c3ea30b9c82f91f564ba03c50b2334",
+    "semantic_hash": "b0c3ea30b9c82f91f564ba03c50b2334"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\speak_jarvis.py": {
+    "mtime": 1785582336.6480274,
+    "ast_hash": "138f200af60af75030fabe0dd3399218",
+    "semantic_hash": "138f200af60af75030fabe0dd3399218"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\speak_thai.py": {
+    "mtime": 1785234707.1250052,
+    "ast_hash": "3ca911f5e40dc621e774a1c82f8d38b0",
+    "semantic_hash": "3ca911f5e40dc621e774a1c82f8d38b0"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\start.bash": {
+    "mtime": 1784183454.23563,
+    "ast_hash": "7dabbbb2c120fc0dc568e6f5a2f7aed9",
+    "semantic_hash": "7dabbbb2c120fc0dc568e6f5a2f7aed9"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\tts_worker.py": {
+    "mtime": 1785429079.0059123,
+    "ast_hash": "7085087625ad991e8cfe878922df4b8a",
+    "semantic_hash": "7085087625ad991e8cfe878922df4b8a"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\video-comprehension.js": {
+    "mtime": 1784182031.8301055,
+    "ast_hash": "5fbd948f324680e1f542015adcf1b90d",
+    "semantic_hash": "5fbd948f324680e1f542015adcf1b90d"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\.claude\\launch.json": {
+    "mtime": 1781526409.185081,
+    "ast_hash": "e3c85b5e6cb32165a42ff31548b622b2",
+    "semantic_hash": "e3c85b5e6cb32165a42ff31548b622b2"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\.claude\\settings.local.json": {
+    "mtime": 1781531654.717335,
+    "ast_hash": "5d789fb3d2856d43cae9e3eabdc559ce",
+    "semantic_hash": "5d789fb3d2856d43cae9e3eabdc559ce"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\public\\modules\\github.js": {
+    "mtime": 1784182031.7224922,
+    "ast_hash": "711a8b5225b2d440c55969c9eeaf01a6",
+    "semantic_hash": "711a8b5225b2d440c55969c9eeaf01a6"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\shape-cam\\run_sim_panel.sh": {
+    "mtime": 1784183454.226628,
+    "ast_hash": "aee1d3840d648da6b983d9eb5b822505",
+    "semantic_hash": "aee1d3840d648da6b983d9eb5b822505"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\shape-cam\\shape_cam_ros.py": {
+    "mtime": 1784183454.2296295,
+    "ast_hash": "d1a19727fdaa45de927ddbb6d40e4649",
+    "semantic_hash": "d1a19727fdaa45de927ddbb6d40e4649"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\shape-cam\\shape_cam_server.py": {
+    "mtime": 1784183454.2326312,
+    "ast_hash": "63486758eec977cc5f34e6b134020190",
+    "semantic_hash": "63486758eec977cc5f34e6b134020190"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\video-digest\\video_digest.py": {
+    "mtime": 1784183454.2396295,
+    "ast_hash": "5878eec2218c358d227ff0904a1cecd3",
+    "semantic_hash": "5878eec2218c358d227ff0904a1cecd3"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\GEMINI.md": {
+    "mtime": 1785329279.5420463,
+    "ast_hash": "d0b179a5081565e7cddefd85c28b61f0",
+    "semantic_hash": "d0b179a5081565e7cddefd85c28b61f0"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\docs\\voice-ptt-and-notifications.md": {
+    "mtime": 1785597600.962741,
+    "ast_hash": "cd5196c517358013cb9173dbb79b5b6c",
+    "semantic_hash": "cd5196c517358013cb9173dbb79b5b6c"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\notes\\custom-mcp-servers.md": {
+    "mtime": 1784344952.671097,
+    "ast_hash": "389c0dac68c0e190314e9920ad936d51",
+    "semantic_hash": "389c0dac68c0e190314e9920ad936d51"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\notes\\Ray Dalio Economic Machine & Subprime Crisis.md": {
+    "mtime": 1785234643.7049904,
+    "ast_hash": "0516290f46e51a71804a41358436a144",
+    "semantic_hash": "0516290f46e51a71804a41358436a144"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\notes\\tia-portal-automation.md": {
+    "mtime": 1784344991.3415573,
+    "ast_hash": "fe13061a9a998a5abadc06008b98467f",
+    "semantic_hash": "fe13061a9a998a5abadc06008b98467f"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\notes\\tia-portal-usage-guide.md": {
+    "mtime": 1784345000.2188895,
+    "ast_hash": "393ec563488a4706340e5f417d2f4abc",
+    "semantic_hash": "393ec563488a4706340e5f417d2f4abc"
+  },
+  "C:\\Users\\wicha\\Desktop\\powerfull_note\\presentation-inflation\\index.html": {
+    "mtime": 1784812389.2569678,
+    "ast_hash": "4c088ac54792aacc045df878bdebe84c",
+    "semantic_hash": "4c088ac54792aacc045df878bdebe84c"
   }
 }

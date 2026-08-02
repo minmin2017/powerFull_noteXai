@@ -13,3 +13,21 @@ simulation/
 *.wav
 *.mp3
 *.mp4
+*.pdf
+
+# Vendored MCP servers — each is someone else's repo with its own docs and
+# build output. Indexing them added ~300 files of noise and bloated graph.json
+# past the point where querying it beats just reading the code (same failure
+# mode as the animation project that indexed all of manim).
+tools/
+
+# agent scratch output, not source
+reply*.json
+__pycache__/
+*.pyc
+*.log
+*.log.err
+.last_voice_ts.txt
+.notify_daemon_seen_ts.txt
+data/
+notes/.obsidian/
