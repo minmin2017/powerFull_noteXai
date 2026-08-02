@@ -131,6 +131,8 @@ export default function setupVoice({ api, toast, localActiveSectionRef }) {
   // --- Groq / Local Whisper (MediaRecorder) ---
   let mediaRecorder = null;
   let audioChunks = [];
+  let activeMode = null; // "groq" | "local" | "webspeech" — which path started the in-progress recording
+  let autoSubmit = false; // true when triggered remotely (global Alt+P → webspeech) — send on stop instead of filling the input
 
   async function startGroqRecording() {
     try {
@@ -145,7 +147,7 @@ export default function setupVoice({ api, toast, localActiveSectionRef }) {
         setMicUI(false);
         if (!shouldSubmit) return; // cancelled
         const blob = new Blob(audioChunks, { type: "audio/webm" });
-        const isLocal = sttModel === "local";
+        const isLocal = activeMode === "local";
         try {
           const lang = isThai() ? "th" : "en";
           let fullText = "";
@@ -221,13 +223,16 @@ export default function setupVoice({ api, toast, localActiveSectionRef }) {
   function setMicUI(active) {
     document.getElementById("mic-btn").classList.toggle("listening", active);
     document.getElementById("mic-cancel").hidden = !active;
+    document.body.classList.toggle("ptt-recording", active);
   }
 
-  function startListening() {
+  function startListening(forceWebSpeech = false) {
+    autoSubmit = forceWebSpeech;
+    activeMode = forceWebSpeech ? "webspeech" : (sttModel === "groq" || sttModel === "local") ? sttModel : "webspeech";
     finalBuf = "";
     listening = true;
     setMicUI(true);
-    if (sttModel === "groq" || sttModel === "local") {
+    if (activeMode === "groq" || activeMode === "local") {
       document.getElementById("voice-status").textContent = isThai()
         ? "กำลังอัดเสียง… (กดไมค์ = ส่ง · ✕ = ยกเลิก)"
         : "Recording… (mic = send · ✕ = cancel)";
@@ -243,7 +248,7 @@ export default function setupVoice({ api, toast, localActiveSectionRef }) {
   }
 
   function stopListening() {
-    if (sttModel === "groq" || sttModel === "local") {
+    if (activeMode === "groq" || activeMode === "local") {
       if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     } else {
       listening = false;
@@ -254,16 +259,25 @@ export default function setupVoice({ api, toast, localActiveSectionRef }) {
       ).trim();
       document.getElementById("voice-interim").textContent = "";
       if (text) {
-        const inp = document.getElementById("text-input");
-        inp.value = text;
-        inp.focus();
-        inp.select();
-        document.getElementById("voice-status").textContent =
-          "แก้ข้อความได้ แล้วกด Enter หรือ ส่ง";
-        setTimeout(() => {
-          if (!listening)
-            document.getElementById("voice-status").textContent = idleStatus();
-        }, 4000);
+        if (autoSubmit) {
+          submitUserInput(text);
+          document.getElementById("voice-status").textContent = isThai() ? "ส่งแล้ว ✓" : "Sent ✓";
+          setTimeout(() => {
+            if (!listening)
+              document.getElementById("voice-status").textContent = idleStatus();
+          }, 1500);
+        } else {
+          const inp = document.getElementById("text-input");
+          inp.value = text;
+          inp.focus();
+          inp.select();
+          document.getElementById("voice-status").textContent =
+            "แก้ข้อความได้ แล้วกด Enter หรือ ส่ง";
+          setTimeout(() => {
+            if (!listening)
+              document.getElementById("voice-status").textContent = idleStatus();
+          }, 4000);
+        }
       } else {
         document.getElementById("voice-status").textContent = idleStatus();
       }
@@ -272,13 +286,14 @@ export default function setupVoice({ api, toast, localActiveSectionRef }) {
 
   function cancelListening() {
     listening = false;
-    if (sttModel === "groq" || sttModel === "local") {
+    if (activeMode === "groq" || activeMode === "local") {
       if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     } else {
       try { recog.stop(); } catch {}
     }
     setMicUI(false);
     finalBuf = "";
+    autoSubmit = false;
     document.getElementById("voice-interim").textContent = "";
     document.getElementById("voice-status").textContent = isThai() ? "ยกเลิกแล้ว" : "Cancelled";
     setTimeout(() => {
@@ -312,4 +327,52 @@ export default function setupVoice({ api, toast, localActiveSectionRef }) {
     if (e.key === "Enter") sendFromInput();
   });
   document.getElementById("send-btn").addEventListener("click", sendFromInput);
+
+  // --- Global push-to-talk (Alt+P, system-wide via global_ptt.py) ---
+  // The hotkey itself is handled by a native script outside the browser. Default mode
+  // ("record") just records locally via ffmpeg + local/Groq whisper — this tab only
+  // needs to show the glow. mode "webspeech" means the native script briefly focused
+  // this browser window so the page itself can drive the (fast, in-browser) Web
+  // Speech API — start/stop the same recognizer the mic button uses, and auto-send
+  // the result since nobody's here to click send.
+  window.__wsOnPtt = (active, mode) => {
+    document.body.classList.toggle("ptt-recording", active);
+    if (mode !== "webspeech") return;
+    if (active) {
+      if (!listening) startListening(true);
+    } else if (listening && activeMode === "webspeech") {
+      stopListening();
+    }
+  };
+
+  // --- Local push-to-talk: hold "P" (no Alt needed) while this tab already has
+  // focus — fires straight off the browser's own keydown, so it's instant with no
+  // Python/WS round-trip. Alt+P (above) covers the case where the tab ISN'T focused.
+  // Both paths converge on the same startListening/stopListening, guarded by
+  // `listening`, so pressing P while the global hotkey is also mid-fire is a no-op.
+  let localPttDown = false;
+  function isEditableTarget(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    return el.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  }
+  window.addEventListener("keydown", (e) => {
+    if (e.key.toLowerCase() !== "p" || e.repeat) return;
+    if (isEditableTarget(document.activeElement)) return;
+    if (listening || localPttDown) return;
+    localPttDown = true;
+    startListening(true);
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.key.toLowerCase() !== "p") return;
+    if (!localPttDown) return;
+    localPttDown = false;
+    stopListening();
+  });
+  window.addEventListener("blur", () => {
+    if (localPttDown) {
+      localPttDown = false;
+      stopListening();
+    }
+  });
 }

@@ -10,7 +10,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, execSync, execFile } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import os from "node:os";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -995,40 +995,70 @@ app.get("/api/media", (req, res) => {
 });
 
 // ---- Text-to-Speech (edge-tts, Thai neural voice) ----
-// Resolves the CLI to an absolute path since `pip install --user` puts it in
-// ~/.local/bin, which may not be on the PATH the server process inherited.
-const EDGE_TTS_BIN = (() => {
-  const candidate = path.join(os.homedir(), ".local", "bin", "edge-tts");
-  try {
-    if (fs.existsSync(candidate)) return candidate;
-  } catch {}
-  return "edge-tts"; // fall back to PATH lookup
-})();
+// Persistent worker (mirrors the faster-whisper worker below): a fresh
+// `edge-tts` CLI process per request cost ~1-3s of Python startup + a brand
+// new synthesis before ANY audio could play — that was the "laggy TTS"
+// latency. This keeps one process alive and streams MP3 bytes to the HTTP
+// response as edge-tts generates them, so playback can start almost
+// immediately instead of waiting for the whole clip.
+const VALID_TTS_VOICES = { female: "th-TH-PremwadeeNeural", male: "th-TH-NiwatNeural" };
+let ttsWorker = null;
+let ttsReady = false;
+const ttsQueue = [];
+let ttsCurrentJob = null;
 
-// GET /api/tts?text=... → synthesize Thai speech via edge-tts CLI and stream
-// back an mp3. Text is passed through execFile's args array (never a shell
-// string) so it can never be interpreted as a shell command.
+function ttsProcessNext() {
+  if (!ttsReady || ttsCurrentJob || ttsQueue.length === 0) return;
+  ttsCurrentJob = ttsQueue.shift();
+  const { voice, text } = ttsCurrentJob;
+  ttsCurrentJob.res.setHeader("Content-Type", "audio/mpeg");
+  ttsWorker.stdin.write(`${voice}|${text}\n`);
+}
+
+function spawnTtsWorker() {
+  if (ttsWorker) { try { ttsWorker.kill(); } catch {} }
+  ttsReady = false;
+  ttsWorker = spawn("python", [path.join(__dirname, "tts_worker.py")]);
+  ttsWorker.stdout.on("data", (chunk) => {
+    if (ttsCurrentJob) ttsCurrentJob.res.write(chunk);
+  });
+  let stderrBuf = "";
+  ttsWorker.stderr.on("data", (d) => {
+    stderrBuf += d.toString();
+    const lines = stderrBuf.split("\n");
+    stderrBuf = lines.pop();
+    for (const line of lines.map((l) => l.trim()).filter(Boolean)) {
+      if (line === "READY") { ttsReady = true; console.log("[TTS] worker ready ✓"); ttsProcessNext(); continue; }
+      if (line === "DONE" || line.startsWith("ERROR:")) {
+        if (line.startsWith("ERROR:")) console.error("[TTS]", line);
+        if (ttsCurrentJob) { ttsCurrentJob.res.end(); ttsCurrentJob = null; }
+        ttsProcessNext();
+        continue;
+      }
+    }
+  });
+  ttsWorker.on("close", (code) => {
+    if (code === null) return; // killed intentionally
+    console.log(`[TTS] worker exited: ${code} — restarting in 3s`);
+    ttsWorker = null; ttsReady = false;
+    if (ttsCurrentJob) { ttsCurrentJob.res.end(); ttsCurrentJob = null; }
+    setTimeout(spawnTtsWorker, 3000);
+  });
+}
+spawnTtsWorker();
+
+// GET /api/tts?text=...&voice=female|male → streamed Thai speech (mp3 chunks
+// arrive as they're synthesized, not after the whole clip finishes).
 app.get("/api/tts", (req, res) => {
   const text = String(req.query.text || "").slice(0, 3000);
   if (!text.trim()) return res.status(400).json({ error: "missing text" });
-
-  const tmpFile = path.join(os.tmpdir(), `pn_tts_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.mp3`);
-  const args = ["--voice", "th-TH-PremwadeeNeural", "--text", text, "--write-media", tmpFile];
-  execFile(EDGE_TTS_BIN, args, { timeout: 60000 }, (err, stdout, stderr) => {
-    if (err) {
-      console.error("[tts] edge-tts failed:", err.message, stderr || "");
-      try { fs.unlinkSync(tmpFile); } catch {}
-      return res.status(500).json({ error: "tts generation failed" });
-    }
-    if (!fs.existsSync(tmpFile)) {
-      return res.status(500).json({ error: "tts produced no output" });
-    }
-    res.setHeader("Content-Type", "audio/mpeg");
-    const stream = fs.createReadStream(tmpFile);
-    const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch {} };
-    stream.on("close", cleanup);
-    stream.on("error", cleanup);
-    stream.pipe(res);
+  const voice = VALID_TTS_VOICES[req.query.voice] || VALID_TTS_VOICES.female;
+  const job = { voice, text: text.replace(/\n/g, " "), res };
+  ttsQueue.push(job);
+  ttsProcessNext();
+  res.on("close", () => {
+    const qi = ttsQueue.indexOf(job);
+    if (qi !== -1) ttsQueue.splice(qi, 1);
   });
 });
 
@@ -1553,8 +1583,9 @@ app.post("/api/agent-listener", (req, res) => {
   const secId = resolveSectionKey(secKey);
   const sec = state.chatSections.find((s) => s.id === secId);
   if (sec && ["claude", "gemini", "both"].includes(b.agentListener)) {
+    const isChange = sec.agentListener !== b.agentListener;
     sec.agentListener = b.agentListener;
-    changed();
+    if (isChange) changed();
     res.json({ agentListener: sec.agentListener });
   } else {
     res.status(400).json({ error: "Invalid section or agentListener" });
@@ -1569,6 +1600,16 @@ app.post("/api/calendar", (req, res) => {
   calendarCache = { events: Array.isArray(events) ? events : [], fetchedAt: Date.now() };
   broadcastRaw({ type: "calendar", ...calendarCache });
   res.json({ ok: true, count: calendarCache.events.length });
+});
+
+// Global push-to-talk (system-wide Alt+P hotkey, see global_ptt.py) tells every
+// open browser tab to show/hide the recording glow, even though the hotkey
+// itself fires outside the browser.
+app.post("/api/ptt", (req, res) => {
+  const active = !!(req.body || {}).active;
+  const mode = (req.body || {}).mode === "webspeech" ? "webspeech" : "record";
+  broadcastRaw({ type: "ptt", active, mode });
+  res.json({ ok: true, active, mode });
 });
 
 app.patch("/api/meta", (req, res) => {

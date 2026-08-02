@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>Latest</LangVersion>
+    <OutputType>Exe</OutputType>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>PlcSimMcp</AssemblyName>
+    <RootNamespace>PlcSimMcp</RootNamespace>
+    <AssemblyVersion>0.1.0</AssemblyVersion>
+    <BaseOutputPath>.\bin</BaseOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0-preview.4.25258.110" />
+    <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The Simulation Runtime API is loaded at runtime via AssemblyResolve
+         (see Program.cs). CopyLocal=false so we always bind against the
+         installed copy and its sibling native/managed dependencies. -->
+    <Reference Include="Siemens.Simatic.Simulation.Runtime.Api.x64">
+      <HintPath>D:\sieman_plc\PLCSIM_V20\resources\bin\wwwroot\assets\lib\runtime\Siemens.Simatic.Simulation.Runtime.Api.x64.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

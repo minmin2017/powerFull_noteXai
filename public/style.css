@@ -305,6 +305,31 @@ body.col-resizing {
 }
 
 /* ===================== Voice area ===================== */
+.settings-details {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.settings-details summary {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: background 0.15s, color 0.15s;
+}
+.settings-details summary:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.settings-details > .drag-block {
+  border-top: none; /* remove inner borders since details has one */
+}
+.drag-block { cursor: grab; transition: opacity 0.2s, background 0.2s; }
+.drag-block:active { cursor: grabbing; }
+.drag-block.dragging { opacity: 0.4; }
 .model-switcher {
   border-top: 1px solid var(--line);
   padding: 10px 14px;
@@ -394,6 +419,24 @@ body.col-resizing {
   border-color: #059669;
   color: #fff;
 }
+.tts-voice-btn {
+  flex: 1;
+  padding: 5px 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tts-voice-btn:hover { border-color: var(--accent); }
+.tts-voice-btn.active {
+  background: #d946ef;
+  border-color: #d946ef;
+  color: #fff;
+}
 
 .voice-area {
   border-top: 1px solid var(--line);
@@ -471,6 +514,31 @@ body.col-resizing {
   0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
   70%  { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* Push-to-talk (hold "P") recording indicator — glowing orange screen edge */
+body.ptt-recording::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  box-shadow: inset 0 0 0 4px rgba(255, 140, 0, 0.9), inset 0 0 40px 10px rgba(255, 140, 0, 0.55);
+  animation: ptt-pulse 1.1s ease-in-out infinite;
+}
+@keyframes ptt-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 4px rgba(255, 140, 0, 0.85), inset 0 0 30px 8px rgba(255, 140, 0, 0.45); }
+  50%      { box-shadow: inset 0 0 0 6px rgba(255, 165, 40, 1), inset 0 0 55px 16px rgba(255, 140, 0, 0.75); }
+}
+
+/* Active chat section is listened to by Gemini (not Claude) — steady blue screen-edge border */
+body.gemini-mode::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  box-shadow: inset 0 0 0 4px rgba(59, 130, 246, 0.85), inset 0 0 30px 8px rgba(59, 130, 246, 0.35);
 }
 .mic-cancel {
   flex: 0 0 auto;
@@ -1316,6 +1384,58 @@ body.col-resizing {
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* ===================== Message banner (Messenger-style popup) ===================== */
+.msg-banner {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-24px);
+  min-width: 260px;
+  max-width: 420px;
+  background: #111827;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 12px 34px 12px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s;
+  z-index: 200;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.msg-banner.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.msg-banner-head {
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--accent);
+}
+.msg-banner-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+.msg-banner-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.msg-banner-close:hover {
+  opacity: 1;
 }
 
 /* ===================== Handwriting boxes ===================== */

@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>การเงินและเงินเฟ้อ สำหรับคนทำงาน</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&display=swap');
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  :root{
+    --ink:#1e293b;
+    --muted:#64748b;
+    --brand:#2563eb;
+    --brand-dark:#1e40af;
+    --accent:#f59e0b;
+    --good:#10b981;
+    --bad:#ef4444;
+    --paper:#ffffff;
+  }
+
+  html,body{ height:100%; }
+  body{
+    font-family:'Sarabun',sans-serif;
+    background:#0f172a;
+    color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh;
+    padding:20px;
+    overflow:hidden;
+  }
+
+  .deck{
+    width:min(1000px,100%);
+    aspect-ratio:16/10;
+    max-height:92vh;
+    background:var(--paper);
+    border-radius:24px;
+    box-shadow:0 40px 80px rgba(0,0,0,.5);
+    position:relative;
+    overflow:hidden;
+  }
+
+  .slide{
+    position:absolute; inset:0;
+    padding:56px 60px;
+    display:none;
+    flex-direction:column;
+    animation:fade .5s ease;
+  }
+  .slide.active{ display:flex; }
+  @keyframes fade{ from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);} }
+
+  .kicker{
+    display:inline-flex; align-items:center; gap:8px;
+    font-size:14px; font-weight:700; letter-spacing:.5px;
+    color:var(--brand);
+    background:#eff6ff;
+    padding:6px 14px; border-radius:99px;
+    width:fit-content;
+    margin-bottom:16px;
+  }
+  h1{ font-size:40px; font-weight:800; line-height:1.15; color:var(--ink); margin-bottom:8px; }
+  h2{ font-size:34px; font-weight:800; line-height:1.2; color:var(--ink); margin-bottom:6px; }
+  .sub{ font-size:18px; color:var(--muted); font-weight:400; }
+
+  .body{ display:flex; gap:36px; flex:1; align-items:center; margin-top:20px; }
+  .col-text{ flex:1; }
+  .col-art{ flex:0 0 42%; display:flex; align-items:center; justify-content:center; }
+  .col-art svg{ width:100%; height:auto; max-height:340px; filter:drop-shadow(0 12px 24px rgba(0,0,0,.12)); }
+
+  .point{ display:flex; gap:14px; margin-bottom:18px; align-items:flex-start; }
+  .point .ic{
+    flex:0 0 40px; height:40px; border-radius:12px;
+    background:#eff6ff; color:var(--brand);
+    display:flex; align-items:center; justify-content:center; font-size:20px;
+  }
+  .point .tx b{ display:block; font-size:18px; color:var(--ink); font-weight:700; }
+  .point .tx span{ font-size:15px; color:var(--muted); line-height:1.45; }
+
+  .example{
+    margin-top:14px;
+    background:linear-gradient(135deg,#fff7ed,#fef3c7);
+    border-left:5px solid var(--accent);
+    border-radius:12px;
+    padding:16px 18px;
+  }
+  .example .lbl{ font-size:13px; font-weight:700; color:#b45309; letter-spacing:.5px; }
+  .example p{ font-size:15.5px; color:#78350f; margin-top:4px; line-height:1.5; }
+  .example b{ color:#92400e; }
+
+  /* cover */
+  .cover{ background:linear-gradient(135deg,#1e3a8a,#2563eb 55%,#3b82f6); color:#fff; justify-content:center; }
+  .cover h1{ color:#fff; font-size:52px; }
+  .cover .sub{ color:#dbeafe; font-size:22px; margin-top:12px; max-width:560px; }
+  .cover .kicker{ background:rgba(255,255,255,.15); color:#fff; }
+  .cover .cover-art{ position:absolute; right:-20px; bottom:-20px; width:46%; opacity:.95; }
+  .cover .tags{ display:flex; gap:10px; margin-top:28px; flex-wrap:wrap; }
+  .cover .tag{ background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.25); padding:8px 16px; border-radius:99px; font-size:15px; font-weight:600; }
+
+  /* summary */
+  .cards{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:24px; }
+  .card{ background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:18px 20px; display:flex; gap:14px; align-items:flex-start; }
+  .card .n{ flex:0 0 36px; height:36px; border-radius:10px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px; }
+  .card b{ display:block; font-size:16.5px; margin-bottom:2px; }
+  .card span{ font-size:14px; color:var(--muted); line-height:1.4; }
+
+  /* controls */
+  .nav{ position:absolute; bottom:22px; right:28px; display:flex; align-items:center; gap:14px; z-index:10; }
+  .nav button{
+    border:none; cursor:pointer;
+    width:44px; height:44px; border-radius:50%;
+    background:var(--brand); color:#fff; font-size:20px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 6px 16px rgba(37,99,235,.4);
+    transition:transform .15s, background .15s;
+  }
+  .nav button:hover{ transform:scale(1.08); }
+  .nav button:disabled{ background:#cbd5e1; box-shadow:none; cursor:default; transform:none; }
+  .counter{ font-size:15px; font-weight:700; color:var(--muted); min-width:46px; text-align:center; }
+  .cover .nav .counter{ color:#dbeafe; }
+
+  .dots{ position:absolute; bottom:30px; left:60px; display:flex; gap:8px; z-index:10; }
+  .dot{ width:9px; height:9px; border-radius:50%; background:#cbd5e1; cursor:pointer; transition:.2s; }
+  .dot.on{ background:var(--brand); width:26px; border-radius:5px; }
+  .cover .dot{ background:rgba(255,255,255,.4); }
+  .cover .dot.on{ background:#fff; }
+
+  .page-tag{ position:absolute; top:24px; right:32px; font-size:13px; font-weight:700; color:var(--muted); letter-spacing:1px; }
+  .cover .page-tag{ color:#dbeafe; }
+
+  @media (max-width:720px){
+    .slide{ padding:32px 26px; }
+    h1{font-size:30px;} h2{font-size:26px;} .cover h1{font-size:38px;}
+    .body{ flex-direction:column; gap:16px; }
+    .col-art{ flex:0 0 auto; max-width:60%; }
+    .cards{ grid-template-columns:1fr; }
+    .dots{ left:26px; }
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- ===================== SLIDE 1 : COVER ===================== -->
+  <section class="slide cover active">
+    <span class="page-tag">FINANCE 101</span>
+    <span class="kicker">💡 คู่มือฉบับเข้าใจง่าย</span>
+    <h1>การเงินและเงินเฟ้อ<br>สำหรับคนทำงาน</h1>
+    <p class="sub">รู้ทันเงินเฟ้อ เพื่อไม่ให้เงินเดือนที่หามาอย่างหนัก… ค่อย ๆ หายไปเงียบ ๆ</p>
+    <div class="tags">
+      <span class="tag">☕ เข้าใจใน 5 นาที</span>
+      <span class="tag">📊 มีตัวอย่างจริง</span>
+      <span class="tag">✅ ใช้ได้ทันที</span>
+    </div>
+
+    <!-- Cover illustration: coins + upward arrow + city -->
+    <svg class="cover-art" viewBox="0 0 420 380" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="coinG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/>
+        </linearGradient>
+        <linearGradient id="jarG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#bfdbfe" stop-opacity=".5"/><stop offset="1" stop-color="#60a5fa" stop-opacity=".6"/>
+        </linearGradient>
+      </defs>
+      <!-- jar -->
+      <path d="M120 200 q-10 0 -10 12 v120 q0 20 20 20 h140 q20 0 20 -20 v-120 q0 -12 -10 -12 z" fill="url(#jarG)" stroke="#93c5fd" stroke-width="3"/>
+      <rect x="112" y="182" width="196" height="24" rx="8" fill="#dbeafe" stroke="#93c5fd" stroke-width="3"/>
+      <!-- coins stack inside -->
+      <g>
+        <ellipse cx="200" cy="330" rx="70" ry="16" fill="url(#coinG)" stroke="#d97706" stroke-width="2"/>
+        <ellipse cx="200" cy="312" rx="70" ry="16" fill="url(#coinG)" stroke="#d97706" stroke-width="2"/>
+        <ellipse cx="200" cy="294" rx="60" ry="14" fill="url(#coinG)" stroke="#d97706" stroke-width="2"/>
+        <ellipse cx="200" cy="278" rx="60" ry="14" fill="url(#coinG)" stroke="#d97706" stroke-width="2"/>
+      </g>
+      <!-- floating coin with $ -->
+      <g transform="translate(300 90)">
+        <circle r="38" fill="url(#coinG)" stroke="#d97706" stroke-width="3"/>
+        <circle r="30" fill="none" stroke="#fbbf24" stroke-width="2"/>
+        <text x="0" y="14" font-size="42" font-weight="800" fill="#b45309" text-anchor="middle" font-family="Sarabun">฿</text>
+      </g>
+      <!-- up arrow -->
+      <path d="M60 250 L60 150 L40 150 L90 90 L140 150 L120 150 L120 250 Z" fill="#34d399" stroke="#059669" stroke-width="2" opacity=".95"/>
+    </svg>
+
+    <div class="dots"></div>
+    <div class="nav">
+      <span class="counter"></span>
+      <button class="prev">‹</button>
+      <button class="next">›</button>
+    </div>
+  </section>
+
+  <!-- ===================== SLIDE 2 : เงินเฟ้อคืออะไร ===================== -->
+  <section class="slide">
+    <span class="page-tag">01</span>
+    <span class="kicker">🔍 พื้นฐานที่ต้องรู้</span>
+    <h2>เงินเฟ้อ คืออะไร?</h2>
+    <p class="sub">คือภาวะที่ “ข้าวของแพงขึ้นเรื่อย ๆ” ทำให้เงินเท่าเดิมซื้อของได้น้อยลง</p>
+
+    <div class="body">
+      <div class="col-text">
+        <div class="point">
+          <div class="ic">📈</div>
+          <div class="tx"><b>ราคาสินค้าค่อย ๆ สูงขึ้น</b>
+          <span>ทั้งอาหาร ค่าเดินทาง ค่าเช่า ขยับขึ้นทีละนิดทุกปี</span></div>
+        </div>
+        <div class="point">
+          <div class="ic">💸</div>
+          <div class="tx"><b>เงินมี “อำนาจซื้อ” ลดลง</b>
+          <span>เงิน 100 บาทวันนี้ ปีหน้าซื้อของได้ไม่ครบเท่าเดิม</span></div>
+        </div>
+        <div class="point">
+          <div class="ic">🌡️</div>
+          <div class="tx"><b>ไทยเฉลี่ยราว 2–3% ต่อปี</b>
+          <span>ดูน้อย แต่สะสมหลายปีกลายเป็นก้อนใหญ่</span></div>
+        </div>
+
+        <div class="example">
+          <span class="lbl">☕ ตัวอย่างง่าย ๆ</span>
+          <p>กาแฟแก้วโปรดเมื่อ 10 ปีก่อน <b>35 บาท</b> วันนี้กลายเป็น <b>55–60 บาท</b> — กาแฟแก้วเดิม แต่ต้องจ่ายเงินมากขึ้น นั่นแหละคือ “เงินเฟ้อ”</p>
+        </div>
+      </div>
+
+      <div class="col-art">
+        <!-- illustration: coffee cup with rising price tags -->
+        <svg viewBox="0 0 320 340" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="cupG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#ea580c"/></linearGradient>
+          </defs>
+          <!-- steam -->
+          <path d="M120 60 q10 -18 0 -34 q-10 -14 0 -28" fill="none" stroke="#fcd34d" stroke-width="6" stroke-linecap="round" opacity=".8"/>
+          <path d="M150 60 q10 -18 0 -34 q-10 -14 0 -28" fill="none" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" opacity=".8"/>
+          <path d="M180 60 q10 -18 0 -34 q-10 -14 0 -28" fill="none" stroke="#fcd34d" stroke-width="6" stroke-linecap="round" opacity=".8"/>
+          <!-- saucer -->
+          <ellipse cx="150" cy="300" rx="120" ry="24" fill="#fed7aa"/>
+          <!-- cup -->
+          <path d="M80 110 h140 l-14 150 q-4 34 -40 34 h-32 q-36 0 -40 -34 z" fill="url(#cupG)" stroke="#c2410c" stroke-width="4"/>
+          <path d="M96 128 h128" stroke="#fff7ed" stroke-width="8" stroke-linecap="round" opacity=".6"/>
+          <!-- handle -->
+          <path d="M220 150 q56 4 52 56 q-4 44 -56 44" fill="none" stroke="#c2410c" stroke-width="14" stroke-linecap="round"/>
+          <!-- price tags rising -->
+          <g font-family="Sarabun" font-weight="800">
+            <g transform="translate(30 250)"><rect width="66" height="34" rx="8" fill="#fff" stroke="#94a3b8" stroke-width="2"/><text x="33" y="24" font-size="17" fill="#64748b" text-anchor="middle">฿35</text></g>
+            <g transform="translate(30 195)"><rect width="66" height="34" rx="8" fill="#fef9c3" stroke="#eab308" stroke-width="2"/><text x="33" y="24" font-size="17" fill="#a16207" text-anchor="middle">฿45</text></g>
+            <g transform="translate(30 140)"><rect width="70" height="36" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="2.5"/><text x="35" y="25" font-size="18" fill="#b91c1c" text-anchor="middle">฿58</text></g>
+          </g>
+          <path d="M64 240 L64 165" stroke="#ef4444" stroke-width="3" stroke-dasharray="5 5"/>
+          <path d="M64 158 l-7 12 h14 z" fill="#ef4444"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="dots"></div>
+    <div class="nav"><span class="counter"></span><button class="prev">‹</button><button class="next">›</button></div>
+  </section>
+
+  <!-- ===================== SLIDE 3 : ทำไมกระทบคนทำงาน ===================== -->
+  <section class="slide">
+    <span class="page-tag">02</span>
+    <span class="kicker">👔 เรื่องใกล้ตัว</span>
+    <h2>ทำไมคนทำงานต้องสนใจ?</h2>
+    <p class="sub">เพราะเงินเดือนขึ้นช้ากว่าราคาของ — เผลอแป๊บเดียว “เงินหด” โดยไม่รู้ตัว</p>
+
+    <div class="body">
+      <div class="col-art">
+        <!-- illustration: shrinking wallet / basket -->
+        <svg viewBox="0 0 320 340" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="basketG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f87171"/><stop offset="1" stop-color="#dc2626"/></linearGradient>
+          </defs>
+          <!-- salary bill -->
+          <g transform="translate(40 40)">
+            <rect width="150" height="86" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="3"/>
+            <circle cx="75" cy="43" r="24" fill="#86efac"/>
+            <text x="75" y="52" font-size="26" font-weight="800" fill="#15803d" text-anchor="middle" font-family="Sarabun">฿</text>
+            <text x="75" y="80" font-size="12" font-weight="700" fill="#15803d" text-anchor="middle" font-family="Sarabun">เงินเดือน</text>
+          </g>
+          <!-- arrow down into basket -->
+          <path d="M115 135 L115 165" stroke="#94a3b8" stroke-width="4"/>
+          <path d="M115 172 l-9 -14 h18 z" fill="#94a3b8"/>
+          <!-- shopping basket -->
+          <g transform="translate(70 180)">
+            <path d="M0 20 h180 l-18 120 q-3 20 -24 20 H42 q-21 0 -24 -20 z" fill="url(#basketG)" stroke="#991b1b" stroke-width="4"/>
+            <rect x="-6" y="6" width="192" height="22" rx="8" fill="#ef4444" stroke="#991b1b" stroke-width="3"/>
+            <!-- fewer items -->
+            <circle cx="55" cy="70" r="20" fill="#fca5a5"/>
+            <circle cx="110" cy="90" r="18" fill="#fecaca"/>
+            <rect x="130" y="55" width="26" height="34" rx="5" fill="#fca5a5"/>
+            <!-- grid lines -->
+            <path d="M30 40 L20 150 M75 30 L75 155 M120 30 L128 155 M165 40 L172 150" stroke="#fee2e2" stroke-width="2" opacity=".6"/>
+          </g>
+          <text x="160" y="335" font-size="15" font-weight="700" fill="#dc2626" text-anchor="middle" font-family="Sarabun">เงินเท่าเดิม → ของน้อยลง</text>
+        </svg>
+      </div>
+
+      <div class="col-text">
+        <div class="point">
+          <div class="ic">🛒</div>
+          <div class="tx"><b>ค่าครองชีพสูงขึ้น</b>
+          <span>เงินเดือนก้อนเดิม แต่ปลายเดือนเหลือเก็บน้อยลง</span></div>
+        </div>
+        <div class="point">
+          <div class="ic">⏳</div>
+          <div class="tx"><b>เงินเก็บ “นิ่ง” = ค่อย ๆ จน</b>
+          <span>ถ้าเงินไม่โต แต่ของแพงขึ้น เท่ากับจนลงทุกปี</span></div>
+        </div>
+        <div class="point">
+          <div class="ic">📉</div>
+          <div class="tx"><b>เงินเดือนขึ้นไม่ทันของ</b>
+          <span>ขึ้นเงินเดือน 3% แต่ของแพง 4% = รายได้จริงลด</span></div>
+        </div>
+
+        <div class="example">
+          <span class="lbl">🧾 ลองคิดดู</span>
+          <p>ถ้าค่าครองชีพขึ้นปีละ <b>3%</b> ค่าใช้จ่าย <b>20,000 บาท/เดือน</b> วันนี้ อีก 10 ปีจะกลายเป็นราว <b>26,900 บาท/เดือน</b> ทั้งที่ใช้ชีวิตแบบเดิม</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="dots"></div>
+    <div class="nav"><span class="counter"></span><button class="prev">‹</button><button class="next">›</button></div>
+  </section>
+
+  <!-- ===================== SLIDE 4 : เงินในบัญชีแพ้เงินเฟ้อ ===================== -->
+  <section class="slide">
+    <span class="page-tag">03</span>
+    <span class="kicker">⚠️ กับดักที่คนมองข้าม</span>
+    <h2>ฝากเงินเฉย ๆ… แพ้เงินเฟ้อ</h2>
+    <p class="sub">ดอกเบี้ยออมทรัพย์มักต่ำกว่าเงินเฟ้อ เงินในบัญชีจึง “โตช้ากว่าราคาของ”</p>
+
+    <div class="body">
+      <div class="col-text">
+        <div class="point">
+          <div class="ic">🏦</div>
+          <div class="tx"><b>ดอกเบี้ยออมทรัพย์ ≈ 0.25–0.5%</b>
+          <span>ขณะที่เงินเฟ้อ 2–3% → เงินโตไม่ทันของแพง</span></div>
+        </div>
+        <div class="point">
+          <div class="ic">🔻</div>
+          <div class="tx"><b>“มูลค่าจริง” ของเงินลดลง</b>
+          <span>ตัวเลขในบัญชีเท่าเดิม แต่ซื้อของได้น้อยลง</span></div>
+        </div>
+        <div class="point">
+          <div class="ic">🧭</div>
+          <div class="tx"><b>ต้องให้เงิน “ทำงาน” ต่อ</b>
+          <span>กระจายบางส่วนไปที่ผลตอบแทนสูงกว่าเงินเฟ้อ</span></div>
+        </div>
+
+        <div class="example">
+          <span class="lbl">💰 ตัวอย่างเห็นภาพ</span>
+          <p>ฝาก <b>100,000 บาท</b> ดอกเบี้ย 0.5% ปีหน้าได้ <b>100,500 บาท</b> แต่ถ้าเงินเฟ้อ 3% ต้องมี <b>103,000 บาท</b> ถึงจะซื้อของชุดเดิมได้ → <b>ขาดไป 2,500 บาท</b></p>
+        </div>
+      </div>
+
+      <div class="col-art">
+        <!-- illustration: two bars race, savings vs inflation -->
+        <svg viewBox="0 0 320 340" xmlns="http://www.w3.org/2000/svg">
+          <line x1="40" y1="290" x2="300" y2="290" stroke="#cbd5e1" stroke-width="3"/>
+          <!-- savings bar (short) -->
+          <g>
+            <rect x="70" y="230" width="70" height="60" rx="8" fill="#60a5fa"/>
+            <rect x="70" y="230" width="70" height="16" rx="8" fill="#93c5fd"/>
+            <circle cx="105" cy="200" r="26" fill="#dbeafe" stroke="#3b82f6" stroke-width="3"/>
+            <text x="105" y="209" font-size="24" text-anchor="middle" font-family="Sarabun">🏦</text>
+            <text x="105" y="315" font-size="14" font-weight="700" fill="#2563eb" text-anchor="middle" font-family="Sarabun">เงินฝาก</text>
+            <text x="105" y="333" font-size="13" fill="#64748b" text-anchor="middle" font-family="Sarabun">+0.5%</text>
+          </g>
+          <!-- inflation bar (tall) -->
+          <g>
+            <rect x="200" y="110" width="70" height="180" rx="8" fill="#f87171"/>
+            <rect x="200" y="110" width="70" height="16" rx="8" fill="#fca5a5"/>
+            <circle cx="235" cy="80" r="26" fill="#fee2e2" stroke="#ef4444" stroke-width="3"/>
+            <text x="235" y="89" font-size="24" text-anchor="middle" font-family="Sarabun">🔥</text>
+            <text x="235" y="315" font-size="14" font-weight="700" fill="#dc2626" text-anchor="middle" font-family="Sarabun">เงินเฟ้อ</text>
+            <text x="235" y="333" font-size="13" fill="#64748b" text-anchor="middle" font-family="Sarabun">+3%</text>
+          </g>
+          <!-- gap marker -->
+          <path d="M150 150 q30 -10 44 0" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="4 4"/>
+          <text x="172" y="140" font-size="13" font-weight="800" fill="#d97706" text-anchor="middle" font-family="Sarabun">แพ้!</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="dots"></div>
+    <div class="nav"><span class="counter"></span><button class="prev">‹</button><button class="next">›</button></div>
+  </section>
+
+  <!-- ===================== SLIDE 5 : วิธีรับมือ ===================== -->
+  <section class="slide">
+    <span class="page-tag">04</span>
+    <span class="kicker">🛡️ ลงมือได้เลย</span>
+    <h2>4 วิธีเอาชนะเงินเฟ้อ</h2>
+    <p class="sub">ไม่ต้องเป็นผู้เชี่ยวชาญ แค่เริ่มทำ 4 ข้อนี้ก็รักษามูลค่าเงินไว้ได้</p>
+
+    <div class="body" style="margin-top:10px;">
+      <div class="col-text" style="flex:1;">
+        <div class="cards" style="margin-top:6px;">
+          <div class="card"><div class="n">1</div><div><b>💵 ทำงบ + มีเงินสำรอง</b><span>รู้รายรับ-รายจ่าย กันเงินฉุกเฉิน 3–6 เดือน</span></div></div>
+          <div class="card"><div class="n">2</div><div><b>📈 ลงทุนให้ชนะเงินเฟ้อ</b><span>กองทุนรวม/หุ้น/ทองคำ กระจายความเสี่ยง ลงสม่ำเสมอ</span></div></div>
+          <div class="card"><div class="n">3</div><div><b>🎯 ใช้สิทธิลดหย่อนภาษี</b><span>RMF/SSF/PVD ได้ทั้งลงทุนและประหยัดภาษี</span></div></div>
+          <div class="card"><div class="n">4</div><div><b>🚀 เพิ่มรายได้ + อัปสกิล</b><span>พัฒนาทักษะ เพิ่มมูลค่าตัวเอง รายได้โตเร็วกว่าของแพง</span></div></div>
+        </div>
+        <div class="example" style="margin-top:18px;">
+          <span class="lbl">🌱 พลังของการลงทุนสม่ำเสมอ</span>
+          <p>ลงทุนเดือนละ <b>3,000 บาท</b> ได้ผลตอบแทนเฉลี่ย 7% ต่อปี ครบ 10 ปี เงินต้น 360,000 อาจโตเป็นราว <b>510,000 บาท</b> — ชนะเงินเฟ้อสบาย ๆ</p>
+        </div>
+      </div>
+
+      <div class="col-art" style="flex:0 0 34%;">
+        <!-- illustration: plant growing from coins -->
+        <svg viewBox="0 0 260 340" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="potG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#d97706"/></linearGradient>
+          </defs>
+          <!-- coins base -->
+          <ellipse cx="130" cy="300" rx="90" ry="20" fill="#fde68a" stroke="#d97706" stroke-width="2"/>
+          <ellipse cx="130" cy="282" rx="90" ry="20" fill="#fcd34d" stroke="#d97706" stroke-width="2"/>
+          <ellipse cx="130" cy="264" rx="78" ry="18" fill="#fde68a" stroke="#d97706" stroke-width="2"/>
+          <text x="130" y="290" font-size="20" font-weight="800" fill="#b45309" text-anchor="middle" font-family="Sarabun">฿ ฿ ฿</text>
+          <!-- stem -->
+          <path d="M130 260 C130 200 128 170 130 130" fill="none" stroke="#16a34a" stroke-width="10" stroke-linecap="round"/>
+          <!-- leaves -->
+          <path d="M130 200 C90 200 70 170 74 140 C110 148 128 172 130 200 Z" fill="#4ade80" stroke="#16a34a" stroke-width="2"/>
+          <path d="M130 175 C170 175 190 145 186 116 C150 124 132 148 130 175 Z" fill="#22c55e" stroke="#15803d" stroke-width="2"/>
+          <!-- money leaves / growth -->
+          <circle cx="130" cy="105" r="34" fill="#86efac" stroke="#16a34a" stroke-width="3"/>
+          <text x="130" y="116" font-size="34" font-weight="800" fill="#15803d" text-anchor="middle" font-family="Sarabun">฿</text>
+          <!-- sparkles -->
+          <text x="70" y="90" font-size="20">✨</text>
+          <text x="180" y="80" font-size="18">✨</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="dots"></div>
+    <div class="nav"><span class="counter"></span><button class="prev">‹</button><button class="next">›</button></div>
+  </section>
+
+  <!-- ===================== SLIDE 6 : สรุป ===================== -->
+  <section class="slide cover" style="background:linear-gradient(135deg,#065f46,#059669 55%,#10b981);">
+    <span class="page-tag">SUMMARY</span>
+    <span class="kicker">📌 สรุปสั้น จำไปใช้</span>
+    <h1 style="font-size:44px;">จำ 4 ข้อนี้ให้ขึ้นใจ</h1>
+    <p class="sub" style="max-width:600px;">เงินเฟ้อไม่ใช่เรื่องน่ากลัว ถ้าเรารู้ทันและวางแผน — เริ่มวันนี้ ดีกว่าพรุ่งนี้</p>
+
+    <div class="cards" style="margin-top:26px; max-width:660px;">
+      <div class="card" style="background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.25);">
+        <div class="n" style="background:#fff; color:#059669;">1</div>
+        <div><b style="color:#fff;">เข้าใจเงินเฟ้อ</b><span style="color:#d1fae5;">ของแพงขึ้น = เงินซื้อของได้น้อยลง</span></div>
+      </div>
+      <div class="card" style="background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.25);">
+        <div class="n" style="background:#fff; color:#059669;">2</div>
+        <div><b style="color:#fff;">อย่าเก็บเงินนิ่ง</b><span style="color:#d1fae5;">ฝากเฉย ๆ แพ้เงินเฟ้อทุกปี</span></div>
+      </div>
+      <div class="card" style="background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.25);">
+        <div class="n" style="background:#fff; color:#059669;">3</div>
+        <div><b style="color:#fff;">ให้เงินทำงาน</b><span style="color:#d1fae5;">ลงทุนกระจายเสี่ยง สม่ำเสมอ</span></div>
+      </div>
+      <div class="card" style="background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.25);">
+        <div class="n" style="background:#fff; color:#059669;">4</div>
+        <div><b style="color:#fff;">เพิ่มรายได้ + อัปสกิล</b><span style="color:#d1fae5;">ให้รายได้โตเร็วกว่าค่าครองชีพ</span></div>
+      </div>
+    </div>
+
+    <p style="margin-top:26px; font-size:19px; font-weight:700; color:#fff;">💪 “เงินที่วางแผนดี ทำงานแทนเราได้ทั้งชีวิต”</p>
+
+    <div class="dots"></div>
+    <div class="nav"><span class="counter"></span><button class="prev">‹</button><button class="next">›</button></div>
+  </section>
+
+</div>
+
+<script>
+  const deck = document.getElementById('deck');
+  const slides = [...deck.querySelectorAll('.slide')];
+  let cur = 0;
+
+  // build dots for every slide
+  deck.querySelectorAll('.dots').forEach(d=>{
+    slides.forEach((_,i)=>{
+      const dot=document.createElement('span');
+      dot.className='dot'; dot.dataset.i=i;
+      dot.onclick=()=>go(i);
+      d.appendChild(dot);
+    });
+  });
+
+  function go(i){
+    cur = Math.max(0, Math.min(slides.length-1, i));
+    slides.forEach((s,idx)=>s.classList.toggle('active', idx===cur));
+    // update per-slide UI
+    const active = slides[cur];
+    active.querySelectorAll('.dot').forEach((d,idx)=>d.classList.toggle('on', idx===cur));
+    active.querySelector('.counter').textContent = (cur+1)+' / '+slides.length;
+    const prev=active.querySelector('.prev'), next=active.querySelector('.next');
+    if(prev) prev.disabled = cur===0;
+    if(next) next.disabled = cur===slides.length-1;
+  }
+
+  deck.addEventListener('click', e=>{
+    if(e.target.classList.contains('next')) go(cur+1);
+    if(e.target.classList.contains('prev')) go(cur-1);
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowRight'||e.key===' ') go(cur+1);
+    if(e.key==='ArrowLeft') go(cur-1);
+  });
+
+  go(0);
+</script>
+</body>
+</html>

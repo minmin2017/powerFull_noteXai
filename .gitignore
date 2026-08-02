@@ -14,3 +14,23 @@ videos/
 manim-community/
 # junk files from windows-path bug
 D:\\*
+
+# python bytecode / daemon state
+__pycache__/
+*.pyc
+.last_voice_ts.txt
+.notify_daemon_seen_ts.txt
+
+# scratch output from agent runs
+reply*.json
+*.log.err
+temp_tts.mp3
+
+# tools/: keep sources, drop build output and throwaway screenshots
+tools/**/bin/
+tools/**/obj/
+tools/*.png
+
+# nested clones with their own .git (not submodules)
+tools/TIA_Portal_Openness_MCP/
+tools/tiaportal-mcp/

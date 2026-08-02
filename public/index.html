@@ -42,43 +42,60 @@
 
         <div id="chat" class="chat"></div>
 
-        <div class="model-switcher">
-          <span class="model-label">โมเดล Claude:</span>
-          <div class="model-btns">
-            <button class="model-btn" data-model="haiku" title="เร็วสุด ประหยัดสุด">Haiku</button>
-            <button class="model-btn" data-model="sonnet" title="สมดุล (default)">Sonnet</button>
-            <button class="model-btn" data-model="opus" title="ฉลาดสุด">Opus</button>
+        <details class="settings-details">
+          <summary>⚙️ ตั้งค่า (โมเดล / ผู้ช่วย / ไมค์)</summary>
+          <div class="model-switcher drag-block" draggable="true">
+            <span class="model-label">โมเดล Claude:</span>
+            <div class="model-btns">
+              <button class="model-btn" data-model="haiku" title="เร็วสุด ประหยัดสุด">Haiku</button>
+              <button class="model-btn" data-model="sonnet" title="สมดุล (default)">Sonnet</button>
+              <button class="model-btn" data-model="opus" title="ฉลาดสุด">Opus</button>
+            </div>
+            <span class="model-note">มีผลครั้งถัดไปที่เปิด Claude Code</span>
           </div>
-          <span class="model-note">มีผลครั้งถัดไปที่เปิด Claude Code</span>
-        </div>
 
-        <div class="agent-switcher">
-          <span class="model-label">ผู้รับฟังคำสั่ง (AI Agent):</span>
-          <div class="agent-btns">
-            <button class="agent-btn" data-agent="claude" title="ให้ Claude Code เป็นผู้รับคำสั่งเท่านั้น">Claude</button>
-            <button class="agent-btn" data-agent="gemini" title="ให้ Gemini (Antigravity) เป็นผู้รับคำสั่งเท่านั้น">Gemini</button>
-            <button class="agent-btn" data-agent="both" title="ให้ทั้ง Claude และ Gemini ตอบสนอง">ทั้งคู่</button>
+          <div class="agent-switcher drag-block" draggable="true">
+            <span class="model-label">ผู้รับฟังคำสั่ง (AI Agent):</span>
+            <div class="agent-btns">
+              <button class="agent-btn" data-agent="claude" title="ให้ Claude Code เป็นผู้รับคำสั่งเท่านั้น">Claude</button>
+              <button class="agent-btn" data-agent="gemini" title="ให้ Gemini (Antigravity) เป็นผู้รับคำสั่งเท่านั้น">Gemini</button>
+              <button class="agent-btn" data-agent="both" title="ให้ทั้ง Claude และ Gemini ตอบสนอง">ทั้งคู่</button>
+            </div>
+            <span class="model-note">เลือกผู้ช่วยที่จะตอบรับข้อความและเสียงพูดของคุณ</span>
           </div>
-          <span class="model-note">เลือกผู้ช่วยที่จะตอบรับข้อความและเสียงพูดของคุณ</span>
-        </div>
 
-        <div class="stt-switcher">
-          <span class="model-label">ไมค์ STT:</span>
-          <div class="model-btns">
-            <button class="stt-btn" data-stt="webspeech" title="ฟรี ไม่ต้อง API key — ใช้ Chrome/Edge">Web Speech</button>
-            <button class="stt-btn" data-stt="groq" title="แม่นกว่า — ต้อง GROQ_API_KEY ใน env">Groq</button>
-            <button class="stt-btn" data-stt="local" title="Whisper รันบนเครื่อง — ต้อง faster-whisper">Local</button>
+          <div class="stt-switcher drag-block" draggable="true">
+            <span class="model-label">ไมค์ STT:</span>
+            <div class="model-btns">
+              <button class="stt-btn" data-stt="webspeech" title="ฟรี ไม่ต้อง API key — ใช้ Chrome/Edge">Web Speech</button>
+              <button class="stt-btn" data-stt="groq" title="แม่นกว่า — ต้อง GROQ_API_KEY ใน env">Groq</button>
+              <button class="stt-btn" data-stt="local" title="Whisper รันบนเครื่อง — ต้อง faster-whisper">Local</button>
+            </div>
           </div>
-        </div>
-        <div class="stt-switcher" id="whisper-model-row" hidden>
-          <span class="model-label">Whisper:</span>
-          <div class="model-btns">
-            <button class="whisper-btn" data-wm="large-v3-turbo" title="เร็ว ~4× แม่นใกล้เคียง v3">Turbo</button>
-            <button class="whisper-btn" data-wm="large-v3" title="แม่นสุด แต่ช้ากว่า">v3</button>
-            <button class="whisper-btn" data-wm="medium" title="เร็วมาก แม่นพอใช้">Medium</button>
-            <button class="whisper-btn" data-wm="small" title="เร็วสุด แม่นน้อยสุด">Small</button>
+          <div class="stt-switcher drag-block" id="whisper-model-row" hidden draggable="true">
+            <span class="model-label">Whisper:</span>
+            <div class="model-btns">
+              <button class="whisper-btn" data-wm="large-v3-turbo" title="เร็ว ~4× แม่นใกล้เคียง v3">Turbo</button>
+              <button class="whisper-btn" data-wm="large-v3" title="แม่นสุด แต่ช้ากว่า">v3</button>
+              <button class="whisper-btn" data-wm="medium" title="เร็วมาก แม่นพอใช้">Medium</button>
+              <button class="whisper-btn" data-wm="small" title="เร็วสุด แม่นน้อยสุด">Small</button>
+            </div>
           </div>
-        </div>
+          <div class="stt-switcher drag-block" draggable="true">
+            <span class="model-label">เสียงอ่าน:</span>
+            <div class="model-btns">
+              <button class="tts-voice-btn" data-voice="female" title="th-TH-PremwadeeNeural">หญิง</button>
+              <button class="tts-voice-btn" data-voice="male" title="th-TH-NiwatNeural">ชาย</button>
+            </div>
+          </div>
+          <div class="stt-switcher drag-block" draggable="true">
+            <span class="model-label">แจ้งเตือนข้อความ (popup):</span>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" id="msg-banner-toggle" checked />
+              <span class="model-note" style="margin:0;">เด้งแจ้งเตือนบนจอ แล้วเลือนหายเอง</span>
+            </label>
+          </div>
+        </details>
 
         <div class="voice-area">
           <div id="voice-status" class="voice-status">กดไมค์เพื่อพูดภาษาไทย</div>
@@ -164,7 +181,9 @@
           </div>
           <div class="tb-group right">
             <button id="btn-fit" class="tb-btn">🔭 ภาพรวม</button>
-            <span id="zoom-label" class="zoom-label">100%</span>
+            <button id="btn-zoom-out" class="tb-btn" title="ซูมออก">➖</button>
+            <span id="zoom-label" class="zoom-label" style="min-width: 44px; text-align: center;">100%</span>
+            <button id="btn-zoom-in" class="tb-btn" title="ซูมเข้า">➕</button>
             <button id="btn-export-md" class="tb-btn" title="ส่งออกเป็น Markdown (.md)">⬇ MD</button>
             <button id="btn-export-png" class="tb-btn" title="ส่งออกเป็นภาพ PNG">⬇ PNG</button>
             <button id="btn-export-pdf" class="tb-btn" title="ส่งออกเป็น PDF ความละเอียดสูง (รวม Handwriting)">⬇ PDF</button>

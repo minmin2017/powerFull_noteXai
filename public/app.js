@@ -98,6 +98,7 @@ import setupGitHub from './modules/github.js';
         if (msg.type === "reload") { location.reload(); return; }
         if (msg.type === "capture-fullmap") { if (window.__captureFullMap) window.__captureFullMap(msg.reqId); return; }
         if (msg.type === "calendar") { if (window.__wsOnCalendar) window.__wsOnCalendar(msg); return; }
+        if (msg.type === "ptt") { if (window.__wsOnPtt) window.__wsOnPtt(msg.active, msg.mode); return; }
         if (msg.type === "state") {
           // Server restarted with new code → refresh to pick it up.
           if (msg.bootId) {
@@ -168,6 +169,7 @@ import setupGitHub from './modules/github.js';
     const agentListener = sec ? (sec.agentListener || "both") : "both";
     const btns = document.querySelectorAll(".agent-btn");
     btns.forEach((b) => b.classList.toggle("active", b.dataset.agent === agentListener));
+    document.body.classList.toggle("gemini-mode", agentListener === "gemini");
   }
 
   // Call when a drawing gesture has fully persisted: stop deferring and flush the
@@ -196,16 +198,19 @@ import setupGitHub from './modules/github.js';
   }
   function maybeNotifyClaude(s) {
     const chat = s.chat || [];
-    const lastClaude = [...chat].reverse().find((m) => m.role === "claude");
-    if (!lastClaude) return;
-    if (lastNotifiedTs === 0) { lastNotifiedTs = lastClaude.ts; return; } // skip backlog on first load
-    if (lastClaude.ts <= lastNotifiedTs) return;
-    lastNotifiedTs = lastClaude.ts;
-    if (document.hasFocus()) return; // already looking at the app
+    const lastAgentMsg = [...chat].reverse().find((m) => m.role === "claude" || m.role === "gemini");
+    if (!lastAgentMsg) return;
+    if (lastNotifiedTs === 0) { lastNotifiedTs = lastAgentMsg.ts; return; } // skip backlog on first load
+    if (lastAgentMsg.ts <= lastNotifiedTs) return;
+    lastNotifiedTs = lastAgentMsg.ts;
+    // Always fire the native Windows toast (not gated on document.hasFocus) —
+    // Min wants it to pop up outside the browser tab/window entirely, on top
+    // of whatever else he's working in, not just an in-page banner.
     if ("Notification" in window && Notification.permission === "granted") {
-      const n = new Notification("Claude ตอบกลับแล้ว 🧠", {
-        body: lastClaude.text.slice(0, 180),
-        tag: "powerfull-note-claude",
+      const label = lastAgentMsg.role === "gemini" ? "Gemini ตอบกลับแล้ว 💎" : "Claude ตอบกลับแล้ว 🧠";
+      const n = new Notification(label, {
+        body: lastAgentMsg.text.slice(0, 180),
+        tag: "powerfull-note-" + lastAgentMsg.role,
       });
       n.onclick = () => { window.focus(); n.close(); };
     }
@@ -2057,6 +2062,22 @@ import setupGitHub from './modules/github.js';
     }
   });
 
+  $("#btn-zoom-in")?.addEventListener("click", () => doZoom(1.25));
+  $("#btn-zoom-out")?.addEventListener("click", () => doZoom(1 / 1.25));
+
+  function doZoom(factor) {
+    const oldScale = view.scale;
+    view.scale = Math.min(3, Math.max(0.15, view.scale * factor));
+    if (oldScale === view.scale) return;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const worldX = (cx - view.x) / oldScale;
+    const worldY = (cy - view.y) / oldScale;
+    view.x = cx - worldX * view.scale;
+    view.y = cy - worldY * view.scale;
+    scheduleViewport();
+  }
+
   $("#btn-fit").addEventListener("click", fitView);
   function fitView() {
     const ns = STATE.nodes;
@@ -2390,6 +2411,7 @@ import setupGitHub from './modules/github.js';
 
       const head = el.querySelector(".box-head");
       head.addEventListener("pointerdown", (e) => {
+        if (spaceDown) { e.stopPropagation(); startPan(e); return; }
         if (mode !== "select") return;
         if (e.target.closest(".box-btn")) return;
         e.stopPropagation();
@@ -2420,6 +2442,7 @@ import setupGitHub from './modules/github.js';
          <div class="aibox-body"></div>
          <div class="box-resize" title="ปรับขนาด"></div>`;
       el.querySelector(".box-head").addEventListener("pointerdown", (e) => {
+        if (spaceDown) { e.stopPropagation(); startPan(e); return; }
         if (mode !== "select") return;
         if (e.target.closest(".box-btn")) return;
         e.stopPropagation();
@@ -2442,6 +2465,7 @@ import setupGitHub from './modules/github.js';
          </div>
          <div class="portal-body">🔀 คลิกเพื่อเปิด</div>`;
       el.querySelector(".box-head").addEventListener("pointerdown", (e) => {
+        if (spaceDown) { e.stopPropagation(); startPan(e); return; }
         if (mode !== "select") return;
         if (e.target.closest(".box-btn")) return;
         e.stopPropagation();
@@ -2481,6 +2505,7 @@ import setupGitHub from './modules/github.js';
 
     const head = el.querySelector(".box-head");
     head.addEventListener("pointerdown", (e) => {
+      if (spaceDown) { e.stopPropagation(); startPan(e); return; }
       if (mode !== "select") return;
       if (e.target.closest(".box-btn")) return;
       e.stopPropagation();
@@ -3004,8 +3029,20 @@ import setupGitHub from './modules/github.js';
     const t = $("#toast");
     t.textContent = msg;
     t.classList.add("show");
-    clearTimeout(toast._t);
-    toast._t = setTimeout(() => t.classList.remove("show"), 3200);
+    
+    const startToastTimer = () => {
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => t.classList.remove("show"), 6000);
+    };
+
+    t.onmouseenter = () => {
+      clearTimeout(toast._t);
+    };
+    t.onmouseleave = () => {
+      startToastTimer();
+    };
+
+    startToastTimer();
   }
 
   // ----------------------------------------------------------------------
@@ -3214,3 +3251,53 @@ setupExport({ STATE, view, canvas, world, toast, render, flushFx });
 setupCalendar({ api, toast, escapeHtml });
 
 setupGitHub({ api, toast });
+
+// ----------------------------------------------------------------------
+// Drag and Drop Sidebar Sections
+// ----------------------------------------------------------------------
+let draggedSidebarBlock = null;
+document.querySelectorAll(".drag-block").forEach(block => {
+  block.addEventListener("dragstart", (e) => {
+    draggedSidebarBlock = block;
+    setTimeout(() => block.classList.add("dragging"), 0);
+    e.dataTransfer.effectAllowed = "move";
+  });
+  block.addEventListener("dragend", () => {
+    block.classList.remove("dragging");
+    draggedSidebarBlock = null;
+    document.querySelectorAll(".drag-block").forEach(b => {
+      b.style.borderTop = "";
+      b.style.borderBottom = "";
+    });
+  });
+  block.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    if (!draggedSidebarBlock || draggedSidebarBlock === block) return;
+    const rect = block.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    if (e.clientY < mid) {
+      block.style.borderTop = "2px solid var(--accent)";
+      block.style.borderBottom = "";
+    } else {
+      block.style.borderTop = "";
+      block.style.borderBottom = "2px solid var(--accent)";
+    }
+  });
+  block.addEventListener("dragleave", () => {
+    block.style.borderTop = "";
+    block.style.borderBottom = "";
+  });
+  block.addEventListener("drop", (e) => {
+    e.preventDefault();
+    block.style.borderTop = "";
+    block.style.borderBottom = "";
+    if (draggedSidebarBlock && draggedSidebarBlock !== block) {
+      const rect = block.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        block.parentNode.insertBefore(draggedSidebarBlock, block);
+      } else {
+        block.parentNode.insertBefore(draggedSidebarBlock, block.nextSibling);
+      }
+    }
+  });
+});

@@ -253,11 +253,23 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
   // it never speaks. Only ids that show up in a LATER render are new.
   // ---------------------------------------------------------------------
   let ttsEnabled = localStorage.getItem("ttsEnabled") !== "false"; // default ON
+  let ttsVoice = localStorage.getItem("pn.ttsVoice") || "female";
   let seenChatIds = null;
   const ttsQueue = [];
   let ttsPlaying = false;
   let currentAudioEl = null;
   const ttsToggleBtn = document.getElementById("tts-toggle-btn");
+
+  document.querySelectorAll(".tts-voice-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.voice === ttsVoice);
+    btn.addEventListener("click", () => {
+      ttsVoice = btn.dataset.voice;
+      localStorage.setItem("pn.ttsVoice", ttsVoice);
+      document.querySelectorAll(".tts-voice-btn").forEach((b) =>
+        b.classList.toggle("active", b.dataset.voice === ttsVoice)
+      );
+    });
+  });
 
   function updateTtsButton() {
     if (!ttsToggleBtn) return;
@@ -284,6 +296,17 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
 
   ttsToggleBtn?.addEventListener("click", () => setTtsEnabled(!ttsEnabled));
   updateTtsButton();
+
+  // Keyboard shortcut: M toggles TTS mute (ignored while typing in a field).
+  window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.getAttribute?.("contenteditable") === "true") return;
+    if (e.code === "KeyM") {
+      e.preventDefault();
+      setTtsEnabled(!ttsEnabled);
+    }
+  });
 
   // Strip markdown noise so the voice doesn't read out symbols/URLs/code.
   function sanitizeForSpeech(text) {
@@ -331,7 +354,7 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
       playNextTts();
     };
     try {
-      const audio = new Audio(`/api/tts?text=${encodeURIComponent(text)}`);
+      const audio = new Audio(`/api/tts?text=${encodeURIComponent(text)}&voice=${ttsVoice}`);
       currentAudioEl = audio;
       audio.addEventListener("ended", finish);
       audio.addEventListener("error", () => speakFallback(text, finish));
@@ -341,28 +364,28 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
     }
   }
 
+  // Speak the whole message in one shot instead of per-sentence chunks —
+  // the /api/tts backend already streams audio as it synthesizes, so
+  // chunking here only added gaps (a new fetch + Audio element per sentence)
+  // without saving latency. Only split when text would exceed the backend's
+  // 3000-char cap (server.js /api/tts).
+  const TTS_MAX_CHUNK = 2800;
   function splitTextForSpeech(text) {
-    const rawChunks = text.split(/[\n|.!?;]/);
+    const clean = text.trim();
+    if (!clean) return [];
+    if (clean.length <= TTS_MAX_CHUNK) return [clean];
+    const words = clean.split(/\s+/);
     const chunks = [];
-    for (let chunk of rawChunks) {
-      chunk = chunk.trim();
-      if (!chunk) continue;
-      if (chunk.length > 150) {
-        const subChunks = chunk.split(/[,，、\s]+/);
-        let currentSub = "";
-        for (const sub of subChunks) {
-          if ((currentSub + " " + sub).length > 150) {
-            if (currentSub.trim()) chunks.push(currentSub.trim());
-            currentSub = sub;
-          } else {
-            currentSub = currentSub ? currentSub + " " + sub : sub;
-          }
-        }
-        if (currentSub.trim()) chunks.push(currentSub.trim());
+    let current = "";
+    for (const word of words) {
+      if ((current + " " + word).length > TTS_MAX_CHUNK) {
+        if (current.trim()) chunks.push(current.trim());
+        current = word;
       } else {
-        chunks.push(chunk);
+        current = current ? current + " " + word : word;
       }
     }
+    if (current.trim()) chunks.push(current.trim());
     return chunks;
   }
 
@@ -397,9 +420,75 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
     return true;
   }
 
+  // In-app Messenger-style popup for new agent replies — separate from the
+  // browser's native Notification API (which only fires when the window is
+  // unfocused). Min wanted this even while the app itself has focus but he's
+  // looking at the canvas/another section, so he doesn't have to keep
+  // checking the chat panel. Toggleable via the settings checkbox.
+  const BANNER_ENABLED_KEY = "pn_msg_banner_enabled";
+  function bannerEnabled() {
+    const v = localStorage.getItem(BANNER_ENABLED_KEY);
+    return v === null ? true : v === "1";
+  }
+  const bannerToggle = document.getElementById("msg-banner-toggle");
+  if (bannerToggle) {
+    bannerToggle.checked = bannerEnabled();
+    bannerToggle.addEventListener("change", () => {
+      localStorage.setItem(BANNER_ENABLED_KEY, bannerToggle.checked ? "1" : "0");
+    });
+  }
+  function showMsgBanner(role, text, sectionId) {
+    if (!bannerEnabled()) return;
+    let el = document.getElementById("msg-banner");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "msg-banner";
+      el.className = "msg-banner";
+      document.body.appendChild(el);
+    }
+    el.innerHTML = "";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "msg-banner-close";
+    closeBtn.textContent = "✕";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      el.classList.remove("show");
+    });
+    const head = document.createElement("div");
+    head.className = "msg-banner-head";
+    head.textContent = role === "gemini" ? "Gemini ตอบกลับ 💎" : "Claude ตอบกลับ 🧠";
+    const body = document.createElement("div");
+    body.className = "msg-banner-body";
+    body.textContent = text.slice(0, 160);
+    el.append(closeBtn, head, body);
+    el.onclick = () => {
+      if (sectionId && sectionId !== STATE.activeSection) {
+        const tab = document.querySelector(`.chat-tab[data-id="${sectionId}"]`);
+        if (tab) tab.click();
+      }
+      el.classList.remove("show");
+    };
+    el.classList.add("show");
+
+    const startTimer = () => {
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.remove("show"), 6000);
+    };
+
+    el.onmouseenter = () => {
+      clearTimeout(el._t);
+    };
+    el.onmouseleave = () => {
+      startTimer();
+    };
+
+    startTimer();
+  }
+
   // Called from renderChat() on every state broadcast. Diffs STATE.chat
   // against ids already seen; speaks new role:"claude" messages only,
-  // scoped to this tab's active section and claimed cross-tab.
+  // scoped to this tab's active section and claimed cross-tab. Also pops
+  // the on-screen banner for any new claude/gemini message, any section.
   function checkForNewClaudeMessages() {
     const all = STATE.chat || [];
     if (seenChatIds === null) {
@@ -411,6 +500,8 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
     for (const m of all) {
       if (!m || seenChatIds.has(m.id)) continue;
       seenChatIds.add(m.id);
+      if (m.role === "claude" || m.role === "gemini")
+        showMsgBanner(m.role, m.text, m.section || "main");
       if (m.role === "claude" && (m.section || "main") === active && claimForSpeech(m.id))
         enqueueSpeech(m.text);
     }
