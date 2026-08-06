@@ -8,6 +8,7 @@ echo.
 start "" http://localhost:4321
 start "PTT Listener (Alt+P)" cmd /c ptt-listen.cmd
 start "Desktop Notifications" cmd /c notify-listen.cmd
+start "Usage Guard (85%% handoff / auto-resume)" cmd /c "node usage-guard.js main"
 
 rem Auto-open Claude Code bound to the "main" chat section and already listening.
 rem It waits for this window's server to bind before connecting (see claude-listen.cmd).

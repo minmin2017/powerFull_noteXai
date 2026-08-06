@@ -39,7 +39,12 @@ MAX_BANNER_W = 1100
 MAX_BODY_LINES = 24  # beyond this the Text widget scrolls instead of growing forever
 DISPLAY_SECONDS = 6
 BROWSER_WINDOW_TITLE_HINT = "Powerfull Note"
-MATH_PATTERN = re.compile(r"\$\$(.+?)\$\$|\$(.+?)\$", re.S)
+# Gemini/Claude เขียนสมการได้ 4 แบบ: $$..$$, $..$, \[..\], \(..\)
+# กลุ่มคู่ (1,3) = display (บรรทัดของตัวเอง), กลุ่มคี่ (2,4) = inline
+MATH_PATTERN = re.compile(
+    r"\$\$(.+?)\$\$|\$(.+?)\$|\\\[(.+?)\\\]|\\\((.+?)\\\)", re.S
+)
+THAI_RE = re.compile(r"[฀-๿]")
 
 root = None
 last_ts = 0
@@ -133,6 +138,39 @@ def render_math_photo(expr, block, color="#e5e7eb"):
     return ImageTk.PhotoImage(Image.open(buf).convert("RGBA"))
 
 
+def latex_to_plain(expr):
+    """LaTeX -> ข้อความอ่านง่าย ใช้เมื่อมีภาษาไทยปนอยู่ในสมการ
+
+    matplotlib mathtext วาดอักษรไทยไม่ได้เลย (ฟอนต์ DejaVu ไม่มี glyph ไทย)
+    ผลคือได้สี่เหลี่ยม/วงกลมเรียงกันยาว เช่น '⊂⊃⊂⊃⊂⊃ = P x V_D'
+    เจอไทยเมื่อไหร่จึงเลิกวาดเป็นรูป แล้วแปลงเป็นข้อความธรรมดาแทน"""
+    s = expr
+    s = re.sub(r"\\(?:text|mathrm|mathbf|textbf)\s*\{([^{}]*)\}", r"\1", s)
+    s = re.sub(r"\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}", r"(\1)/(\2)", s)
+    for cmd, sym in (
+        (r"\times", "×"), (r"\cdot", "·"), (r"\approx", "≈"), (r"\neq", "≠"),
+        (r"\leq", "≤"), (r"\geq", "≥"), (r"\pi", "π"), (r"\eta", "η"),
+        (r"\omega", "ω"), (r"\rho", "ρ"), (r"\mu", "μ"), (r"\Delta", "Δ"),
+        (r"\phi", "φ"), (r"\theta", "θ"), (r"\gamma", "γ"), (r"\beta", "β"),
+    ):
+        s = s.replace(cmd, sym)
+    s = re.sub(r"\\[a-zA-Z]+", "", s)          # คำสั่งที่เหลือ ตัดทิ้ง
+    s = s.replace("{", "").replace("}", "").replace("\\", "")
+    return re.sub(r"[ \t]+", " ", s).strip()
+
+
+def strip_markdown(s):
+    """ตัดสัญลักษณ์ Markdown ออก — toast เป็น Text widget ธรรมดา
+    ถ้าไม่ตัด จะเห็น '**ตัวหนา**' กับ '###' โผล่มาดิบๆ เต็มไปหมด"""
+    s = re.sub(r"^\s{0,3}#{1,6}\s*", "", s, flags=re.M)        # ### หัวข้อ
+    s = re.sub(r"\*\*(.+?)\*\*", r"\1", s, flags=re.S)          # **หนา**
+    s = re.sub(r"__(.+?)__", r"\1", s, flags=re.S)              # __หนา__
+    s = re.sub(r"`([^`]+)`", r"\1", s)                          # `code`
+    s = re.sub(r"^\s*[-*+]\s+", "• ", s, flags=re.M)            # bullet
+    s = re.sub(r"^\s*-{3,}\s*$", "─" * 24, s, flags=re.M)       # เส้นคั่น
+    return s
+
+
 def build_segments(s):
     """Split s into ('text', str) / ('img', PhotoImage, is_block) tokens, rendering
     equations up front so we know the widest equation's pixel width before we size
@@ -143,13 +181,19 @@ def build_segments(s):
         start, end = m.span()
         if start > pos:
             segments.append(("text", s[pos:start]))
-        block = m.group(1) is not None
-        expr = m.group(1) if block else m.group(2)
-        try:
-            img = render_math_photo(expr, block)
-            segments.append(("img", img, block))
-        except Exception:
-            segments.append(("text", s[start:end]))
+        # กลุ่ม 1=$$..$$ 2=$..$ 3=\[..\] 4=\(..\)  — คู่ = display, คี่ = inline
+        block = m.group(1) is not None or m.group(3) is not None
+        expr = next((g for g in m.groups() if g is not None), "")
+        if THAI_RE.search(expr):
+            # มีไทยในสมการ -> วาดเป็นรูปไม่ได้ ใส่เป็นข้อความแทน
+            plain = latex_to_plain(expr)
+            segments.append(("text", f"\n{plain}\n" if block else plain))
+        else:
+            try:
+                img = render_math_photo(expr, block)
+                segments.append(("img", img, block))
+            except Exception:
+                segments.append(("text", latex_to_plain(expr)))
         pos = end
     if pos < len(s):
         segments.append(("text", s[pos:]))
@@ -182,7 +226,7 @@ def show_toast(role, text):
         pass
     win.configure(bg="#111827")
 
-    segments = build_segments(text)
+    segments = build_segments(strip_markdown(text))
     image_refs = [seg[1] for seg in segments if seg[0] == "img"]
     win.image_refs = image_refs  # keep alive for this window's lifetime
     max_img_w = max((img.width() for img in image_refs), default=0)
@@ -221,6 +265,15 @@ def show_toast(role, text):
         body.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
 
+    win.update_idletasks()
+    # Auto-size the window to the full reply right away instead of leaving
+    # it locked at the placeholder 100px from the geometry() call above —
+    # winfo_reqheight() reports what pack actually wants for the header row
+    # + however many text rows body.configure(height=...) just set, so the
+    # whole message is visible without Min needing to drag the grip first.
+    req_h = win.winfo_reqheight()
+    auto_x = win.winfo_screenwidth() - win_w - BANNER_MARGIN
+    win.geometry(f"{win_w}x{req_h}+{auto_x}+{BANNER_MARGIN}")
     win.update_idletasks()
     # Everything in the window besides the resizable text body (header row,
     # padding) — used below to compute exact pixel heights when the grip

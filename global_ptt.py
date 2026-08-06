@@ -63,6 +63,14 @@ def set_agent_listener(agent: str):
         pass
 
 
+def toggle_tts_mute():
+    try:
+        requests.post(f"{SERVER}/api/tts/toggle", timeout=3)
+        print("[PTT] TTS mute toggled")
+    except Exception as e:
+        print(f"[PTT] TTS toggle failed: {e}")
+
+
 # ---------------------------------------------------------------------------
 # "record" mode — local ffmpeg capture + server-side Whisper
 # ---------------------------------------------------------------------------
@@ -274,7 +282,8 @@ def main():
     keyboard.on_release_key("p", on_p_release, suppress=False)
     keyboard.on_press_key("o", on_o_press, suppress=False)
     keyboard.on_release_key("o", on_o_release, suppress=False)
-    print(f"[PTT] armed (mode={PTT_MODE}) — hold Alt+P to talk to Claude, Alt+O to talk to Gemini, release to send (section: main)")
+    keyboard.add_hotkey("ctrl+alt+m", toggle_tts_mute, suppress=False)
+    print(f"[PTT] armed (mode={PTT_MODE}) — hold Alt+P to talk to Claude, Alt+O to talk to Gemini, release to send; Ctrl+Alt+M toggles TTS mute anywhere (section: main)")
     keyboard.wait()
 
 

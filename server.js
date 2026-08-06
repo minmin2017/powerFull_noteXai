@@ -973,7 +973,13 @@ app.get("/api/media", (req, res) => {
 
   const resolvedPath = path.resolve(rawPath);
 
-  if (!resolvedPath.startsWith("/home/minmin/")) {
+  // เสิร์ฟได้เฉพาะไฟล์ที่อยู่ใต้โฮมไดเรกทอรีของผู้ใช้เท่านั้น
+  // เดิมฮาร์ดโค้ดไว้เป็น "/home/minmin/" ตั้งแต่ตอนรันบน Linux — บน Windows
+  // path.resolve() คืน "C:\Users\..." จึงไม่มีทางตรงเลย ทำให้เล่นไฟล์โลคอล
+  // ไม่ได้ทุกกรณี (ตอบ 403 ตลอด) ใช้ os.homedir() แทนเพื่อให้ถูกทั้งสองแพลตฟอร์ม
+  const homeRoot = path.resolve(os.homedir()) + path.sep;
+  const norm = (s) => (process.platform === "win32" ? s.toLowerCase() : s);
+  if (!norm(resolvedPath).startsWith(norm(homeRoot))) {
     return res.status(403).json({ error: "access denied" });
   }
 
@@ -1610,6 +1616,13 @@ app.post("/api/ptt", (req, res) => {
   const mode = (req.body || {}).mode === "webspeech" ? "webspeech" : "record";
   broadcastRaw({ type: "ptt", active, mode });
   res.json({ ok: true, active, mode });
+});
+
+// Global system-wide Ctrl+Alt+M hotkey (see global_ptt.py) toggles TTS mute in
+// every open browser tab, even when Chrome isn't the focused window.
+app.post("/api/tts/toggle", (_req, res) => {
+  broadcastRaw({ type: "tts-toggle" });
+  res.json({ ok: true });
 });
 
 app.patch("/api/meta", (req, res) => {

@@ -99,6 +99,7 @@ import setupGitHub from './modules/github.js';
         if (msg.type === "capture-fullmap") { if (window.__captureFullMap) window.__captureFullMap(msg.reqId); return; }
         if (msg.type === "calendar") { if (window.__wsOnCalendar) window.__wsOnCalendar(msg); return; }
         if (msg.type === "ptt") { if (window.__wsOnPtt) window.__wsOnPtt(msg.active, msg.mode); return; }
+        if (msg.type === "tts-toggle") { if (window.__wsOnTtsToggle) window.__wsOnTtsToggle(); return; }
         if (msg.type === "state") {
           // Server restarted with new code → refresh to pick it up.
           if (msg.bootId) {

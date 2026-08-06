@@ -2,6 +2,29 @@
 
 แอป mind-map โลคอล + MCP bridge ของ Min (http://localhost:4321)
 
+## 🔋 โควตา session — เช็คเองได้ ไม่ต้องถาม Min
+
+**Claude อ่าน % การใช้โควตาของตัวเองได้** ผ่าน API ของแอปนี้:
+```bash
+curl -s http://localhost:4321/api/claude-usage
+# {"session":{"percent":70,"resets_at":...},"weekly":{"percent":29,...}}
+```
+เบื้องหลัง (`server.js:1724`): อ่าน OAuth token จาก `~/.claude/.credentials.json` แล้วเรียก
+`https://api.anthropic.com/api/oauth/usage` → เลข**จริง**จาก Anthropic ไม่ใช่ค่าประมาณ (cache 60 วิ)
+
+> ⚠️ `session.percent` = **โควตาแผน** (รอบ ~5 ชม.) — คนละอย่างกับ context window ที่ harness ย่อให้เอง
+> ห้ามบอก Min ว่า "ผมดู % ตัวเองไม่ได้" — ดูได้ ผ่าน endpoint นี้
+
+**ระบบอัตโนมัติ `usage-guard.js`** (รันแยกจาก Claude เพราะตอนโควตาหมด Claude ตายไปด้วย):
+- **`start.cmd` เปิดให้อัตโนมัติแล้ว** (หน้าต่าง "Usage Guard") ทุกครั้งที่ Min เปิดเซิร์ฟเวอร์ ไม่ต้องรันมือ
+- รันมือถ้าจำเป็น: `node usage-guard.js main` (เปิดค้างไว้ 1 หน้าต่าง ไม่กิน token)
+- ⚠️ **Claude ไม่สามารถเปิดหน้าต่างนี้แทน Min ได้** — คำสั่ง `start` จาก Bash tool ของ Claude ไม่สร้าง process จริงบนเดสก์ท็อป Min (ตรวจสอบด้วย `Get-CimInstance Win32_Process -Filter "Name='node.exe'"` ก่อนอ้างว่ารันแล้วเสมอ) ถ้า guard ไม่ได้รัน ให้ขอ Min พิมพ์ `!node usage-guard.js main` เอง
+- **ถึง 85%** → ยิงข้อความเข้า inbox สั่งให้ **อัปเดต `HANDOFF.md` แล้วหยุดรับงานใหม่**
+- **โควตารีเซ็ต (≤20%)** → ยิง inbox + `POST /api/launch-claude` เปิด Claude ใหม่ให้ทำงานต่อ
+
+**`HANDOFF.md`** (root โปรเจกต์) = สมองสำรองข้าม session — **อ่านไฟล์นี้ก่อนเริ่มงานทุกครั้ง**
+แล้วอัปเดตทับเรื่อยๆ ระหว่างทำงาน (เขียนเผื่อไว้ก่อนฟรี แต่รอจนโควตาหมดคือสายเกินไป)
+
 ## ⭐ เริ่มทุก session — arm inbox listener อัตโนมัติ
 
 1. เช็คเซิร์ฟเวอร์: `curl -s -m 5 "http://localhost:4321/api/inbox?drain=true"`

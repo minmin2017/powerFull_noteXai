@@ -26,7 +26,7 @@ import os
 import sys
 import subprocess
 
-BASE = "http://localhost:4321"
+BASE = "http://127.0.0.1:4321"
 SCRATCH_DIR = os.path.dirname(os.path.abspath(__file__))
 TS_FILE = os.path.join(SCRATCH_DIR, ".last_voice_ts.txt")
 APPROVE_SCRIPT = os.path.join(SCRATCH_DIR, "antigravity-approve.sh")

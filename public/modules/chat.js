@@ -76,7 +76,13 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
         hour: "2-digit",
         minute: "2-digit",
       });
-      const body = escapeHtml(m.text).replace(/\\r\\n|\\n|\\r/g, "\n");
+      const rawHtml = (window.marked && typeof window.marked.parse === "function")
+        ? window.marked.parse(m.text)
+        : escapeHtml(m.text).replace(/\n/g, "<br>");
+      // marked() passes raw HTML through untouched — sanitize before innerHTML so a
+      // malicious <script>/onerror payload relayed through Gemini or OCR'd text can't
+      // execute with this app's full read/write API access.
+      const bodyHtml = window.DOMPurify ? window.DOMPurify.sanitize(rawHtml) : escapeHtml(m.text).replace(/\n/g, "<br>");
       
       let header = "";
       if (role === "claude") {
@@ -85,8 +91,20 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
         header = '<div class="msg-sender-label">♊ Gemini</div>';
       }
       
-      el.innerHTML = `${header}${body}<span class="ts">${t}</span>`;
+      el.innerHTML = `${header}<div class="msg-body">${bodyHtml}</div><span class="ts">${t}</span>`;
       box.appendChild(el);
+    }
+    // Auto-render KaTeX math equations if available
+    if (window.renderMathInElement) {
+      window.renderMathInElement(box, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\(", right: "\\)", display: false },
+          { left: "\\[", right: "\\]", display: true }
+        ],
+        throwOnError: false
+      });
     }
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
@@ -296,6 +314,10 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
 
   ttsToggleBtn?.addEventListener("click", () => setTtsEnabled(!ttsEnabled));
   updateTtsButton();
+
+  // Global OS-wide hotkey (Ctrl+Alt+M via AutoHotkey) posts to /api/tts/toggle,
+  // which broadcasts this over WS so it works even when Chrome isn't focused.
+  window.__wsOnTtsToggle = () => setTtsEnabled(!ttsEnabled);
 
   // Keyboard shortcut: M toggles TTS mute (ignored while typing in a field).
   window.addEventListener("keydown", (e) => {

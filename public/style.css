@@ -253,6 +253,38 @@ body.col-resizing {
   white-space: pre-wrap;
   word-break: break-word;
 }
+.msg-body {
+  white-space: normal;
+}
+.msg-body p {
+  margin: 6px 0;
+}
+.msg-body p:first-child {
+  margin-top: 0;
+}
+.msg-body p:last-child {
+  margin-bottom: 0;
+}
+.msg-body ul, .msg-body ol {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.msg-body li {
+  margin-bottom: 3px;
+}
+.msg-body pre {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 6px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.msg-body code {
+  font-family: monospace;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
 .msg.claude {
   align-self: flex-start;
   background: linear-gradient(135deg, #f97316, #ea580c);
