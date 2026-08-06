@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "powerNote Web Speech Helper",
+  "version": "1.1",
+  "description": "Transcribes the system-wide Alt+P push-to-talk in the background, so powerNote never has to steal window focus.",
+  "permissions": [
+    "offscreen",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:4321/*",
+    "http://localhost:4321/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "permission.html"
+}

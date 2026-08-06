@@ -5,7 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 def export_canvas_to_pdf():
     # 1. Fetch current active project state
-    res = urllib.request.urlopen("http://localhost:4321/api/state")
+    res = urllib.request.urlopen("http://127.0.0.1:4321/api/state")
     state = json.loads(res.read().decode("utf-8"))
 
     drawings = state.get("drawings", [])

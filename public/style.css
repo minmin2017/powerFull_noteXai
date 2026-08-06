@@ -415,7 +415,7 @@ body.col-resizing {
   gap: 8px;
   background: var(--panel);
 }
-.stt-btn {
+.stt-btn, .ptt-mode-btn {
   flex: 1;
   padding: 5px 0;
   background: var(--panel-2);
@@ -427,8 +427,8 @@ body.col-resizing {
   cursor: pointer;
   transition: all 0.15s;
 }
-.stt-btn:hover { border-color: var(--accent); }
-.stt-btn.active {
+.stt-btn:hover, .ptt-mode-btn:hover { border-color: var(--accent); }
+.stt-btn.active, .ptt-mode-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;

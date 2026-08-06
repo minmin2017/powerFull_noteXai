@@ -3,7 +3,56 @@
 > ไฟล์นี้คือ "สมองสำรอง" ข้าม session — เขียนไว้กัน context เต็มแล้วงานหาย
 > **session ถัดไป: อ่านไฟล์นี้ก่อนเริ่มงาน** แล้วอัปเดตทับเรื่อยๆ (ไม่ต้องสร้างไฟล์ใหม่ตามวันที่)
 
-**อัปเดตล่าสุด:** 2026-08-06 — session 86% (Usage Guard เตือน)
+**อัปเดตล่าสุด:** 2026-08-06 — ซ่อม global PTT ที่ Gemini ทำค้างไว้
+
+## 🔥 กฎเหล็กที่เพิ่งได้: ห้ามใช้ `localhost` ในโค้ดที่ยิงเข้า server นี้
+
+`getaddrinfo("localhost")` บนเครื่อง Min คืน `::1` (IPv6) **มาก่อน** `127.0.0.1` แต่ Node
+ฟังแค่ IPv4 → ทุก request รอ IPv6 connect ตายก่อนแล้วค่อย fallback = **~2,020 ms ต่อ 1 request**
+(`127.0.0.1` = 4 ms) วัดด้วย `requests.get` แล้วทั้งคู่ ยืนยันแล้ว
+- แก้แล้ว: `global_ptt.py`, `notify_daemon.py`, `export_project_pdf.py`
+- **เขียนสคริปต์ใหม่ที่คุยกับ :4321 เมื่อไหร่ ใช้ `127.0.0.1` เสมอ**
+- curl ไม่เจอปัญหานี้ (มี Happy Eyeballs) → เทสต์ด้วย curl แล้วผ่านไม่ได้แปลว่าโค้ด Python เร็ว
+
+### ซ่อม `global_ptt.py` (Gemini เขียนไว้ พังทั้ง 5 จุด)
+1. **ขอบเรืองแสงไม่ขึ้นเลย** — `SetWindowLong(WS_EX_LAYERED)` ถูกใส่บน `root.winfo_id()`
+   ซึ่งเป็น **`TkChild`** ไม่ใช่ `TkTopLevel` (พิสูจน์ด้วย `GetClassName` แล้ว) — LAYERED บน
+   หน้าต่างที่ไม่เคยเรียก `SetLayeredWindowAttributes` = Windows ไม่วาดให้เลย
+   → ใช้ `GetParent(winfo_id())` และปล่อยให้ `-transparentcolor` จัดการ LAYERED เอง
+2. **`fetch_active_mode()` ยิง HTTP บนเธรด keyboard hook** = ค้าง 2 วิก่อนไมค์เริ่มทำงาน
+   → อ่าน `data/ptt_config.json` ตรงๆ (0.2 ms) ทำงานได้แม้ server ดับ
+3. **สร้าง `tk.Tk()` + mainloop ใหม่ทุกครั้งที่กด** (Tk ไม่ thread-safe) ปล่อยปุ่มเร็ว = หน้าต่าง
+   เต็มจอค้างถาวร → สร้างหน้าต่างขอบ 2 สีครั้งเดียวตอน start แล้ว `ShowWindow` เอา
+   + `WS_EX_NOACTIVATE` กัน overlay แย่งโฟกัสจากเบราว์เซอร์
+4. **`stop_webspeech()` สั่ง minimize เบราว์เซอร์เสมอ** แม้ตอนที่ Min อยู่ในแอปอยู่แล้ว
+   → ย่อเฉพาะตอน `prev_hwnd` ไม่ว่าง (= สลับมาจากหน้าต่างอื่นจริง)
+5. **`ptt_config.json` ค้างที่ `"extension"`** ทั้งที่ Gemini แจ้งใน chat ว่ารีเซ็ตแล้ว →
+   Alt+P เลยไม่ทำอะไรเลยเพราะส่วนขยายยังไม่ได้ติดตั้ง → ตั้งกลับเป็น `webspeech`
+
+**วิธีเทสต์ overlay โดยไม่ต้องใช้ตา:** `win32gui.GetPixel` บน screen DC แถวบนสุดกลางจอ
+สี `#ff6f00` = claude, `#a020f0` = gemini (มี 12 แถวตาม BORDER_THICKNESS)
+
+### ✅ โหมด extension ใช้งานได้จริงแล้ว (ยืนยัน 2026-08-06 23:00)
+`tools/chrome-extension/` v1.1 — Min โหลดเข้า Chrome + กดอนุญาตไมค์แล้ว เสียงเข้าครบ
+**โดยไม่แย่งโฟกัสหน้าต่างเลย** (log ไม่มีบรรทัด `listening (web speech)` = ไม่ได้สลับหน้าจอ)
+- ที่ซ่อมจากของ Gemini: `"microphone"` ไม่ใช่ permission จริงของ MV3 / ไม่มี `host_permissions`
+  → fetch เข้า :4321 โดน CORS บล็อก / ไม่มี keepalive → service worker ตายทุก 30 วิแล้วไม่ฟื้น
+  → เพิ่ม `chrome.alarms` ปลุกทุก 30 วิ + fallback ไป `/api/transcribe-local` เผื่อ Web Speech
+  ใช้ใน offscreen document ไม่ได้ + `permission.html` (options page) ไว้ขอสิทธิ์ไมค์ครั้งเดียว
+- ⚠️ **แก้ไฟล์ส่วนขยายแล้วต้องกด ⟳ ที่การ์ดใน `chrome://extensions` เสมอ** — Chrome ถือของเก่าไว้
+  จนกว่าจะรีโหลด (Min เจอมาแล้ว: การ์ดขึ้น 1.0 ทั้งที่ดิสก์เป็น 1.1)
+
+**ตัวกันพลาด:** ส่วนขยาย POST `/api/ptt/extension-ping` ทุก 30 วิ → server เขียน
+`data/ptt_extension_ping` → `global_ptt.extension_alive()` เช็ค mtime (<90 วิ) ถ้าโหมดเป็น
+`extension` แต่ส่วนขยายไม่ออนไลน์ **จะสลับไป webspeech อัตโนมัติ** กันอาการ "ขอบขึ้นแต่เงียบ"
+ซึ่งหน้าตาเหมือนแอปพังทุกประการ (เสียเวลาไปทั้งคืนเพราะอาการนี้ 2 รอบ)
+
+### ค้าง — รอ Min ตัดสินใจ
+- `start.cmd` เปิด `tools/antigravity_startup_bot.py` อัตโนมัติ บอทนี้ **พิมพ์+กด Enter ด้วย
+  pyautogui** ถ้าจับโฟกัสพลาดจะพิมพ์ลงหน้าต่างที่ Min ใช้อยู่ — ยังไม่ได้เอาออก
+
+---
+
 
 ## ✅ เสร็จแล้วรอบนี้ (เข้า Obsidian vault `Main_note/Exam_Prep/` ครบทุกอัน)
 

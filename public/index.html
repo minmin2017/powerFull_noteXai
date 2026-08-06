@@ -73,6 +73,14 @@
               <button class="stt-btn" data-stt="local" title="Whisper รันบนเครื่อง — ต้อง faster-whisper">Local</button>
             </div>
           </div>
+          <div class="stt-switcher drag-block" draggable="true">
+            <span class="model-label">ปุ่มลัด PTT:</span>
+            <div class="model-btns" id="ptt-mode-btns">
+              <button class="ptt-mode-btn" data-ptt="webspeech" title="สลับโฟกัสเบราว์เซอร์อัตโนมัติ (ฟรี/เร็ว)">สลับหน้าจอ</button>
+              <button class="ptt-mode-btn" data-ptt="record" title="ประมวลผลออฟไลน์ (ช้า/กินกำลังเครื่อง)">เครื่องตัวเอง</button>
+              <button class="ptt-mode-btn" data-ptt="extension" title="ประมวลผลเบื้องหลังฟรี (ต้องลง Chrome Extension)">ส่วนขยาย (Extension)</button>
+            </div>
+          </div>
           <div class="stt-switcher drag-block" id="whisper-model-row" hidden draggable="true">
             <span class="model-label">Whisper:</span>
             <div class="model-btns">

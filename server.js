@@ -1608,12 +1608,75 @@ app.post("/api/calendar", (req, res) => {
   res.json({ ok: true, count: calendarCache.events.length });
 });
 
+// Global push-to-talk config file. global_ptt.py reads this same file directly
+// on every keypress rather than asking over HTTP, so the hotkey never waits on
+// the network — keep the shape ({ mode }) stable for it.
+const PTT_CONFIG_FILE = path.join(__dirname, "data", "ptt_config.json");
+const PTT_MODES = ["webspeech", "record", "extension"];
+
+function getPttMode() {
+  try {
+    if (fs.existsSync(PTT_CONFIG_FILE)) {
+      const cfg = JSON.parse(fs.readFileSync(PTT_CONFIG_FILE, "utf8"));
+      if (PTT_MODES.includes(cfg.mode)) return cfg.mode;
+    }
+  } catch (e) {
+    console.error("Error reading PTT config:", e);
+  }
+  return "webspeech";
+}
+
+// The Chrome extension pings this while its service worker is alive.
+// global_ptt.py stats the file's mtime before it honours "extension" mode:
+// without that check, selecting extension mode without the extension actually
+// installed swallows every key press — the screen border lights up and nothing
+// records, which looks exactly like the app being broken. Cost an evening once.
+const PTT_EXT_PING_FILE = path.join(__dirname, "data", "ptt_extension_ping");
+const PTT_EXT_PING_MAX_AGE = 90_000;
+
+function pttExtensionAlive() {
+  try {
+    return Date.now() - fs.statSync(PTT_EXT_PING_FILE).mtimeMs < PTT_EXT_PING_MAX_AGE;
+  } catch {
+    return false;
+  }
+}
+
+app.post("/api/ptt/extension-ping", (_req, res) => {
+  try {
+    fs.mkdirSync(path.dirname(PTT_EXT_PING_FILE), { recursive: true });
+    fs.writeFileSync(PTT_EXT_PING_FILE, String(Date.now()), "utf8");
+  } catch (e) {
+    console.error("Error writing PTT extension ping:", e);
+  }
+  res.json({ ok: true });
+});
+
+app.get("/api/ptt/mode", (_req, res) => {
+  res.json({ mode: getPttMode(), extensionAlive: pttExtensionAlive() });
+});
+
+app.post("/api/ptt/mode", (req, res) => {
+  const { mode } = req.body || {};
+  if (!PTT_MODES.includes(mode)) {
+    return res.status(400).json({ error: "Invalid PTT mode" });
+  }
+  try {
+    fs.mkdirSync(path.dirname(PTT_CONFIG_FILE), { recursive: true });
+    fs.writeFileSync(PTT_CONFIG_FILE, JSON.stringify({ mode }, null, 2), "utf8");
+    res.json({ ok: true, mode });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // Global push-to-talk (system-wide Alt+P hotkey, see global_ptt.py) tells every
 // open browser tab to show/hide the recording glow, even though the hotkey
 // itself fires outside the browser.
 app.post("/api/ptt", (req, res) => {
   const active = !!(req.body || {}).active;
-  const mode = (req.body || {}).mode === "webspeech" ? "webspeech" : "record";
+  const raw = (req.body || {}).mode;
+  const mode = PTT_MODES.includes(raw) ? raw : "webspeech";
   broadcastRaw({ type: "ptt", active, mode });
   res.json({ ok: true, active, mode });
 });

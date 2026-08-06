@@ -6,6 +6,7 @@ echo   Powerfull Note - starting (auto-restart on code changes)...
 echo   เปิดเบราว์เซอร์ที่ http://localhost:4321 (Chrome/Edge)
 echo.
 start "" http://localhost:4321
+start "Antigravity Startup Helper" /min cmd /c "python tools/antigravity_startup_bot.py"
 start "PTT Listener (Alt+P)" cmd /c ptt-listen.cmd
 start "Desktop Notifications" cmd /c notify-listen.cmd
 start "Usage Guard (85%% handoff / auto-resume)" cmd /c "node usage-guard.js main"

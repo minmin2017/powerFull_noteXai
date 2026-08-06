@@ -29,7 +29,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from PIL import Image, ImageTk
 
-SERVER = "http://localhost:4321"
+# 127.0.0.1, not "localhost" — see global_ptt.py: localhost resolves to ::1 first
+# here and the server is IPv4-only, so every poll burned ~2s on a dead IPv6
+# connect. With a 1.5s poll interval that meant this daemon was never idle.
+SERVER = "http://127.0.0.1:4321"
 POLL_INTERVAL = 1.5
 SEEN_FILE = os.path.join(os.path.dirname(__file__), ".notify_daemon_seen_ts.txt")
 BANNER_W = 560

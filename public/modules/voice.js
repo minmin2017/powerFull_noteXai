@@ -69,6 +69,46 @@ export default function setupVoice({ api, toast, localActiveSectionRef }) {
       .catch(() => {});
   })();
 
+  // PTT Hotkey mode switching — persisted locally and on server
+  (function setupPttBtns() {
+    let pttMode = localStorage.getItem("pn.pttMode") || "webspeech";
+    
+    function applyPttUI(mode) {
+      document.querySelectorAll(".ptt-mode-btn").forEach((b) =>
+        b.classList.toggle("active", b.dataset.ptt === mode)
+      );
+    }
+    
+    applyPttUI(pttMode);
+    
+    fetch("/api/ptt/mode")
+      .then((r) => r.json())
+      .then(({ mode }) => {
+        pttMode = mode;
+        localStorage.setItem("pn.pttMode", pttMode);
+        applyPttUI(pttMode);
+      })
+      .catch(() => {});
+      
+    document.querySelectorAll(".ptt-mode-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const mode = btn.dataset.ptt;
+        if (mode === pttMode) return;
+        pttMode = mode;
+        localStorage.setItem("pn.pttMode", pttMode);
+        applyPttUI(pttMode);
+        
+        await fetch("/api/ptt/mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode }),
+        }).catch(() => {});
+        
+        toast(`สลับโหมดปุ่มลัด PTT เป็น: ${mode === "webspeech" ? "สลับหน้าจอ" : mode === "record" ? "เครื่องตัวเอง" : "ส่วนขยาย Extension"}`);
+      });
+    });
+  })();
+
   // Mic language: a two-state toggle (ไทย ↔ EN), persisted.
   const langToggle = document.getElementById("voice-lang");
   let currentLang = localStorage.getItem("pn.voiceLang") || "th-TH";
