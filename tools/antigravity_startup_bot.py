@@ -37,7 +37,7 @@ def find_antigravity_window():
             if class_name == "Chrome_WidgetWin_1":
                 title = win32gui.GetWindowText(hwnd)
                 t_low = title.lower()
-                if "antigravity" in t_low or "powerfull_note" in t_low:
+                if "antigravity" in t_low or "powerfull_note" in t_low or "powernote" in t_low:
                     hwnd_list.append((hwnd, title))
         return True
     win32gui.EnumWindows(callback, None)
