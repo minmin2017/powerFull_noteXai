@@ -5,6 +5,16 @@ echo.
 echo   Powerfull Note - starting (auto-restart on code changes)...
 echo   เปิดเบราว์เซอร์ที่ http://localhost:4321 (Chrome/Edge)
 echo.
+
+if not exist "node_modules" (
+  echo   Installing npm dependencies (first run)...
+  call npm install
+)
+where python >nul 2>nul && (
+  echo   Installing/checking Python dependencies...
+  python -m pip install -q -r requirements.txt
+)
+
 start "" http://localhost:4321
 start "Antigravity Startup Helper" /min cmd /c "python tools/antigravity_startup_bot.py"
 start "PTT Listener (Alt+P)" cmd /c ptt-listen.cmd

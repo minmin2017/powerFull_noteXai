@@ -6,8 +6,10 @@ import win32gui
 import win32con
 import pyautogui
 
+WORKSPACE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # Set up logging to file
-log_file = r"C:\Users\wicha\Desktop\powerfull_note\startup_bot.log"
+log_file = os.path.join(WORKSPACE, "startup_bot.log")
 def log(msg):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {msg}\n"
@@ -42,9 +44,9 @@ def find_antigravity_window():
     return hwnd_list
 
 def main():
-    exe_path = r"C:\Users\wicha\AppData\Local\Programs\antigravity\Antigravity.exe"
-    workspace = r"C:\Users\wicha\Desktop\powerfull_note"
-    
+    exe_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "antigravity", "Antigravity.exe")
+    workspace = WORKSPACE
+
     log("Launching Antigravity IDE...")
     if os.path.exists(exe_path):
         subprocess.Popen([exe_path, workspace])
@@ -96,7 +98,8 @@ def main():
     
     # Type the greeting message and send
     log("Typing and sending message...")
-    pyautogui.typewrite("read C:/Users/wicha/Desktop/powerfull_note/GEMINI.md and listen to powernote", interval=0.03)
+    gemini_md = os.path.join(WORKSPACE, "GEMINI.md").replace("\\", "/")
+    pyautogui.typewrite(f"read {gemini_md} and listen to powernote", interval=0.03)
     time.sleep(1)
     pyautogui.press('enter')
     log("Startup sequence complete!")

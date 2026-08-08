@@ -49,14 +49,14 @@
 ### 1) ติดตั้ง
 
 ```powershell
-cd C:\Users\wicha\Desktop\powerfull_note
+cd path\to\powerfull_note
 npm install
-pip install edge-tts faster-whisper matplotlib keyboard requests   # สำหรับเสียง + notification
+pip install -r requirements.txt   # สำหรับเสียง + notification
 ```
 
 ### 2) เปิดแอป
 
-ดับเบิลคลิก **`start.cmd`** — คลิกเดียวได้ครบทั้งระบบ:
+ดับเบิลคลิก **`start.cmd`** — คลิกเดียวได้ครบทั้งระบบ (รวมติดตั้ง `npm install` / `pip install -r requirements.txt` ให้อัตโนมัติถ้ายังไม่ได้ติดตั้ง):
 
 1. `node --watch server.js` (auto-restart เมื่อแก้โค้ด)
 2. `ptt-listen.cmd` → `global_ptt.py` — global push-to-talk (Alt+P / Alt+O)
@@ -72,7 +72,7 @@ pip install edge-tts faster-whisper matplotlib keyboard requests   # สำห�
 ### 3) ต่อ Claude Code (ถ้าไม่ได้ใช้ auto-launch จากข้อ 2)
 
 ```powershell
-cd C:\Users\wicha\Desktop\powerfull_note
+cd path\to\powerfull_note
 claude
 ```
 
@@ -260,7 +260,7 @@ claude
   "mcpServers": {
     "powerfull-note": {
       "command": "node",
-      "args": ["C:/Users/wicha/Desktop/powerfull_note/mcp-server.js"],
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/mcp-server.js"],
       "env": { "PORT": "4321" }
     }
   }
@@ -270,7 +270,7 @@ claude
 **วิธีที่ 2 — user scope (ใช้ได้ทุกโปรเจกต์):**
 
 ```bash
-claude mcp add powerfull-note -s user -- node C:/Users/wicha/Desktop/powerfull_note/mcp-server.js
+claude mcp add powerfull-note -s user -- node path/to/powerfull_note/mcp-server.js
 claude mcp list          # ดูสถานะ
 claude mcp remove powerfull-note -s user
 ```

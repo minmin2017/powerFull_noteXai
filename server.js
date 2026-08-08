@@ -805,7 +805,7 @@ app.post("/api/viewport", (req, res) => {
 app.get("/api/viewport", (_req, res) => res.json(lastViewport || {}));
 
 // Canvas screenshot — browser POSTs a JPEG dataUrl after each viewport settle
-const SCREENSHOT_PATH = "D:\\powerfull_note_screenshot.jpg";
+const SCREENSHOT_PATH = path.join(os.tmpdir(), "powerfull_note_screenshot.jpg");
 app.post("/api/screenshot", (req, res) => {
   const { dataUrl } = req.body || {};
   if (dataUrl && dataUrl.startsWith("data:image/")) {
@@ -822,7 +822,7 @@ app.get("/api/screenshot", (_req, res) => {
 
 // Full-map snapshot — Claude asks via GET; we tell the browser (over WS) to fit
 // the whole map and capture it, then resolve once the browser POSTs it back.
-const FULLMAP_PATH = "D:\\powerfull_note_fullmap.jpg";
+const FULLMAP_PATH = path.join(os.tmpdir(), "powerfull_note_fullmap.jpg");
 const fullmapWaiters = new Map(); // reqId -> {resolve, timer}
 app.post("/api/fullmap", (req, res) => {
   const { reqId, dataUrl, error } = req.body || {};
@@ -1853,7 +1853,7 @@ app.post("/api/video-inbox", (req, res) => {
     const sec = resolveSectionKey(section) || state.activeSection || "main";
     const log = fs.openSync(path.join(dir, "worker.log"), "a");
     const worker = spawn(
-      "python3",
+      "python",
       [VIDEO_WORKER, "--source", String(source), "--out", dir, "--id", id,
        "--section", sec, "--notify-url", `http://localhost:${PORT}/api/video-complete`],
       { detached: true, stdio: ["ignore", log, log] }

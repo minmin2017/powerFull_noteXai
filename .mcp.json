@@ -2,7 +2,7 @@
   "mcpServers": {
     "powerfull-note": {
       "command": "node",
-      "args": ["C:/Users/wicha/Desktop/powerfull_note/mcp-server.js"],
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/mcp-server.js"],
       "env": {
         "PORT": "4321"
       }

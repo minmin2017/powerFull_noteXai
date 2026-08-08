@@ -1,0 +1,10 @@
+# Python deps for Powerfull Note's core app (spawned by server.js / start.cmd).
+# Install with: python -m pip install -r requirements.txt
+edge-tts
+faster-whisper
+pyautogui
+pywin32
+keyboard
+requests
+matplotlib
+pillow
