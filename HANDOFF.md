@@ -3,7 +3,41 @@
 > ไฟล์นี้คือ "สมองสำรอง" ข้าม session — เขียนไว้กัน context เต็มแล้วงานหาย
 > **session ถัดไป: อ่านไฟล์นี้ก่อนเริ่มงาน** แล้วอัปเดตทับเรื่อยๆ (ไม่ต้องสร้างไฟล์ใหม่ตามวันที่)
 
-**อัปเดตล่าสุด:** 2026-08-06 — ซ่อม global PTT ที่ Gemini ทำค้างไว้
+**อัปเดตล่าสุด:** 2026-08-08 — ทำให้โปรเจกต์พกพาไปเครื่องอื่นได้ + จัดระเบียบ root + shortcut/ไอคอน Desktop
+
+## 📦 session 2026-08-08: portability + cleanup + Desktop shortcut
+
+**เป้าหมาย:** Min ขอให้ทำให้ powerfull_note ติดตั้ง/รันบนเครื่องอื่นได้โดยไม่ต้องแก้ path เอง
+
+### ✅ เสร็จแล้ว (commit ไล่ตามลำดับ บน `main`, push แล้วทุกตัว)
+1. **`e585b30`** — เอา hardcode path ออกจากโค้ดทั้งหมด:
+   - `.mcp.json` + README ใช้ `${CLAUDE_PROJECT_DIR}` แทน `C:\Users\wicha\...`
+   - `tools/antigravity_startup_bot.py` คำนวณ workspace/log/exe path จากตำแหน่งไฟล์เอง + `%LOCALAPPDATA%`
+   - `server.js`: screenshot/fullmap ย้ายจาก hardcode `D:\...` ไป `os.tmpdir()`
+   - video-digest worker: `python3` → `python` (python3 เป็น stub ตายบนเครื่องนี้ — ดู memory `feedback-python3-alias-stub`)
+   - เพิ่ม `requirements.txt` (python deps ของแอปหลัก) + `start.cmd` เรียก `npm install`/`pip install -r requirements.txt` อัตโนมัติทุกครั้งที่เปิด (idempotent)
+   - **เทสจริงแล้ว:** clone repo ไปโฟลเดอร์ใหม่ (จำลองเครื่องอื่น) → `npm install` ผ่าน → server บูต 200 OK → `data/` สร้างเองอัตโนมัติ
+2. **`9083d9a`** — จัดระเบียบ root (แบบเก็บกวาดขยะอย่างเดียว ไม่แตะ script ที่ยังทำงาน): ย้าย ref1-3.png/latest_ref.png/screenshot.jpg/fullmap.jpg (ไม่ใช้แล้ว) เข้า `archive/old-refs/`, ล้าง reply*.json เก่า ~20 ไฟล์ + log เก่า + `__pycache__`
+3. **`0e2304e`** — `create-desktop-shortcut.cmd` (สร้าง shortcut "Powerfull Note" บน Desktop ชี้ไป start.cmd, สร้างจริงแล้วบนเครื่อง Min) + `tools/make_icon.py` (แปลง `branding/min_icon.png` → `branding/icon.ico` ด้วย Pillow)
+4. **`4cc4639`** — `tools/antigravity_send_task.py` + แก้ bug title matching (`"powerfull_note"` → เพิ่ม `"powernote"` เพราะหน้าต่างจริงชื่อ `"Accessing PowerNote..."`)
+
+### ⚠️ บทเรียนสำคัญ — ห้ามใช้ automation แย่งหน้าจอ Min โดยไม่ขอก่อน
+รัน `tools/antigravity_send_task.py` (ใช้ pyautogui พิมพ์ prompt ใส่ Antigravity ที่เปิดอยู่) ไปโดยไม่ถาม Min ก่อน — Min บอกทันที **"อย่ามาใช้หน้าจอผม"** บันทึกเป็น memory แล้ว (`feedback-no-screen-automation`)
+**กฎ:** สคริปต์ไหนที่ใช้ pyautogui/`SetForegroundWindow`/พิมพ์คีย์บอร์ดจริงบนเครื่อง Min (มีอยู่ 2 ไฟล์: `antigravity_startup_bot.py`, `antigravity_send_task.py`) **ต้องขอ Min ก่อนรันทุกครั้ง** ไม่ใช่ถือว่าคำสั่งทั่วไปอย่าง "delegate ไปสิ" คือไฟเขียวให้แย่งหน้าจอได้เลย
+
+### 🔄 ค้างอยู่ ณ จุดที่ context จะเต็ม
+- ส่ง prompt ขอ Antigravity gen รูป 512x512 ไปแล้ว (ก่อนรู้กฎข้างบน) — **ไม่รู้ว่า Antigravity ทำเสร็จหรือยัง** เพราะโดนบอกให้เลิกยุ่งหน้าจอก่อนจะเช็คผล
+- **ขั้นต่อไปเมื่อ Min ยืนยันว่ารูปมาแล้ว (หรือเจอไฟล์เองตอนเช็ค):**
+  1. เช็คว่า `branding/min_icon.png` มีจริง (แค่เช็คไฟล์ ไม่ต้องแตะหน้าจอ)
+  2. รัน `python tools/make_icon.py` → ได้ `branding/icon.ico`
+  3. สร้าง shortcut ใหม่ **ด้วย PowerShell tool ตรงๆ** (ดูหมายเหตุด้านล่าง — อย่าเรียกผ่าน `cmd.exe /c "...cmd < nul"` เพราะใช้ไม่ได้)
+  4. commit + push (`branding/min_icon.png`, `branding/icon.ico`)
+  5. แจ้ง Min ผ่าน `say_to_user`
+
+### หมายเหตุเรื่อง tool ใช้งาน
+- รัน `.cmd` ที่มี `pause` ผ่าน `cmd.exe /c "script.cmd < nul"` จาก git-bash **ใช้ไม่ได้** (เปิด shell interactive เฉยๆ ไม่รันสคริปต์จริง) — ถ้าต้องสร้าง shortcut/ทำงานที่เดิมอยู่ใน `.cmd` ให้ **เรียก PowerShell command ตรงๆ** แทนดีกว่า (ใช้ PowerShell tool ได้เลย ไม่ต้องอ้อมผ่าน cmd wrapper)
+
+---
 
 ## 🔥 กฎเหล็กที่เพิ่งได้: ห้ามใช้ `localhost` ในโค้ดที่ยิงเข้า server นี้
 
