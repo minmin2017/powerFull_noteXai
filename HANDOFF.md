@@ -25,14 +25,14 @@
 รัน `tools/antigravity_send_task.py` (ใช้ pyautogui พิมพ์ prompt ใส่ Antigravity ที่เปิดอยู่) ไปโดยไม่ถาม Min ก่อน — Min บอกทันที **"อย่ามาใช้หน้าจอผม"** บันทึกเป็น memory แล้ว (`feedback-no-screen-automation`)
 **กฎ:** สคริปต์ไหนที่ใช้ pyautogui/`SetForegroundWindow`/พิมพ์คีย์บอร์ดจริงบนเครื่อง Min (มีอยู่ 2 ไฟล์: `antigravity_startup_bot.py`, `antigravity_send_task.py`) **ต้องขอ Min ก่อนรันทุกครั้ง** ไม่ใช่ถือว่าคำสั่งทั่วไปอย่าง "delegate ไปสิ" คือไฟเขียวให้แย่งหน้าจอได้เลย
 
-### 🔄 ค้างอยู่ ณ จุดที่ context จะเต็ม
-- ส่ง prompt ขอ Antigravity gen รูป 512x512 ไปแล้ว (ก่อนรู้กฎข้างบน) — **ไม่รู้ว่า Antigravity ทำเสร็จหรือยัง** เพราะโดนบอกให้เลิกยุ่งหน้าจอก่อนจะเช็คผล
-- **ขั้นต่อไปเมื่อ Min ยืนยันว่ารูปมาแล้ว (หรือเจอไฟล์เองตอนเช็ค):**
-  1. เช็คว่า `branding/min_icon.png` มีจริง (แค่เช็คไฟล์ ไม่ต้องแตะหน้าจอ)
-  2. รัน `python tools/make_icon.py` → ได้ `branding/icon.ico`
-  3. สร้าง shortcut ใหม่ **ด้วย PowerShell tool ตรงๆ** (ดูหมายเหตุด้านล่าง — อย่าเรียกผ่าน `cmd.exe /c "...cmd < nul"` เพราะใช้ไม่ได้)
-  4. commit + push (`branding/min_icon.png`, `branding/icon.ico`)
-  5. แจ้ง Min ผ่าน `say_to_user`
+### ✅ ไอคอนเสร็จแล้ว (แก้ไขวิธีให้ถูกทาง)
+Min ชี้ทางที่ถูก: โปรเจกต์นี้มี MCP tool `delegate_to_gemini` อยู่แล้ว (ส่งงานผ่าน task queue —
+`/api/agent/status` + `/api/gemini/task`, antigravity-wait.py เป็นคนรับงาน) **ไม่ต้องแย่งหน้าจอเลย**
+ใช้ตัวนี้แทน pyautogui hack ไปแล้ว: delegate ให้ Antigravity gen `branding/min_icon.png` (512x512)
+สำเร็จจริง → `python tools/make_icon.py` แปลงเป็น `branding/icon.ico` → อัปเดต shortcut Desktop
+ด้วย PowerShell tool ตรงๆ (`$s.IconLocation = ...; $s.Save()`) → commit `2ac9830` push แล้ว
+**บทเรียน:** งานที่ "ให้ Antigravity ทำ" ต่อไปนี้ **ใช้ `delegate_to_gemini` เป็นค่าเริ่มต้นเสมอ**
+อย่านึกถึง pyautogui script ก่อน — ปลอดภัยกว่า ไม่ยุ่งหน้าจอ Min เลย
 
 ### หมายเหตุเรื่อง tool ใช้งาน
 - รัน `.cmd` ที่มี `pause` ผ่าน `cmd.exe /c "script.cmd < nul"` จาก git-bash **ใช้ไม่ได้** (เปิด shell interactive เฉยๆ ไม่รันสคริปต์จริง) — ถ้าต้องสร้าง shortcut/ทำงานที่เดิมอยู่ใน `.cmd` ให้ **เรียก PowerShell command ตรงๆ** แทนดีกว่า (ใช้ PowerShell tool ได้เลย ไม่ต้องอ้อมผ่าน cmd wrapper)
