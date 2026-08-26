@@ -1422,10 +1422,10 @@ body.gemini-mode::before {
 .msg-banner {
   position: fixed;
   top: 18px;
-  left: 50%;
-  transform: translateX(-50%) translateY(-24px);
+  right: 18px;
+  transform: translateY(-24px);
   min-width: 260px;
-  max-width: 420px;
+  max-width: 320px;
   background: #111827;
   border: 1px solid var(--accent);
   color: var(--text);
@@ -1441,7 +1441,7 @@ body.gemini-mode::before {
 }
 .msg-banner.show {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
   pointer-events: auto;
 }
 .msg-banner-head {
@@ -1453,6 +1453,21 @@ body.gemini-mode::before {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.4;
+}
+.msg-banner-media {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: zoom-in;
+  transition: max-height 0.2s;
+}
+.msg-banner-media.expanded {
+  max-height: 60vh;
+  object-fit: contain;
+  cursor: zoom-out;
 }
 .msg-banner-close {
   position: absolute;

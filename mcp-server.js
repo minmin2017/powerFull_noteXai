@@ -256,12 +256,27 @@ server.registerTool(
         .string()
         .optional()
         .describe("บทบาทผู้ส่ง (เช่น 'claude' หรือ 'gemini')"),
+      media: z
+        .object({
+          kind: z.enum(["image", "video"]).describe("ชนิดสื่อ: image (รวม gif) หรือ video"),
+          path: z.string().optional().describe("path ไฟล์ในเครื่อง Min (absolute) — ใช้อันนี้หรือ url อย่างใดอย่างหนึ่ง"),
+          url: z.string().optional().describe("URL ของสื่อ (http(s) หรือ YouTube) — ใช้อันนี้หรือ path อย่างใดอย่างหนึ่ง"),
+        })
+        .optional()
+        .describe(
+          "แนบรูป/gif/วิดีโอเล็กๆ ไปกับ popup แจ้งเตือนมุมขวาบน (ไม่บังคับ) — เล่นแบบย่อในกรอบ ไม่เต็มจอ"
+        ),
     },
   },
-  async ({ text, section, role }) => {
+  async ({ text, section, role, media }) => {
     try {
       const senderRole = role || process.env.AGENT || "claude";
-      await api("/api/chat", "POST", { role: senderRole, text, section: section || SECTION || undefined });
+      await api("/api/chat", "POST", {
+        role: senderRole,
+        text,
+        section: section || SECTION || undefined,
+        media: media || undefined,
+      });
       return ok("ส่งข้อความเข้าพาเนลแล้ว" + (section || SECTION ? ` (section: ${section || SECTION})` : ""));
     } catch (e) {
       return fail(e);

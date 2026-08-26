@@ -501,10 +501,28 @@ function deleteImage(id) {
   return before - state.images.length;
 }
 
-function addChat({ role = "claude", text, section }) {
+// Turn a say_to_user media hint ({kind, path|url}) into a small URL the chat
+// banner can render directly. Local paths are routed through /api/media
+// (same mechanism as video boxes) so the browser never needs filesystem
+// access. Anything unresolvable is dropped rather than failing the message.
+function resolveChatMedia(media) {
+  if (!media || typeof media !== "object") return null;
+  const kind = media.kind === "video" ? "video" : "image";
+  let url = media.url;
+  if (!url && media.path) {
+    if (!fs.existsSync(media.path)) return null;
+    url = `/api/media?path=${encodeURIComponent(media.path)}`;
+  }
+  if (!url || typeof url !== "string") return null;
+  return { kind, url };
+}
+
+function addChat({ role = "claude", text, section, media }) {
   let sec = state.activeSection || "main";
   if (section) sec = resolveSectionKey(section) || sec;
   const msg = { id: uid("c"), role, text: String(text ?? ""), ts: Date.now(), section: sec };
+  const resolvedMedia = resolveChatMedia(media);
+  if (resolvedMedia) msg.media = resolvedMedia;
   state.chat.push(msg);
   if (state.chat.length > 500) state.chat = state.chat.slice(-500);
   changed();
@@ -988,7 +1006,10 @@ app.get("/api/media", (req, res) => {
   }
 
   const ext = path.extname(resolvedPath).toLowerCase();
-  const whitelist = [".mp4", ".webm", ".mkv", ".mov", ".m4v", ".mp3", ".wav"];
+  const whitelist = [
+    ".mp4", ".webm", ".mkv", ".mov", ".m4v", ".mp3", ".wav",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp",
+  ];
   if (!whitelist.includes(ext)) {
     return res.status(403).json({ error: "unsupported file format" });
   }

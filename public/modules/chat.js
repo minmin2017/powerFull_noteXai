@@ -459,7 +459,7 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
       localStorage.setItem(BANNER_ENABLED_KEY, bannerToggle.checked ? "1" : "0");
     });
   }
-  function showMsgBanner(role, text, sectionId) {
+  function showMsgBanner(role, text, sectionId, media) {
     if (!bannerEnabled()) return;
     let el = document.getElementById("msg-banner");
     if (!el) {
@@ -482,7 +482,25 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
     const body = document.createElement("div");
     body.className = "msg-banner-body";
     body.textContent = text.slice(0, 160);
-    el.append(closeBtn, head, body);
+    el.append(closeBtn, head);
+    if (media && media.url) {
+      const mediaEl = document.createElement(media.kind === "video" ? "video" : "img");
+      mediaEl.className = "msg-banner-media";
+      mediaEl.src = media.url;
+      if (media.kind === "video") {
+        mediaEl.muted = true;
+        mediaEl.autoplay = true;
+        mediaEl.loop = true;
+        mediaEl.playsInline = true;
+      }
+      // Expand to a larger, still-not-fullscreen view instead of navigating away.
+      mediaEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        mediaEl.classList.toggle("expanded");
+      });
+      el.append(mediaEl);
+    }
+    el.append(body);
     el.onclick = () => {
       if (sectionId && sectionId !== STATE.activeSection) {
         const tab = document.querySelector(`.chat-tab[data-id="${sectionId}"]`);
@@ -523,7 +541,7 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
       if (!m || seenChatIds.has(m.id)) continue;
       seenChatIds.add(m.id);
       if (m.role === "claude" || m.role === "gemini")
-        showMsgBanner(m.role, m.text, m.section || "main");
+        showMsgBanner(m.role, m.text, m.section || "main", m.media);
       if (m.role === "claude" && (m.section || "main") === active && claimForSpeech(m.id))
         enqueueSpeech(m.text);
     }
