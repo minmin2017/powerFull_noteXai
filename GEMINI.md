@@ -208,3 +208,12 @@ ext_to) and loop back to step 1.
 4. **Cloud System Dependencies:** When setting up GitHub Actions or Kaggle (Ubuntu), you MUST install these packages for Manim + Thai support:
    sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config python3-dev texlive-latex-extra texlive-fonts-extra texlive-latex-recommended texlive-xetex texlive-lang-other fonts-thai-tlwg
 5. **API Limits:** Do not poll the GitHub REST API aggressively without authentication, or you will get rate-limited (60 req/hr).
+
+## 11. GitHub Actions Optimization for Manim (Docker)
+**CRITICAL CLOUD PERFORMANCE RULE:**
+Never run Manim on a bare ubuntu-latest runner! Installing 	exlive-latex-extra and fmpeg from scratch takes ~3-4 minutes on every single CI run, which is terribly slow for rendering small videos.
+
+**Solution:** Always use the official Manim Docker container!
+By adding container: manimcommunity/manim:latest to your GitHub Actions job, the runner boots up with Manim, FFmpeg, and a full LaTeX suite pre-installed.
+You only need to run a 5-second sudo apt-get update && sudo apt-get install -y fonts-thai-tlwg texlive-lang-other to add Thai support before rendering!
+This cuts down the setup time from 3 minutes to ~5 seconds!
