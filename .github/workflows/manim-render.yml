@@ -27,7 +27,7 @@ jobs:
         run: pip install manim
         
       - name: Render Video
-        run: manim -pqh scratch/manim_part1_2.py Part1_Basics Part2_SimpleGears
+        run: manim -pqh scratch/manim_part3.py Part3_CompoundGears
         
       - name: Upload Videos
         uses: actions/upload-artifact@v4
