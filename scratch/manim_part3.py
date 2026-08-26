@@ -1,6 +1,6 @@
 from manim import *
 
-THAI_FONT = "Loma"
+THAI_FONT = "Tahoma"
 
 class Part3_CompoundGears(Scene):
     def construct(self):
@@ -53,11 +53,20 @@ class Part3_CompoundGears(Scene):
         gears = VGroup(shaft1, g2, l2, shaft2, g3, g4, l3, l4, shaft3, g5, l5).shift(DOWN*0.5)
         self.play(Create(gears))
         
-        # Formula
-        formula = MathTex(r"e = \frac{\omega_{out}}{\omega_{in}} = \frac{\text{ผลคูณ } N \text{ ของเฟืองขับ}}{\text{ผลคูณ } N \text{ ของเฟืองตาม}}", font_size=32)
+        # Formula (Mixed Thai Text and Math)
+        formula_left = MathTex(r"e = \frac{\omega_{out}}{\omega_{in}} = ", font_size=32)
+        
+        formula_frac_up = Text("ผลคูณ N ของเฟืองขับ", font=THAI_FONT, font_size=20)
+        formula_frac_down = Text("ผลคูณ N ของเฟืองตาม", font=THAI_FONT, font_size=20)
+        
+        line = Line(LEFT*1.5, RIGHT*1.5, color=WHITE)
+        formula_right = VGroup(formula_frac_up, line, formula_frac_down).arrange(DOWN, buff=0.1)
+        
+        formula = VGroup(formula_left, formula_right).arrange(RIGHT, buff=0.2)
+        
         formula2 = MathTex(r"e = +\frac{N_2 \times N_4}{N_3 \times N_5}", font_size=36, color=YELLOW)
         
-        f_group = VGroup(formula, formula2).arrange(DOWN, buff=0.3).next_to(gears, RIGHT, buff=1)
+        f_group = VGroup(formula, formula2).arrange(DOWN, buff=0.5).next_to(gears, RIGHT, buff=1)
         
         self.play(Write(formula))
         self.wait(1)
