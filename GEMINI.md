@@ -188,3 +188,23 @@ Claude (Fable/Opus/Sonnet) ส่งงานย่อยมาให้ Gemini 
 - **กำลังเครื่องป้อนเข้าเชิงกล (Mechanical Power In: \(\text{HP}_{in}\))**:
   $$\text{HP}_{in} = \frac{T_A \times N}{63025}$$
 
+
+---
+
+## 9. Video Generation Skill (Feedback Loop)
+When creating Manim videos, ALWAYS follow this Feedback Loop:
+1. Render the video using manim in the background.
+2. Extract keyframes from the output video using fmpeg (e.g., fmpeg -i video.mp4 -vf "select='eq(pict_type,I)'" -vsync vfr "frames\frame_%03d.png").
+3. Use the Vision tool (iew_file) to check the extracted frames for overlapping text, cut-off formulas, or bad layout.
+4. If the layout is bad, adjust the manim code (e.g., ont_size, scale, shift, 
+ext_to) and loop back to step 1.
+5. ONLY deliver the final video to the user when the Vision check passes!
+
+## 10. Manim Thai Language & Cloud Rendering Rules
+**CRITICAL RULES FOR THAI TEXT IN MANIM:**
+1. **Never put Thai characters inside MathTex or Tex!** The LaTeX compiler (pdflatex) will instantly crash and fail the render.
+2. **Always separate Thai text:** Use Text("ภาษาไทย", font=THAI_FONT) and group it with MathTex using VGroup(text, math).arrange(...).
+3. **Cross-Platform Fonts:** Use THAI_FONT = "Tahoma" for Local Windows. If pushing to Cloud (Ubuntu), use THAI_FONT = "Loma".
+4. **Cloud System Dependencies:** When setting up GitHub Actions or Kaggle (Ubuntu), you MUST install these packages for Manim + Thai support:
+   sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config python3-dev texlive-latex-extra texlive-fonts-extra texlive-latex-recommended texlive-xetex texlive-lang-other fonts-thai-tlwg
+5. **API Limits:** Do not poll the GitHub REST API aggressively without authentication, or you will get rate-limited (60 req/hr).
