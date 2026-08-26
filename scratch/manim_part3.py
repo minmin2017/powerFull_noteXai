@@ -1,6 +1,6 @@
-﻿from manim import *
+from manim import *
 
-THAI_FONT = "Tahoma"
+THAI_FONT = "Loma"
 
 class Part3_CompoundGears(Scene):
     def construct(self):
