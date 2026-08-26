@@ -1,6 +1,6 @@
 from manim import *
 
-THAI_FONT = "Tahoma"
+THAI_FONT = "Loma"
 
 class Part3_CompoundGears(Scene):
     def construct(self):
@@ -34,39 +34,37 @@ class Part3_CompoundGears(Scene):
         
         # Draw gears
         # Shaft 1: Gear 2 (Input)
-        shaft1 = Line(UP*0.5, DOWN*0.5, color=GREY, stroke_width=8).shift(LEFT*4)
+        shaft1 = Line(UP*0.5, DOWN*0.5, color=GREY, stroke_width=8).shift(LEFT*5)
         g2 = Circle(radius=1, color=GREEN).move_to(shaft1.get_center())
-        l2 = Text("N2 (Input)", font=THAI_FONT, font_size=18).move_to(g2)
+        l2 = Text("N2 (Input)", font=THAI_FONT, font_size=16).move_to(g2)
         
-        # Shaft 2: Gear 3 (Driven by 2) and Gear 4 (Compound with 3)
-        shaft2 = Line(UP*0.5, DOWN*0.5, color=GREY, stroke_width=8).shift(LEFT*1.5)
+        shaft2 = Line(UP*0.5, DOWN*0.5, color=GREY, stroke_width=8).shift(LEFT*2.5)
         g3 = Circle(radius=1.5, color=RED).move_to(shaft2.get_center())
-        g4 = Circle(radius=0.7, color=ORANGE).move_to(shaft2.get_center()) # Compounded
-        l3 = Text("N3", font=THAI_FONT, font_size=18).next_to(g3, UP)
-        l4 = Text("N4", font=THAI_FONT, font_size=18).next_to(g4, DOWN)
+        g4 = Circle(radius=0.7, color=ORANGE).move_to(shaft2.get_center())
+        l3 = Text("N3", font=THAI_FONT, font_size=16).next_to(g3, UP)
+        l4 = Text("N4", font=THAI_FONT, font_size=16).next_to(g4, DOWN)
         
-        # Shaft 3: Gear 5 (Driven by 4)
-        shaft3 = Line(UP*0.5, DOWN*0.5, color=GREY, stroke_width=8).shift(RIGHT*0.7)
+        shaft3 = Line(UP*0.5, DOWN*0.5, color=GREY, stroke_width=8).shift(LEFT*0.3)
         g5 = Circle(radius=1.5, color=BLUE).move_to(shaft3.get_center())
-        l5 = Text("N5 (Output)", font=THAI_FONT, font_size=18).move_to(g5)
+        l5 = Text("N5 (Output)", font=THAI_FONT, font_size=16).move_to(g5)
         
         gears = VGroup(shaft1, g2, l2, shaft2, g3, g4, l3, l4, shaft3, g5, l5).shift(DOWN*0.5)
         self.play(Create(gears))
         
         # Formula (Mixed Thai Text and Math)
-        formula_left = MathTex(r"e = \frac{\omega_{out}}{\omega_{in}} = ", font_size=32)
+        formula_left = MathTex(r"e = \frac{\omega_{out}}{\omega_{in}} = ", font_size=28)
         
-        formula_frac_up = Text("ผลคูณ N ของเฟืองขับ", font=THAI_FONT, font_size=20)
-        formula_frac_down = Text("ผลคูณ N ของเฟืองตาม", font=THAI_FONT, font_size=20)
+        formula_frac_up = Text("ผลคูณ N ของเฟืองขับ", font=THAI_FONT, font_size=16)
+        formula_frac_down = Text("ผลคูณ N ของเฟืองตาม", font=THAI_FONT, font_size=16)
         
-        line = Line(LEFT*1.5, RIGHT*1.5, color=WHITE)
+        line = Line(LEFT*1.2, RIGHT*1.2, color=WHITE)
         formula_right = VGroup(formula_frac_up, line, formula_frac_down).arrange(DOWN, buff=0.1)
         
         formula = VGroup(formula_left, formula_right).arrange(RIGHT, buff=0.2)
         
-        formula2 = MathTex(r"e = +\frac{N_2 \times N_4}{N_3 \times N_5}", font_size=36, color=YELLOW)
+        formula2 = MathTex(r"e = +\frac{N_2 \times N_4}{N_3 \times N_5}", font_size=32, color=YELLOW)
         
-        f_group = VGroup(formula, formula2).arrange(DOWN, buff=0.5).next_to(gears, RIGHT, buff=1)
+        f_group = VGroup(formula, formula2).arrange(DOWN, buff=0.4).next_to(gears, RIGHT, buff=0.5)
         
         self.play(Write(formula))
         self.wait(1)
