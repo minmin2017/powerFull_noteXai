@@ -9,23 +9,18 @@ on:
 jobs:
   render:
     runs-on: ubuntu-latest
+    container:
+      image: manimcommunity/manim:latest
+      options: --user root
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          
-      - name: Install System Dependencies
+      - name: Install Thai Fonts
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config python3-dev texlive-latex-extra texlive-fonts-extra texlive-latex-recommended texlive-xetex texlive-lang-other fonts-thai-tlwg
+          apt-get update
+          apt-get install -y fonts-thai-tlwg texlive-lang-other
           
-      - name: Install Manim
-        run: pip install manim
-        
       - name: Render Video
         run: manim -pqh scratch/manim_part3.py Part3_CompoundGears
         
