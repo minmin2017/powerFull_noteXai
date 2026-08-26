@@ -1,0 +1,36 @@
+name: Manim Render (Headless)
+
+on:
+  push:
+    paths:
+      - 'scratch/manim_*.py'
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libcairo2-dev pkg-config python3-dev
+          
+      - name: Install Manim
+        run: pip install manim
+        
+      - name: Render Video
+        run: manim -pqh scratch/manim_part1_2.py Part1_Basics Part2_SimpleGears
+        
+      - name: Upload Videos
+        uses: actions/upload-artifact@v4
+        with:
+          name: manim-rendered-videos
+          path: media/videos/**/*.mp4
