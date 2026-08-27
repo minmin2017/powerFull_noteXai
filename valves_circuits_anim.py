@@ -108,7 +108,7 @@ class HV02_SpoolValve(Scene):
         p1 = VGroup(
             Text("ตำแหน่งกลาง (Center)", font=THAI_FONT, font_size=22, color=OK),
             Text("สปูลปิดกั้นพอร์ตทั้งหมด", font=THAI_FONT, font_size=18, color=GRAYTXT),
-            Text("กระบอกสูบหยุดนิ่ง (Locked)", font_THAI_FONT, font_size=18, color=GRAYTXT),
+            Text("กระบอกสูบหยุดนิ่ง (Locked)", font=THAI_FONT, font_size=18, color=GRAYTXT),
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.15).move_to([3.5, 1.5, 0])
         self.play(FadeIn(p1))
         self.wait(1.0)
