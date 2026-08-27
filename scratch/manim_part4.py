@@ -1,4 +1,4 @@
-﻿from manim import *
+from manim import *
 
 THAI_FONT = "Loma"
 
@@ -31,7 +31,7 @@ class Part4_PlanetaryBasics(Scene):
         arm = Line(sun_dot.get_center(), planet_dot.get_center(), color=RED, stroke_width=8)
         
         system = VGroup(ring_gear, sun_gear, sun_dot, planet_gear, planet_dot, arm, ring_label)
-        system.shift(LEFT * 2 + DOWN * 0.5)
+        system.shift(LEFT * 2 + DOWN * 1.0)
 
         self.play(Create(ring_gear), Write(ring_label))
         self.play(Create(sun_gear), Create(sun_dot))
