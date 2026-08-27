@@ -22,7 +22,7 @@ jobs:
           apt-get install -y fonts-thai-tlwg texlive-lang-other
           
       - name: Render Video
-        run: manim -pqh scratch/manim_part5.py Part5_FormulaMethod
+        run: manim -pqh scratch/manim_part6.py Part6_TabularMethod
         
       - name: Upload Videos
         uses: actions/upload-artifact@v4
