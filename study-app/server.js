@@ -6,6 +6,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STUDY_PORT = Number(process.env.STUDY_PORT) || 4322;
@@ -31,6 +32,27 @@ function writeVideo(id, data) {
   const dir = path.join(DATA_DIR, id);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "explain.json"), JSON.stringify(data, null, 2), "utf8");
+}
+
+// Remux (never re-encode — just repackage) the source video into an mp4
+// with the "moov" metadata atom moved to the front. A plain file copy of a
+// manim/ffmpeg-concat output leaves moov trailing after the mdat block,
+// which plays fine in a native player (which can seek anywhere in a local
+// file) but leaves a browser <video> tag stuck at readyState 0 forever,
+// since it can't get duration/seek info without either the moov atom up
+// front or downloading the whole file first. Found by registering the real
+// 3.5-minute Agile Robot video and watching it hang in Chrome.
+function remuxFaststart(srcPath, destPath) {
+  return new Promise((resolve, reject) => {
+    const ff = spawn("ffmpeg", ["-y", "-v", "error", "-i", srcPath, "-c", "copy", "-movflags", "+faststart", destPath]);
+    let stderr = "";
+    ff.stderr.on("data", (d) => { stderr += d; });
+    ff.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg remux failed (code ${code}): ${stderr.trim()}`));
+    });
+    ff.on("error", reject);
+  });
 }
 
 function readVideoIndex() {
@@ -61,7 +83,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // rendering a new video: copies the local mp4 into this app's own storage
 // and writes explain.json alongside it. videoPath must already exist on disk
 // (this app runs on the same machine as the Claude Code session that rendered it).
-app.post("/videos", (req, res) => {
+app.post("/videos", async (req, res) => {
   const { title, videoPath, segments } = req.body || {};
   if (!title || !String(title).trim()) return res.status(400).json({ error: "missing title" });
   if (!videoPath || !fs.existsSync(videoPath)) return res.status(400).json({ error: "videoPath does not exist" });
@@ -74,8 +96,12 @@ app.post("/videos", (req, res) => {
   const id = uid("study");
   const dir = path.join(DATA_DIR, id);
   fs.mkdirSync(dir, { recursive: true });
-  const destVideo = path.join(dir, "video" + path.extname(videoPath));
-  fs.copyFileSync(videoPath, destVideo);
+  const destVideo = path.join(dir, "video.mp4");
+  try {
+    await remuxFaststart(videoPath, destVideo);
+  } catch (e) {
+    return res.status(500).json({ error: "video processing failed", detail: String(e.message || e) });
+  }
 
   const durationS = segments.length ? segments[segments.length - 1].end : 0;
   const data = {
