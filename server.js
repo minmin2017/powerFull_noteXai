@@ -1083,6 +1083,7 @@ function spawnStudyApp() {
     stdio: "inherit",
   });
   child.on("exit", (code) => {
+    if (code === null) return; // killed intentionally
     console.log(`[study-app] exited (code ${code}) — restarting in 3s`);
     setTimeout(spawnStudyApp, 3000);
   });
