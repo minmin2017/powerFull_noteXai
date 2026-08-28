@@ -3,6 +3,7 @@ data/
 .claude/
 .env
 *.log
+.setup/
 
 # graphify: track the graph outputs, ignore machine-specific state
 graphify-out/.graphify_python
@@ -34,3 +35,7 @@ tools/*.png
 # nested clones with their own .git (not submodules)
 tools/TIA_Portal_Openness_MCP/
 tools/tiaportal-mcp/
+
+# study-app: ignore video data, keep the directory structure
+study-app/data/*
+!study-app/data/.gitkeep
