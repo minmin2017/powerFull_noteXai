@@ -2817,6 +2817,10 @@ import setupGitHub from './modules/github.js';
     if (box) { selectedBoxId = box.id; toast("สร้างกล่องวิดีโอแล้ว 🎞"); }
   });
 
+  $("#btn-study-mode").addEventListener("click", () => {
+    window.open("http://127.0.0.1:4322/", "_blank");
+  });
+
   $("#btn-add-gallery").addEventListener("click", async () => {
     const c = screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2);
     const box = await api("/api/boxes", "POST", {
