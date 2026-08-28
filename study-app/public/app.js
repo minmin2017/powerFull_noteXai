@@ -49,7 +49,18 @@ if (videoId) {
 
       const text = document.createElement("div");
       text.className = "seg-text";
+      text.contentEditable = "true";
       text.textContent = seg.text;
+      text.addEventListener("blur", async () => {
+        const newText = text.textContent.trim();
+        if (newText === seg.text) return;
+        await fetch(`/videos/${video.id}/segments/${i}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: newText }),
+        });
+        seg.text = newText;
+      });
 
       card.appendChild(time);
       card.appendChild(text);
@@ -99,3 +110,39 @@ if (videoId) {
 document.getElementById("btn-back-to-list").addEventListener("click", () => {
   location.search = "";
 });
+
+document.getElementById("chat-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("chat-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  await fetch("/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  refreshChatLog();
+});
+
+async function refreshChatLog() {
+  try {
+    const { messages } = await fetch("/chat-log").then((r) => r.json());
+    const log = document.getElementById("chat-log");
+    log.innerHTML = messages
+      .map((m) => `<div class="chat-msg ${m.role}"><b>${m.role === "user" ? "Min" : "Claude"}:</b> ${escapeHtml(m.text)}</div>`)
+      .join("");
+    log.scrollTop = log.scrollHeight;
+  } catch {
+    // main server unreachable — leave the log as-is, chat form still queues via /chat's own error handling
+  }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+refreshChatLog();
+setInterval(refreshChatLog, 3000);
