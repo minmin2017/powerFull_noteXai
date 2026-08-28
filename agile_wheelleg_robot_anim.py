@@ -475,7 +475,8 @@ class R08_PassiveWheelsGRF(SafeScene):
 # =========================================================== R09_Kinematics
 class R09_Kinematics(SafeScene):
     def construct(self):
-        self.play(Write(title("Kinematics: จากความเร็วขา สู่ความเร็วล้อ")))
+        ttl1 = title("Kinematics: จากความเร็วขา สู่ความเร็วล้อ")
+        self.play(Write(ttl1))
 
         # top-view 4-wheel frame diagram
         R = Dot(ORIGIN, color=WHITE)
@@ -529,7 +530,7 @@ class R09_Kinematics(SafeScene):
         self.play(FadeIn(note3))
         self.wait(1.5)
 
-        self.play(FadeOut(VGroup(diagram, eq_roller, note1, eq_jac, note2, note3)))
+        self.play(FadeOut(VGroup(diagram, eq_roller, note1, eq_jac, note2, note3, ttl1)))
 
         ttl2 = Text("สถาปัตยกรรมควบคุม", font_size=28, color=WHITE).move_to([0, TITLE_Y, 0])
         self.play(Write(ttl2))
@@ -559,7 +560,8 @@ class R09_Kinematics(SafeScene):
 # =========================================================== R10_Experiments
 class R10_Experiments(SafeScene):
     def construct(self):
-        self.play(Write(title("ผลการทดลอง: Agile Motion Test")))
+        ttl1 = title("ผลการทดลอง: Agile Motion Test")
+        self.play(Write(ttl1))
 
         img = image_stage(IMG("fig11a_path_test.png"), max_w=10.8, max_h=3.6, center=[0, 1.4, 0])
         self.play(FadeIn(img))
@@ -577,7 +579,7 @@ class R10_Experiments(SafeScene):
         fit_width(finding, 11.5)
         self.play(FadeIn(finding))
         self.wait(2)
-        self.play(FadeOut(Group(img, stat, finding)))
+        self.play(FadeOut(Group(img, stat, finding, ttl1)))
 
         self.play(Write(title("ผลการทดลองในสภาพแวดล้อมมนุษย์")))
         img2 = image_stage(IMG("fig12_human_env_tests.png"), max_w=6.0, max_h=5.2, center=[0, -0.1, 0])
