@@ -1077,11 +1077,16 @@ spawnTtsWorker();
 // Study App: separate-port companion server. Spawned here (not by the user)
 // so it's always up whenever PowerNote is — same pattern as the TTS worker.
 const STUDY_PORT = Number(process.env.STUDY_PORT) || 4322;
+let studyChild = null;
 function spawnStudyApp() {
+  if (studyChild) {
+    try { studyChild.kill(); } catch {}
+  }
   const child = spawn("node", [path.join(__dirname, "study-app", "server.js")], {
     env: { ...process.env, STUDY_PORT: String(STUDY_PORT), NOTE_SERVER_URL: `http://127.0.0.1:${PORT}` },
     stdio: "inherit",
   });
+  studyChild = child;
   child.on("exit", (code) => {
     if (code === null) return; // killed intentionally
     console.log(`[study-app] exited (code ${code}) — restarting in 3s`);
@@ -1089,6 +1094,7 @@ function spawnStudyApp() {
   });
 }
 spawnStudyApp();
+process.on("exit", () => { try { studyChild?.kill(); } catch {} });
 
 // GET /api/tts?text=...&voice=female|male → streamed Thai speech (mp3 chunks
 // arrive as they're synthesized, not after the whole clip finishes).

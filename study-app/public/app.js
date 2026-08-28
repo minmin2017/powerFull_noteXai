@@ -54,11 +54,15 @@ if (videoId) {
       text.addEventListener("blur", async () => {
         const newText = text.textContent.trim();
         if (newText === seg.text) return;
-        await fetch(`/videos/${video.id}/segments/${i}`, {
+        const res = await fetch(`/videos/${video.id}/segments/${i}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: newText }),
         });
+        if (!res.ok) {
+          text.textContent = seg.text; // revert the visible text to match what's actually saved on disk
+          return;
+        }
         seg.text = newText;
       });
 

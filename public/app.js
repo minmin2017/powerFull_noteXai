@@ -2817,8 +2817,14 @@ import setupGitHub from './modules/github.js';
     if (box) { selectedBoxId = box.id; toast("สร้างกล่องวิดีโอแล้ว 🎞"); }
   });
 
-  $("#btn-study-mode").addEventListener("click", () => {
-    window.open("http://127.0.0.1:4322/", "_blank");
+  $("#btn-study-mode").addEventListener("click", async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:4322/videos");
+      if (!res.ok) throw new Error("not ok");
+      window.open("http://127.0.0.1:4322/", "_blank");
+    } catch {
+      toast("เปิดแอปติววิดิโอไม่ได้ — เซิร์ฟเวอร์อาจยังไม่พร้อม ลองรออีกสักครู่แล้วกดใหม่");
+    }
   });
 
   $("#btn-add-gallery").addEventListener("click", async () => {

@@ -17,6 +17,7 @@ function uid(prefix = "study") {
 }
 
 function readVideo(id) {
+  if (!/^study_[a-z0-9]+$/i.test(id)) return null;
   const p = path.join(DATA_DIR, id, "explain.json");
   if (!fs.existsSync(p)) return null;
   try {
@@ -114,9 +115,18 @@ app.patch("/videos/:id/segments/:i", (req, res) => {
 
 let studySectionId = null;
 
-async function ensureStudySection() {
-  if (studySectionId) return studySectionId;
-  const state = await fetch(NOTE_BASE + "/api/state").then((r) => r.json());
+// Re-validates the cached section id against the CURRENT project's state on
+// every call (chat sections live inside each PowerNote project's state, and
+// /api/state only returns the active project's — so the cached id goes stale
+// the moment Min switches projects). Pass `state` if the caller already
+// fetched /api/state, to avoid a redundant fetch.
+async function ensureStudySection(state) {
+  if (!state) state = await fetch(NOTE_BASE + "/api/state").then((r) => r.json());
+  if (studySectionId) {
+    const stillValid = (state.chatSections || []).some((s) => s.id === studySectionId);
+    if (stillValid) return studySectionId;
+    studySectionId = null;
+  }
   const existing = (state.chatSections || []).find((s) => (s.name || "").toLowerCase() === "study");
   if (existing) {
     studySectionId = existing.id;
@@ -160,8 +170,8 @@ app.post("/chat", async (req, res) => {
 // frontend chat panel can render it (polling, no WebSocket needed for MVP).
 app.get("/chat-log", async (_req, res) => {
   try {
-    const section = await ensureStudySection();
     const state = await fetch(NOTE_BASE + "/api/state").then((r) => r.json());
+    const section = await ensureStudySection(state);
     const msgs = (state.chat || []).filter((m) => m.section === section);
     res.json({ section, messages: msgs });
   } catch (e) {
