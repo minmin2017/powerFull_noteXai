@@ -46,6 +46,39 @@ function readVideoIndex() {
 const app = express();
 app.use(express.json({ limit: "5mb" }));
 
+// POST /videos {title, videoPath, segments} — Claude calls this right after
+// rendering a new video: copies the local mp4 into this app's own storage
+// and writes explain.json alongside it. videoPath must already exist on disk
+// (this app runs on the same machine as the Claude Code session that rendered it).
+app.post("/videos", (req, res) => {
+  const { title, videoPath, segments } = req.body || {};
+  if (!title || !String(title).trim()) return res.status(400).json({ error: "missing title" });
+  if (!videoPath || !fs.existsSync(videoPath)) return res.status(400).json({ error: "videoPath does not exist" });
+  if (!Array.isArray(segments) || segments.length === 0) return res.status(400).json({ error: "missing segments" });
+  for (const s of segments) {
+    if (typeof s.start !== "number" || typeof s.end !== "number" || typeof s.text !== "string")
+      return res.status(400).json({ error: "each segment needs {start:number, end:number, text:string}" });
+  }
+
+  const id = uid("study");
+  const dir = path.join(DATA_DIR, id);
+  fs.mkdirSync(dir, { recursive: true });
+  const destVideo = path.join(dir, "video" + path.extname(videoPath));
+  fs.copyFileSync(videoPath, destVideo);
+
+  const durationS = segments.length ? segments[segments.length - 1].end : 0;
+  const data = {
+    id,
+    title: String(title).trim(),
+    videoFile: path.basename(destVideo),
+    durationS,
+    createdAt: Date.now(),
+    segments,
+  };
+  writeVideo(id, data);
+  res.json(data);
+});
+
 export { app, STUDY_PORT, NOTE_BASE, DATA_DIR, uid, readVideo, writeVideo, readVideoIndex };
 
 // Every later task inserts its new routes ABOVE this line (before this
