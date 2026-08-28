@@ -95,6 +95,22 @@ app.get("/videos/:id/media", (req, res) => {
   res.sendFile(file);
 });
 
+// PATCH /videos/:id/segments/:i {text} — used by both the in-app edit box
+// and the edit_video_explanation MCP tool, so Claude and Min share one path.
+app.patch("/videos/:id/segments/:i", (req, res) => {
+  const v = readVideo(req.params.id);
+  if (!v) return res.status(404).json({ error: "video not found" });
+  const i = Number(req.params.i);
+  if (!Number.isInteger(i) || i < 0 || i >= v.segments.length)
+    return res.status(404).json({ error: "segment index out of range" });
+  const { text } = req.body || {};
+  if (typeof text !== "string" || !text.trim())
+    return res.status(400).json({ error: "missing text" });
+  v.segments[i].text = text.trim();
+  writeVideo(v.id, v);
+  res.json(v);
+});
+
 export { app, STUDY_PORT, NOTE_BASE, DATA_DIR, uid, readVideo, writeVideo, readVideoIndex };
 
 // Every later task inserts its new routes ABOVE this line (before this
