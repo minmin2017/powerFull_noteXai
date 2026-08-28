@@ -63,6 +63,15 @@ if (videoId) {
       });
       card.appendChild(warpBtn);
 
+      const ttsBtn = document.createElement("button");
+      ttsBtn.className = "tts-btn";
+      ttsBtn.textContent = "🔊 อ่านออกเสียง";
+      ttsBtn.addEventListener("click", () => {
+        const url = "http://127.0.0.1:4321/api/tts?voice=female&text=" + encodeURIComponent(seg.text);
+        new Audio(url).play();
+      });
+      card.appendChild(ttsBtn);
+
       wrap.appendChild(card);
     });
   }
