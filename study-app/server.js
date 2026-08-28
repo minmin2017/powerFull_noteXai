@@ -45,6 +45,15 @@ function readVideoIndex() {
 }
 
 const app = express();
+// PowerNote's own page (origin NOTE_BASE, normally :4321) fetch()es this
+// server's endpoints directly (e.g. the "🎓 ติววิดีโอ" button's reachability
+// check before opening a new tab) — without this header the browser blocks
+// that cross-origin fetch even though the request itself succeeds, which
+// looks exactly like "server unreachable" from the caller's point of view.
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", NOTE_BASE);
+  next();
+});
 app.use(express.json({ limit: "5mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
