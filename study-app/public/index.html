@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>แอปติววิดิโอ</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>🎓 แอปติววิดิโอ</h1>
+    <button id="btn-back-to-list" class="hidden">← รายการวิดิโอ</button>
+  </header>
+
+  <section id="picker">
+    <h2>เลือกวิดิโอ</h2>
+    <div id="video-list"></div>
+    <p class="hint">สั่งสร้างวิดิโอใหม่ได้จากกล่องแชทด้านล่างเมื่อยังไม่มีวิดิโอเลย</p>
+  </section>
+
+  <section id="player-view" class="hidden">
+    <div class="left-pane">
+      <video id="video" controls></video>
+    </div>
+    <div class="right-pane">
+      <div id="segments"></div>
+    </div>
+  </section>
+
+  <footer id="chat-box">
+    <div id="chat-log"></div>
+    <form id="chat-form">
+      <input id="chat-input" type="text" placeholder="สั่งให้ Claude สร้างวิดิโอ หรือถามเพิ่มเกี่ยวกับวิดิโอนี้..." autocomplete="off" />
+      <button type="submit">ส่ง</button>
+    </form>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

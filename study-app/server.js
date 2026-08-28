@@ -45,6 +45,7 @@ function readVideoIndex() {
 
 const app = express();
 app.use(express.json({ limit: "5mb" }));
+app.use(express.static(path.join(__dirname, "public")));
 
 // POST /videos {title, videoPath, segments} — Claude calls this right after
 // rendering a new video: copies the local mp4 into this app's own storage
