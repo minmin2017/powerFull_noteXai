@@ -292,6 +292,13 @@ class R06_LegMechanism(SafeThreeDScene):
         wheel_c = np.array([-2.6, 0.0, -0.4])
 
         body_dot = Dot3D(body, color=LEGC, radius=0.09)
+        # Upper mount: body -> yaw joint -> pitch joint. Previously these three
+        # points had no connecting geometry at all — yaw_dot/pitch_dot floated
+        # next to the leg rods with nothing joining them, reading as a broken
+        # linkage on screen (caught by re-watching the rendered frame, not by
+        # the layout linter, which only checks text).
+        mount1 = line3(body, yaw_act, LEGC, thickness=0.04)
+        mount2 = line3(yaw_act, pitch_act, LEGC, thickness=0.04)
         main_link = line3(pitch_act, wheel_c, LEGC, thickness=0.05)
         sup1 = line3(pitch_act + np.array([0, 0.28, 0]), wheel_c + np.array([0, 0.28, -0.15]),
                      GRAYTXT, thickness=0.03)
@@ -303,6 +310,7 @@ class R06_LegMechanism(SafeThreeDScene):
                           fill_color=WHEELC, fill_opacity=1, stroke_width=1).move_to(wheel_c)
 
         self.play(FadeIn(body_dot))
+        self.play(Create(mount1), Create(mount2))
         self.play(Create(main_link), Create(sup1), Create(sup2))
         self.play(FadeIn(yaw_dot), FadeIn(pitch_dot))
         self.play(FadeIn(wheel))
@@ -330,7 +338,7 @@ class R06_LegMechanism(SafeThreeDScene):
                               font_size=20, color=POLYC).move_to([0, CAP_Y, 0]), show=True)
         self.wait(1.5)
 
-        self.play(FadeOut(VGroup(body_dot, main_link, sup1, sup2, yaw_dot, pitch_dot, wheel, lbl3, ttl)))
+        self.play(FadeOut(VGroup(body_dot, mount1, mount2, main_link, sup1, sup2, yaw_dot, pitch_dot, wheel, lbl3, ttl)))
 
 
 # ========================================================== R07_PlanetaryGear
