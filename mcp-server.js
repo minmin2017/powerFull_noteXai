@@ -43,6 +43,20 @@ async function api(pathname, method = "GET", body) {
   return res.json();
 }
 
+const STUDY_BASE = process.env.STUDY_SERVER_URL || "http://127.0.0.1:4322";
+async function studyApi(pathname, method = "GET", body) {
+  const res = await fetch(STUDY_BASE + pathname, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`${method} ${pathname} → ${res.status} ${txt}`);
+  }
+  return res.json();
+}
+
 function ok(text) {
   return { content: [{ type: "text", text }] };
 }
@@ -743,6 +757,76 @@ server.registerTool(
     try {
       const r = await api(`/api/video-frame?id=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`);
       return ok(`เฟรมที่ t=${r.t}s: ${r.file}\n(เปิดดูที่ http://localhost:4321${r.file})`);
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  "start_video_study",
+  {
+    title: "เริ่มสร้างวิดิโอสอนใหม่สำหรับแอปติว",
+    description:
+      "Register that you (Claude) are about to author a new teaching video for the Video Study App. Call get_video_study_status afterward to confirm it registered. This tool does NOT render the video itself — you still author the manim scenes and render them yourself (use the manim-teaching-video skill), then call edit_video_explanation-style registration via a direct POST to the study app's /videos endpoint once the mp4 exists on disk. Use this tool first just to confirm the study app server is reachable before doing the (potentially long) render work.",
+    inputSchema: {
+      topic: z.string().describe("หัวข้อวิดิโอที่ Min ขอ"),
+    },
+  },
+  async ({ topic }) => {
+    try {
+      const videos = await studyApi("/videos");
+      return ok(
+        `แอปติววิดิโอพร้อมรับวิดิโอใหม่แล้ว (ตอนนี้มี ${videos.length} เรื่องอยู่แล้ว) — ` +
+        `ไปเขียน/render วิดิโอเรื่อง "${topic}" ได้เลย แล้วเรียก POST ${STUDY_BASE}/videos ` +
+        `{title, videoPath, segments} ตอนเสร็จ`
+      );
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  "get_video_study_status",
+  {
+    title: "เช็คสถานะวิดิโอในแอปติว",
+    description: "List videos currently registered in the Video Study App, or get one video's full detail (segments included) if videoId is given.",
+    inputSchema: {
+      videoId: z.string().optional().describe("เว้นว่าง = แสดงรายชื่อทั้งหมด, ใส่ = ดูรายละเอียดวิดิโอนั้น"),
+    },
+  },
+  async ({ videoId }) => {
+    try {
+      if (videoId) {
+        const v = await studyApi(`/videos/${encodeURIComponent(videoId)}`);
+        const lines = v.segments.map((s, i) => `  [${i}] ${s.start}s-${s.end}s: ${s.text}`).join("\n");
+        return ok(`"${v.title}" (${v.durationS}s, ${v.segments.length} segments)\n${lines}`);
+      }
+      const videos = await studyApi("/videos");
+      if (!videos.length) return ok("ยังไม่มีวิดิโอในแอปติวเลย");
+      return ok(videos.map((v) => `- [${v.id}] ${v.title} (${v.durationS}s)`).join("\n"));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  "edit_video_explanation",
+  {
+    title: "แก้ไข/ขยายข้อความอธิบายในแอปติว",
+    description: "Edit one segment's explanation text in a Video Study App video — use this when Min asks a follow-up question in the study chat and you want your fuller answer to also update the right-side text, not just appear in the chat.",
+    inputSchema: {
+      videoId: z.string(),
+      segmentIndex: z.number().int().min(0),
+      newText: z.string().describe("ข้อความใหม่ทั้งหมดของ segment นี้ (แทนที่ของเดิมทั้งหมด)"),
+    },
+  },
+  async ({ videoId, segmentIndex, newText }) => {
+    try {
+      await studyApi(`/videos/${encodeURIComponent(videoId)}/segments/${segmentIndex}`, "PATCH", { text: newText });
+      return ok(`แก้ไข segment [${segmentIndex}] ของวิดิโอ ${videoId} แล้ว`);
     } catch (e) {
       return fail(e);
     }
