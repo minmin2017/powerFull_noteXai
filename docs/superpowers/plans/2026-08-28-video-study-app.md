@@ -18,6 +18,7 @@
 - Chat must reuse the existing chat-section/inbox mechanism on the main server — do not build a second chat backend (spec §5.1).
 - This project has no automated test runner (`package.json` has no `test` script, no jest/mocha/vitest dependency) — verification steps in this plan use real `curl`/`node -e`/browser checks instead of a unit-test framework, matching how `docs/superpowers/specs/2026-08-22-startup-and-onboarding-design.md` verifies its own tasks. Do not add a test framework as a side effect of this plan.
 - Follow existing code style exactly: ESM imports, `const __dirname = path.dirname(fileURLToPath(import.meta.url));`, `uid(prefix)`-style id generation, `Number(process.env.X) || default` for ports.
+- In `study-app/server.js`, every task that adds routes or middleware (`app.get/post/patch/use`) inserts that code directly above the `export { ... };` line — the file's last statement must always stay `app.listen(STUDY_PORT, "127.0.0.1", ...)` (added in Task 1), never pushed above new route code.
 
 ---
 
@@ -103,12 +104,25 @@ const app = express();
 app.use(express.json({ limit: "5mb" }));
 
 export { app, STUDY_PORT, NOTE_BASE, DATA_DIR, uid, readVideo, writeVideo, readVideoIndex };
+
+// Every later task inserts its new routes ABOVE this line (before this
+// listen call), never below it — this must stay the last statement in the
+// file so the process actually stays alive and accepts connections.
+app.listen(STUDY_PORT, "127.0.0.1", () => {
+  console.log(`[study-app] listening on http://127.0.0.1:${STUDY_PORT}`);
+});
 ```
 
-- [ ] **Step 4: Verify it loads without error**
+- [ ] **Step 4: Verify it loads AND actually listens**
 
-Run: `node -e "import('./study-app/server.js').then(() => console.log('LOADS_OK'))"`
-Expected: prints `LOADS_OK`, no exceptions
+Run:
+```bash
+STUDY_PORT=4399 node study-app/server.js &
+sleep 1
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4399/videos
+kill %1
+```
+Expected: prints `[study-app] listening on http://127.0.0.1:4399`, then the curl prints `404` (no `/videos` route exists yet until Task 3 — a 404 still proves the server is up and routing; a connection error would mean it never started). Note `express.json()` alone returns 404 for unknown routes by default, which is what confirms this.
 
 - [ ] **Step 5: Commit**
 
