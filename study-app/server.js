@@ -111,6 +111,63 @@ app.patch("/videos/:id/segments/:i", (req, res) => {
   res.json(v);
 });
 
+let studySectionId = null;
+
+async function ensureStudySection() {
+  if (studySectionId) return studySectionId;
+  const state = await fetch(NOTE_BASE + "/api/state").then((r) => r.json());
+  const existing = (state.chatSections || []).find((s) => (s.name || "").toLowerCase() === "study");
+  if (existing) {
+    studySectionId = existing.id;
+    return studySectionId;
+  }
+  const created = await fetch(NOTE_BASE + "/api/chat-sections", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "study" }),
+  }).then((r) => r.json());
+  studySectionId = created.id;
+  return studySectionId;
+}
+
+// POST /chat {text} — sends a typed message into the "study" chat-section the
+// exact same way the main PowerNote UI does (public/modules/voice.js
+// submitUserInput), so any Claude Code window listening there (opened with
+// `claude-listen.cmd study`) picks it up via the existing inbox mechanism.
+app.post("/chat", async (req, res) => {
+  const { text } = req.body || {};
+  if (!text || !String(text).trim()) return res.status(400).json({ error: "missing text" });
+  try {
+    const section = await ensureStudySection();
+    await fetch(NOTE_BASE + "/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "user", text, section }),
+    });
+    await fetch(NOTE_BASE + "/api/inbox", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, section }),
+    });
+    res.json({ ok: true, section });
+  } catch (e) {
+    res.status(502).json({ error: "could not reach PowerNote server (port 4321) — is it running?", detail: String(e) });
+  }
+});
+
+// GET /chat-log — returns the "study" section's message history so the
+// frontend chat panel can render it (polling, no WebSocket needed for MVP).
+app.get("/chat-log", async (_req, res) => {
+  try {
+    const section = await ensureStudySection();
+    const state = await fetch(NOTE_BASE + "/api/state").then((r) => r.json());
+    const msgs = (state.chat || []).filter((m) => m.section === section);
+    res.json({ section, messages: msgs });
+  } catch (e) {
+    res.status(502).json({ error: "could not reach PowerNote server", detail: String(e) });
+  }
+});
+
 export { app, STUDY_PORT, NOTE_BASE, DATA_DIR, uid, readVideo, writeVideo, readVideoIndex };
 
 // Every later task inserts its new routes ABOVE this line (before this
