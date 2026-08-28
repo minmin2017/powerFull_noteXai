@@ -79,6 +79,22 @@ app.post("/videos", (req, res) => {
   res.json(data);
 });
 
+app.get("/videos", (_req, res) => res.json(readVideoIndex()));
+
+app.get("/videos/:id", (req, res) => {
+  const v = readVideo(req.params.id);
+  if (!v) return res.status(404).json({ error: "not found" });
+  res.json(v);
+});
+
+app.get("/videos/:id/media", (req, res) => {
+  const v = readVideo(req.params.id);
+  if (!v) return res.status(404).end();
+  const file = path.join(DATA_DIR, req.params.id, v.videoFile);
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.sendFile(file);
+});
+
 export { app, STUDY_PORT, NOTE_BASE, DATA_DIR, uid, readVideo, writeVideo, readVideoIndex };
 
 // Every later task inserts its new routes ABOVE this line (before this
