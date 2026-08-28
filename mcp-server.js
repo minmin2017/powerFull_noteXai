@@ -68,6 +68,16 @@ function fail(err) {
     content: [{ type: "text", text: `เกิดข้อผิดพลาด: ${err.message}${hint}` }],
   };
 }
+function studyFail(err) {
+  const hint =
+    "\n\n(ถ้าเชื่อมต่อแอปติววิดิโอไม่ได้ ให้แน่ใจว่า study-app/server.js กำลังรันอยู่ — " +
+    "ปกติมันสปอว์นอัตโนมัติตอนเปิด PowerNote ด้วย `node server.js` แล้ว ถ้ายังไม่ขึ้นลองรัน " +
+    "`node study-app/server.js` แยกเองดูว่ามี error อะไร)";
+  return {
+    isError: true,
+    content: [{ type: "text", text: `เกิดข้อผิดพลาด: ${err.message}${hint}` }],
+  };
+}
 
 // Render the mind map as an indented tree so Claude can see structure + ids.
 function renderTree(nodes) {
@@ -782,7 +792,7 @@ server.registerTool(
         `{title, videoPath, segments} ตอนเสร็จ`
       );
     } catch (e) {
-      return fail(e);
+      return studyFail(e);
     }
   }
 );
@@ -807,7 +817,7 @@ server.registerTool(
       if (!videos.length) return ok("ยังไม่มีวิดิโอในแอปติวเลย");
       return ok(videos.map((v) => `- [${v.id}] ${v.title} (${v.durationS}s)`).join("\n"));
     } catch (e) {
-      return fail(e);
+      return studyFail(e);
     }
   }
 );
@@ -828,7 +838,7 @@ server.registerTool(
       await studyApi(`/videos/${encodeURIComponent(videoId)}/segments/${segmentIndex}`, "PATCH", { text: newText });
       return ok(`แก้ไข segment [${segmentIndex}] ของวิดิโอ ${videoId} แล้ว`);
     } catch (e) {
-      return fail(e);
+      return studyFail(e);
     }
   }
 );
