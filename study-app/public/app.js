@@ -53,6 +53,16 @@ if (videoId) {
 
       card.appendChild(time);
       card.appendChild(text);
+
+      const warpBtn = document.createElement("button");
+      warpBtn.className = "warp-btn";
+      warpBtn.textContent = "⤴ ไปวินาทีนี้";
+      warpBtn.addEventListener("click", () => {
+        document.getElementById("video").currentTime = seg.start;
+        document.getElementById("video").play();
+      });
+      card.appendChild(warpBtn);
+
       wrap.appendChild(card);
     });
   }
@@ -62,6 +72,15 @@ if (videoId) {
     const sec = Math.floor(s % 60);
     return m + ":" + String(sec).padStart(2, "0");
   }
+
+  document.getElementById("video").addEventListener("timeupdate", (e) => {
+    const t = e.target.currentTime;
+    document.querySelectorAll(".segment-card").forEach((card) => {
+      const start = Number(card.dataset.start);
+      const end = Number(card.dataset.end);
+      card.classList.toggle("active", t >= start && t < end);
+    });
+  });
 
   if (videoId) loadVideo(videoId);
 } else {
