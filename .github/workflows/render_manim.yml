@@ -11,6 +11,18 @@ on:
         description: 'Scenes to render (space-separated)'
         required: true
         default: 'HV01_CheckValve HV02_SpoolValve HC01_Regenerative'
+      quality:
+        description: 'manim quality letter (l/m/h/p/k)'
+        required: false
+        default: 'm'
+      fps:
+        description: 'frames per second'
+        required: false
+        default: '30'
+      resolution:
+        description: 'optional WIDTH,HEIGHT override (e.g. 1920,1080) — leave empty to use the quality preset resolution'
+        required: false
+        default: ''
 
 jobs:
   render:
@@ -28,7 +40,11 @@ jobs:
 
       - name: Render Manim Video
         run: |
-          manim -qm --fps 30 ${{ github.event.inputs.scene_file }} ${{ github.event.inputs.scene_names }}
+          RES_FLAG=""
+          if [ -n "${{ github.event.inputs.resolution }}" ]; then
+            RES_FLAG="-r ${{ github.event.inputs.resolution }}"
+          fi
+          manim -q${{ github.event.inputs.quality }} --fps ${{ github.event.inputs.fps }} $RES_FLAG ${{ github.event.inputs.scene_file }} ${{ github.event.inputs.scene_names }}
 
       - name: Upload Video Artifacts
         uses: actions/upload-artifact@v4
