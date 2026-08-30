@@ -21,14 +21,24 @@ on:
         default: '25'
 
 jobs:
+  set-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          echo "matrix=${{ github.event.inputs.scenes }}" >> "$GITHUB_OUTPUT"
+
   render-matrix:
+    needs: set-matrix
     runs-on: ubuntu-latest
     container:
       image: manimcommunity/manim:latest
       options: --user root
     strategy:
       matrix:
-        scene: ["DCMachineComponents3D", "NeutralPlane3DView", "ArmatureReactionDistortion", "MagneticVectorField2D"]
+        scene: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
       fail-fast: false
     steps:
       - name: Checkout repo
