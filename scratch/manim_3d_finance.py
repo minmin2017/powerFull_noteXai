@@ -56,9 +56,6 @@ class Finance3D(ThreeDScene):
             stroke_width=4
         )
 
-        lbl_c1 = Text("พอร์ตทบต้นแบบก้าวกระโดด", font=THAI_FONT, font_size=16, color=GREEN_UP)
-        lbl_c2 = Text("เงินออมแบบเส้นตรง (Linear)", font=THAI_FONT, font_size=16, color=GRAYTXT)
-        
         self.play(Create(curve2), Create(curve1), run_time=2.5)
 
         # 4. 3D Pillars (Asset Allocation Bars)
@@ -82,7 +79,7 @@ class Finance3D(ThreeDScene):
         # 5. Fixed Summary Card
         card = RoundedRectangle(corner_radius=0.15, width=6.5, height=2.2, color=GOLD, fill_opacity=0.85, stroke_width=2).to_edge(DOWN, buff=0.5)
         c_eq = MathTex(r"A = P \left(1 + \frac{r}{n}\right)^{nt}", font_size=28, color=BLACK).move_to(card.get_center() + UP*0.4)
-        c_txt = Text(""Compound interest is the eighth wonder of the world"", font_size=16, color=BLACK).move_to(card.get_center() + DOWN*0.4)
+        c_txt = Text("Compound interest is the eighth wonder of the world", font_size=16, color=BLACK).move_to(card.get_center() + DOWN*0.4)
         
         card_grp = VGroup(card, c_eq, c_txt)
         self.add_fixed_in_frame_mobjects(card_grp)
