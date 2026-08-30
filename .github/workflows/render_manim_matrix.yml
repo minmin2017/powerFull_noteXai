@@ -1,0 +1,80 @@
+name: Parallel Manim Matrix Render & Merge (Docker)
+
+on:
+  workflow_dispatch:
+    inputs:
+      scene_file:
+        description: 'Path to python script'
+        required: true
+        default: 'eps_ch6_neutral_plane_anim.py'
+      scenes:
+        description: 'JSON array of scene names'
+        required: true
+        default: '["DCMachineComponents3D", "NeutralPlane3DView", "ArmatureReactionDistortion", "MagneticVectorField2D"]'
+      quality:
+        description: 'quality preset (l/m/h)'
+        required: false
+        default: 'l'
+      fps:
+        description: 'frames per second'
+        required: false
+        default: '25'
+
+jobs:
+  render-matrix:
+    runs-on: ubuntu-latest
+    container:
+      image: manimcommunity/manim:latest
+      options: --user root
+    strategy:
+      matrix:
+        scene: ["DCMachineComponents3D", "NeutralPlane3DView", "ArmatureReactionDistortion", "MagneticVectorField2D"]
+      fail-fast: false
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Thai Fonts
+        run: |
+          apt-get update && apt-get install -y fonts-thai-tlwg texlive-lang-other
+
+      - name: Render Scene ${{ matrix.scene }}
+        run: |
+          manim -q${{ github.event.inputs.quality }} --fps ${{ github.event.inputs.fps }} ${{ github.event.inputs.scene_file }} ${{ matrix.scene }}
+
+      - name: Upload Scene Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scene-${{ matrix.scene }}
+          path: media/videos/
+
+  merge-and-finalize:
+    needs: render-matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all scene artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_scenes
+
+      - name: Concatenate Scenes with FFmpeg
+        run: |
+          mkdir -p output_merged
+          echo "Finding all mp4 files..."
+          find downloaded_scenes -name "*.mp4" | sort > file_list.txt
+          echo "Files to merge:"
+          cat file_list.txt
+          
+          # Create ffmpeg concat demuxer file
+          sed "s/^/file '/;s/$/'/" file_list.txt > concat.txt
+          echo "Concat manifest:"
+          cat concat.txt
+          
+          ffmpeg -f concat -safe 0 -i concat.txt -c copy output_merged/Full_Chapter6_Manim_Lesson.mp4
+          echo "Merged full lesson video created successfully!"
+
+      - name: Upload Full Combined Video
+        uses: actions/upload-artifact@v4
+        with:
+          name: Full_Chapter6_Manim_Lesson
+          path: output_merged/Full_Chapter6_Manim_Lesson.mp4
