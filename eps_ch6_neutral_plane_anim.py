@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-eps_ch6_neutral_plane_anim.py — Manim 3D Teaching Animation for EPS Chapter 6
+eps_ch6_neutral_plane_anim.py — Manim Teaching Animation for EPS Chapter 6
 Scenes:
 1. DCMachineComponents3D (3D Exploded / Assembled View of Stator, Armature, Commutator, Brushes)
 2. NeutralPlane3DView (3D View of Neutral Plane MNP, 3D Coil Rotation & Faraday Induction)
+3. MagneticVectorField2D (Vector Field / Calculus: Main Field, Armature Reaction & Distorted Field)
 """
 
 import sys
@@ -16,10 +17,8 @@ from mlib import *
 
 class DCMachineComponents3D(SafeThreeDScene):
     def construct(self):
-        # 1. 3D Camera Setup
         self.set_camera_orientation(phi=65 * DEGREES, theta=-55 * DEGREES)
 
-        # 2. HUD Header & Info
         t_title = title("โครงสร้าง 3 มิติ: ชิ้นส่วนหลักของเครื่องกลไฟฟ้ากระแสตรง (DC Machine)")
         self.hud(t_title)
         self.play(FadeIn(t_title))
@@ -53,7 +52,6 @@ class DCMachineComponents3D(SafeThreeDScene):
 
         cx, cy, cz = -1.8, 0.0, 0.0
 
-        # 3. Component 1: Stator (Outer Frame & N-S Poles)
         stator_yoke = Cylinder(radius=2.4, height=2.2, direction=[0, 0, 1], color=METAL).move_to([cx, cy, cz]).set_opacity(0.25)
         pole_n = Prism(dimensions=[0.8, 1.8, 2.0]).move_to([cx - 2.0, cy, cz]).set_color(RED).set_opacity(0.85)
         pole_s = Prism(dimensions=[0.8, 1.8, 2.0]).move_to([cx + 2.0, cy, cz]).set_color(BLUE).set_opacity(0.85)
@@ -67,7 +65,6 @@ class DCMachineComponents3D(SafeThreeDScene):
         self.play(FadeIn(stator_yoke), FadeIn(pole_n), FadeIn(pole_s), FadeIn(lbl_n), FadeIn(lbl_s), FadeIn(cap))
         self.wait(1.5)
 
-        # 4. Component 2: Armature Rotor Core along Z-axis
         armature_core = Cylinder(radius=1.3, height=1.8, direction=[0, 0, 1], color=WARN).move_to([cx, cy, cz]).set_opacity(0.6)
         shaft = Cylinder(radius=0.15, height=3.4, direction=[0, 0, 1], color=GRAY).move_to([cx, cy, cz])
 
@@ -85,7 +82,6 @@ class DCMachineComponents3D(SafeThreeDScene):
         self.play(FadeIn(cap2))
         self.wait(1.5)
 
-        # 5. Component 3: Commutator (on the shaft in front)
         commutator = Cylinder(radius=0.45, height=0.6, direction=[0, 0, 1], color="#F59E0B").move_to([cx, cy, cz + 1.2])
         lbl_comm = Text("คอมมิวเตเตอร์", font_size=14, color="#F59E0B").move_to([cx, cy - 0.7, cz + 1.2])
         self.world_text(lbl_comm)
@@ -100,7 +96,6 @@ class DCMachineComponents3D(SafeThreeDScene):
         self.play(FadeIn(cap3))
         self.wait(1.5)
 
-        # 6. Component 4: Carbon Brushes (Pressing top and bottom on commutator)
         brush_top = Prism(dimensions=[0.25, 0.35, 0.3]).move_to([cx, cy + 0.55, cz + 1.2]).set_color(WHITE).set_opacity(0.95)
         brush_bot = Prism(dimensions=[0.25, 0.35, 0.3]).move_to([cx, cy - 0.55, cz + 1.2]).set_color(WHITE).set_opacity(0.95)
         lbl_br = Text("แปรงถ่าน (Brushes)", font_size=14, color=WHITE).move_to([cx + 0.9, cy + 0.55, cz + 1.2])
@@ -116,7 +111,6 @@ class DCMachineComponents3D(SafeThreeDScene):
         self.hud(cap4)
         self.play(FadeIn(cap4))
 
-        # Rotate camera for full 3D assembly perspective
         self.play(
             self.camera.animate.set_euler_angles(phi=70 * DEGREES, theta=-20 * DEGREES),
             run_time=4.0
@@ -126,28 +120,26 @@ class DCMachineComponents3D(SafeThreeDScene):
 
 class NeutralPlane3DView(SafeThreeDScene):
     def construct(self):
-        # 1. 3D Camera Setup
         self.set_camera_orientation(phi=65 * DEGREES, theta=-55 * DEGREES)
 
-        # 2. HUD Elements (Fixed on screen)
         t_title = title("มุมมอง 3D: ระนาบเป็นกลาง (Neutral Plane) & การตัดเส้นแรงแม่เหล็ก")
         self.hud(t_title)
         self.play(FadeIn(t_title))
 
         hud_panel = RoundedRectangle(corner_radius=0.18, width=4.4, height=5.4, color="#1E293B", fill_opacity=0.92).move_to([4.8, 0, 0])
         hud_head = Text("การเหนี่ยวนำแรงดัน (EMF)", font_size=18, color=WHITE).move_to([4.8, 2.2, 0])
-        hud_form = MathTex(r"e = B \cdot l \cdot v \cdot \sin(	heta)", font_size=23, color=CURRENT).next_to(hud_head, DOWN, buff=0.15)
+        hud_form = MathTex(r"e = B \cdot l \cdot v \cdot \sin(\theta)", font_size=23, color=CURRENT).next_to(hud_head, DOWN, buff=0.15)
 
         hud_c1 = VGroup(
             Text("• ระนาบเป็นกลาง (MNP):", font_size=14, color=OK),
             Text("ขดลวดอยู่บน-ล่าง ขนานกับสนาม B", font_size=13, color=GRAYTXT),
-            MathTex(r"	heta = 0^\circ \;ightarrow\; e = 0 	ext{ V}", font_size=17, color=OK)
+            MathTex(r"\theta = 0^\circ \;\rightarrow\; e = 0 \text{ V}", font_size=17, color=OK)
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.06).move_to([4.8, 0.5, 0])
 
         hud_c2 = VGroup(
             Text("• ระนาบตัดเต็มที่ (90°):", font_size=14, color=EMF),
             Text("ขดลวดอยู่ซ้าย-ขวา ตั้งฉากกับ B", font_size=13, color=GRAYTXT),
-            MathTex(r"	heta = 90^\circ \;ightarrow\; e = 	ext{Max}", font_size=17, color=EMF)
+            MathTex(r"\theta = 90^\circ \;\rightarrow\; e = \text{Max}", font_size=17, color=EMF)
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.06).move_to([4.8, -1.3, 0])
 
         hud_grp = VGroup(hud_panel, hud_head, hud_form, hud_c1, hud_c2)
@@ -156,7 +148,6 @@ class NeutralPlane3DView(SafeThreeDScene):
 
         cx, cy, cz = -1.8, 0.0, 0.0
 
-        # 3. 3D Magnetic Poles
         pole_n = Prism(dimensions=[1.2, 3.2, 2.5]).move_to([cx - 3.0, cy, cz]).set_color(RED).set_opacity(0.85)
         pole_s = Prism(dimensions=[1.2, 3.2, 2.5]).move_to([cx + 3.0, cy, cz]).set_color(BLUE).set_opacity(0.85)
 
@@ -166,7 +157,6 @@ class NeutralPlane3DView(SafeThreeDScene):
 
         self.play(FadeIn(pole_n), FadeIn(pole_s), FadeIn(lbl_n_txt), FadeIn(lbl_s_txt))
 
-        # 4. 3D Magnetic Flux Lines
         flux_lines = VGroup()
         for y_off in [-1.0, 0.0, 1.0]:
             for z_off in [-0.8, 0.0, 0.8]:
@@ -177,7 +167,6 @@ class NeutralPlane3DView(SafeThreeDScene):
 
         self.play(Create(flux_lines))
 
-        # 5. 3D Neutral Plane (Translucent Green Sheet on Y-Z plane at x = cx)
         np_plane = Polygon(
             [cx, cy - 1.8, cz - 1.4],
             [cx, cy + 1.8, cz - 1.4],
@@ -193,11 +182,9 @@ class NeutralPlane3DView(SafeThreeDScene):
 
         self.play(FadeIn(np_plane), FadeIn(lbl_np_3d))
 
-        # 6. Central Rotor Shaft along Z axis
         shaft = Cylinder(radius=0.15, height=3.0, direction=[0, 0, 1], color=METAL).move_to([cx, cy, cz])
         self.play(FadeIn(shaft))
 
-        # 7. 3D Rotating Armature Coil
         r = 1.3
         L = 2.0
 
@@ -233,5 +220,62 @@ class NeutralPlane3DView(SafeThreeDScene):
             Transform(coil, coil_full),
             self.camera.animate.set_euler_angles(phi=70 * DEGREES, theta=-65 * DEGREES),
             run_time=4.0
+        )
+        self.wait(3.0)
+
+
+class MagneticVectorField2D(SafeScene):
+    def construct(self):
+        t_title = title("สนามเวกเตอร์แม่เหล็ก (Magnetic Vector Field & StreamLines)")
+        self.play(FadeIn(t_title))
+
+        # Vector Field of Main Field: B_f = [2.0, 0, 0]
+        def field_main(p):
+            return np.array([1.8, 0.0, 0.0])
+
+        vf_main = ArrowVectorField(
+            field_main,
+            x_range=[-6.0, 2.0, 1.0],
+            y_range=[-2.5, 2.5, 0.8],
+            length_func=lambda norm: 0.5,
+            colors=[FIELD]
+        )
+
+        p_info = RoundedRectangle(corner_radius=0.18, width=4.5, height=5.5, color="#1E293B", fill_opacity=0.92).move_to([4.8, 0, 0])
+        p_head = Text("Vector Calculus", font_size=18, color=WHITE).move_to([4.8, 2.3, 0])
+        
+        eq1 = MathTex(r"\vec{B}_f = B_0 \hat{i}", font_size=24, color=FIELD).move_to([4.8, 1.4, 0])
+        eq2 = MathTex(r"\vec{B}_a = -B_a \hat{j}", font_size=24, color=WARN).move_to([4.8, 0.4, 0])
+        eq3 = MathTex(r"\vec{B}_{\text{total}} = \vec{B}_f + \vec{B}_a", font_size=22, color=EMF).move_to([4.8, -0.6, 0])
+        eq4 = MathTex(r"\alpha = \tan^{-1}\left(\frac{B_a}{B_0}\right)", font_size=22, color=OK).move_to([4.8, -1.6, 0])
+
+        self.play(Create(vf_main), FadeIn(p_info), FadeIn(p_head), Write(eq1), Write(eq2), Write(eq3), Write(eq4))
+        
+        cap1 = caption("1. สนามแม่เหล็กหลักสม่ำเสมอ พุ่งจากขั้ว N ไปขั้ว S (เวกเตอร์แนวนอน)")
+        self.play(FadeIn(cap1))
+        self.wait(2.0)
+
+        # Vector Field of Distorted Resultant Field (Armature Reaction)
+        def field_distorted(p):
+            x, y = p[0] + 2.0, p[1]
+            r = math.sqrt(x*x + y*y) + 0.1
+            # Main horizontal field + perpendicular cross-field from armature
+            bx = 1.8 - 0.4 * y / r
+            by = -1.2 + 0.4 * x / r
+            return np.array([bx, by, 0.0])
+
+        vf_distorted = ArrowVectorField(
+            field_distorted,
+            x_range=[-6.0, 2.0, 1.0],
+            y_range=[-2.5, 2.5, 0.8],
+            length_func=lambda norm: 0.55,
+            colors=[WARN, EMF]
+        )
+
+        cap2 = caption("2. เมื่อจ่ายโหลด: สนามอาร์เมเจอร์รวมกับสนามหลัก ทำให้เวกเตอร์สนามบิดเบี้ยวเอียงลง")
+        self.play(
+            FadeOut(cap1),
+            Transform(vf_main, vf_distorted),
+            FadeIn(cap2)
         )
         self.wait(3.0)
