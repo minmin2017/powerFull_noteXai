@@ -100,7 +100,9 @@ class RightHandRuleStepByStep(SafeScene):
         # -------------------------------------------------------------
         cap3 = caption("ขั้นที่ 3: ตรงกลางแกนโรเตอร์ เส้นแรงทั้งสองชี้ลงเหมือนกัน ➔ รวมกันเป็นสนามอาร์เมเจอร์ Ba แนวดิ่ง!")
         vec_ba_total = Arrow(start=[cx, 1.2, 0], end=[cx, -1.2, 0], color=EMF, stroke_width=6)
-        lbl_ba_total = MathTex(r"\vec{B}_a \text{ (พุ่งลงแนวดิ่ง 90}^\circ\text{)}", font_size=18, color=EMF).next_to(vec_ba_total, RIGHT, buff=0.15)
+        lbl_ba_math = MathTex(r"\vec{B}_a", font_size=20, color=EMF)
+        lbl_ba_txt = Text("(พุ่งลงแนวดิ่ง 90°)", font_size=13, color=EMF)
+        lbl_ba_total = VGroup(lbl_ba_math, lbl_ba_txt).arrange(RIGHT, buff=0.1).next_to(vec_ba_total, RIGHT, buff=0.15)
 
         self.play(
             FadeOut(cap2),
