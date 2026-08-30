@@ -259,7 +259,10 @@ class ArmatureReactionDistortion(SafeScene):
 
         # Step 1: Main Field Only (รูป 6-2 ก)
         v_bf = Arrow(start=[cx - 2.2, 0, 0], end=[cx + 1.2, 0, 0], buff=0, color=FIELD, stroke_width=4)
-        lbl_bf = MathTex(r"\vec{B}_f \text{ (สนามหลัก)}", color=FIELD, font_size=20).next_to(v_bf, UP, buff=0.1)
+        lbl_bf = VGroup(
+            MathTex(r"\vec{B}_f", color=FIELD, font_size=22),
+            Text("(สนามหลัก)", font_size=15, color=FIELD)
+        ).arrange(RIGHT, buff=0.1).next_to(v_bf, UP, buff=0.1)
 
         mnp_original = DashedLine(start=[cx - 0.5, -2.4, 0], end=[cx - 0.5, 2.4, 0], color=OK, stroke_width=3)
         lbl_mnp1 = Text("ระนาบเดิม (ตั้งตรง 90°)", font_size=14, color=OK).next_to(mnp_original, UP, buff=0.1)
@@ -270,7 +273,10 @@ class ArmatureReactionDistortion(SafeScene):
 
         # Step 2: Armature Cross Field (รูป 6-2 ข)
         v_ba = Arrow(start=[cx - 0.5, 1.6, 0], end=[cx - 0.5, -1.6, 0], buff=0, color=WARN, stroke_width=4)
-        lbl_ba = MathTex(r"\vec{B}_a \text{ (สนามอาร์เมเจอร์)}", color=WARN, font_size=20).next_to(v_ba, RIGHT, buff=0.1)
+        lbl_ba = VGroup(
+            MathTex(r"\vec{B}_a", color=WARN, font_size=22),
+            Text("(สนามอาร์เมเจอร์)", font_size=15, color=WARN)
+        ).arrange(RIGHT, buff=0.1).next_to(v_ba, RIGHT, buff=0.1)
 
         cap2 = caption("รูป (ข): เมื่อจ่ายโหลด กระแส Ia สร้างสนาม Ba ตั้งฉาก 90° กับสนามหลัก")
         self.play(
