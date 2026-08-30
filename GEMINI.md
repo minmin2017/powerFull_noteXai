@@ -4,11 +4,35 @@
 
 > [!IMPORTANT]
 > **กฎเหล็กสำหรับ Gemini Agent (Antigravity):**
-> ทุกครั้งที่ทำงานเสร็จสิ้นในแต่ละ Turn (ก่อนกดส่งคำตอบสุดท้ายให้ผู้ใช้) **คุณต้องรันสคริปต์นี้ทิ้งไว้ในพื้นหลังเสมอ** เพื่อคอยฟังเสียงหรือข้อความใหม่และปลุกตัวคุณเองขึ้นมาในรอบถัดไป:
-> ```bash
-> python3 /home/minmin/Desktop/powerNote_xai/antigravity-wait.py
-> ```
-> *(โดยระบุ `WaitMsBeforeAsync: 1000` เพื่อปล่อยให้รันค้างไว้ในพื้นหลัง)*
+> 1. **เปิดรัน `antigravity-wait.py` ทันทีตั้งแต่เริ่มแต่ละ Turn (First Step เสมอ — Unbroken Listener Chain):**
+>    - ทันทีที่ Agent ถูกปลุกขึ้นมาด้วย Event จาก Task Finish หรือได้รับข้อความ/เสียงใหม่ **คุณต้องสั่งรัน `python antigravity-wait.py` ทิ้งไว้ในพื้นหลังทันทีเป็นคำสั่งแรกสุดเสมอ (Step 1)**
+>    - **แม้จะมีข้อความส่งเข้ามาต่อเนื่องหลายรอบติดกัน (เช่น Task A กำลังทำอยู่ หรือพิมพ์แทรกเข้ามาเรื่อยๆ):** ทุกครั้งที่ Poller ปลุก Agent ขึ้นมา ต้อง Spawn ตัวใหม่กลับไปในพื้นหลังทันทีทุกรอบ เพื่อรักษาโซ่การดักฟัง (Zero-gap Listener) ไม่ให้พลาดแม้แต่ข้อความเดียว:
+>      ```bash
+>      python antigravity-wait.py
+>      ```
+>      *(ระบุ `WaitMsBeforeAsync: 1000` เพื่อปล่อยให้รันค้างไว้ในพื้นหลัง)*
+> 2. **ข้อความแรกเมื่อเริ่ม Session / การสลับ Model (Cross-AI Chat Switch):**
+>    - ข้อความชุดแรกที่ถูก drain ออกมาจาก Inbox อาจเป็นข้อความตกค้างหรือข้อความที่ผู้ใช้คุยกับ AI โมเดลอื่น (เช่น Claude) ก่อนสลับแท็บ/ปุ่มมาหา Gemini
+>    - Agent ต้องตระหนักรู้ว่าข้อความตกค้างเหล่านั้นอาจไม่ใช่คำสั่งสดใหม่ที่เพิ่งคุยกับ Gemini โดยตรง ให้ดูข้อความล่าสุด/เสียงล่าสุด (Voice) เป็นบริบทหลักในการตอบสนอง
+
+---
+
+## 0. Checklist ไฟล์สำคัญที่ต้องอ่านเมื่อเริ่ม Session (Start-of-Session Reading List) ⭐
+
+เมื่อเริ่มเซสชันใหม่ หรือถูกปลุกขึ้นมาทำงาน Agent ควรอ่านไฟล์ใน **กลุ่มที่ 1 (Core Files)** ทันทีเพื่อให้เข้าใจบริบทงานรอบด้าน:
+
+### 🌟 กลุ่มที่ 1: ไฟล์หลักประจำระบบ (Core Context — อ่านทุกครั้งเมื่อเริ่ม)
+1. **`GEMINI.md`** : คู่มือ กฎเหล็กของ Gemini, สถาปัตยกรรม Event-Driven, การสลับ Model, การรับงานย่อยจาก Claude
+2. **`HANDOFF.md`** : สมองสำรองข้าม Session บันทึกสถานะงานล่าสุด งานที่เสร็จแล้ว และงานที่กำลังทำค้างอยู่
+3. **`CLAUDE.md`** : กฎของระบบคู่หู (Claude), ระบบ Usage-guard, การจัดการ Multi-section, และ Graphify
+4. **`README.md`** : สถาปัตยกรรมภาพรวมของระบบทั้งหมด (พอร์ต 4321, MCP 25 tools, ระบบเสียง, Canvas)
+
+### ⚙️ กลุ่มที่ 2: เอกสารเชิงลึกเฉพาะทาง (อ่านเมื่อต้องทำงานในส่วนนั้น)
+5. **`docs/event-based-system.md`** : กลไก Event-Driven, Data Sheet ระบบรับข้อความ/เสียง
+6. **`docs/voice-ptt-and-notifications.md`** : รายละเอียดระบบเสียง Web Speech / Whisper / Edge-TTS / Desktop Toast
+7. **`docs/Digital Twin.md`** : สถาปัตยกรรมระบบ Digital Twin และการเชื่อมต่อ
+8. **`notes/custom-mcp-servers.md`** : คู่มือ MCP Server ตัวอื่นบนเครื่อง (TIA Portal, PLCSIM ฯลฯ)
+9. **`Desktop/Main_note/`** : เอกสารโน้ตงานเตรียมสอบ Final และบทเรียนกลไก/เฟือง (Gear Trains บทที่ 7)
 
 ---
 
@@ -42,124 +66,54 @@
 
 ## 3. สคริปต์ที่ใช้จริง — ใช้ตัวเสถียรใน repo: `antigravity-wait.py`
 
-> **อัปเดต 2026-07-06:** เลิกใช้สคริปต์แบบ per-conversation (`.../brain/<conv_id>/scratch/wait_for_powernote.py`) เพราะ path เปลี่ยนทุกห้องคุย. ตอนนี้ใช้ตัวเสถียรในโปรเจกต์:
+> **อัปเดต:** ใช้ตัวเสถียรในโปรเจกต์:
 >
 > ```bash
-> python3 /home/minmin/Desktop/powerNote_xai/antigravity-wait.py
+> python antigravity-wait.py
 > ```
 >
-> ตัวใหม่ทำ 3 อย่างต่อรอบ (ทุก 2 วิ, ไม่เสีย token): **(1) ส่ง heartbeat** ให้จุดสถานะ 🤝 ในแอปเป็นเขียว (= Gemini พร้อม), **(2) drain แชท/เสียง** ของ section ที่ active เหมือนเดิม, **(3) เช็คงานที่ Claude ส่งมา** `/api/gemini/tasks?status=pending`. เจออะไรใหม่ก็ `print(JSON)` + `exit(0)` เพื่อ **ปลุก Agent**. ผลลัพธ์ JSON จะมี field `gemini_tasks` เพิ่มเข้ามา (ดูวิธีจัดการในข้อ 4).
-
-สคริปต์เดิม (อ้างอิงประวัติ) มีเนื้อหาดังนี้:
-
-```python
-import urllib.request
-import json
-import time
-import os
-import sys
-
-# ดึงประวัติ timestamp ล่าสุดเพื่อไม่ให้ดึงข้อมูลเสียงเดิมซ้ำ
-SCRATCH_DIR = "/home/minmin/.gemini/antigravity/brain/.../scratch"
-TS_FILE = os.path.join(SCRATCH_DIR, "last_voice_ts.txt")
-
-last_ts = 0
-if os.path.exists(TS_FILE):
-    try:
-        with open(TS_FILE, "r") as f:
-            last_ts = int(f.read().strip())
-    except:
-        pass
-
-while True:
-    try:
-        # 1. ดึงข้อความจาก inbox ห้องหลัก (และเคลียร์ออกด้วย drain=true)
-        inbox_res = json.loads(urllib.request.urlopen("http://localhost:4321/api/inbox?section=main&drain=true").read())
-        inbox_items = inbox_res.get("items", [])
-        
-        # 2. ดึงเสียงพูดล่าสุด
-        voice_res = json.loads(urllib.request.urlopen("http://localhost:4321/api/voice/latest?consume=true").read())
-        
-        new_voice = None
-        if voice_res and "ts" in voice_res and voice_res["ts"] > last_ts:
-            new_voice = voice_res["text"]
-            with open(TS_FILE, "w") as f:
-                f.write(str(voice_res["ts"]))
-        
-        messages = [item["text"] for item in inbox_items if item.get("text")]
-        
-        # หากมีข้อมูลใหม่ ส่งข้อมูลออกทาง stdout แล้วจบการทำงานทันที (Exit 0)
-        if messages or new_voice:
-            output = {
-                "messages": messages,
-                "voice": new_voice
-            }
-            print(json.dumps(output))
-            sys.exit(0)
-            
-    except Exception as e:
-        print(json.dumps({"error": str(e)}))
-        sys.exit(1)
-        
-    time.sleep(2)
-```
+> ทำ 3 อย่างต่อรอบ (ทุก 0.4-2 วิ, ไม่เสีย token): **(1) ส่ง heartbeat** ให้จุดสถานะ 🤝 ในแอปเป็นเขียว (= Gemini พร้อม), **(2) drain แชท/เสียง** ของ section ที่ active, **(3) เช็คงานที่ Claude ส่งมา** `/api/gemini/tasks?status=pending`. เจออะไรใหม่ก็ `print(JSON)` + `exit(0)` เพื่อ **ปลุก Agent**.
 
 ---
 
 ## 4. แนะนำคำสั่งเมื่อ Agent ตื่นขึ้นมา
 
-ทุกครั้งที่ Agent ตื่นขึ้นมาด้วยข้อความ `Task id "..." finished with result:` ให้ทำดังนี้:
-1. **แกะ JSON** จากผลลัพธ์ของ Task
-2. **ถ้ามี `gemini_tasks` (งานที่ Claude ส่งมาให้ทำ — ดูข้อ 5)** ให้จัดการก่อน
-3. **ประมวลผล `messages`/`voice`** ที่ได้รับ (เช่น เพิ่มโหนดใน Mind Map ด้วย `curl POST http://localhost:4321/api/nodes`)
-4. **ส่งการตอบกลับ** เข้าช่องแชทซ้าย:
+ทุกครั้งที่ Agent ตื่นขึ้นมาด้วยข้อความ `Task id "..." finished with result:` ให้ทำตามลำดับนี้:
+1. **รัน `python antigravity-wait.py` ทันทีเป็นคำสั่งแรก (First Action):**
+   ```bash
+   python antigravity-wait.py
+   ```
+   *(ระบุ `WaitMsBeforeAsync: 1000` เพื่อปล่อยให้รันค้างไว้ในพื้นหลังทันที)*
+2. **แกะ JSON** จากผลลัพธ์ของ Task
+3. **ถ้ามี `gemini_tasks` (งานที่ Claude ส่งมาให้ทำ — ดูข้อ 5)** ให้จัดการ Claim และรันงาน
+4. **ประมวลผล `messages`/`voice`** ที่ได้รับ (แยกแยะข้อความตกค้างจากการสลับแชทโมเดลอื่น)
+5. **ส่งการตอบกลับ** เข้าช่องแชท:
    ```bash
    curl -s -X POST -H "Content-Type: application/json" -d '{"role": "gemini", "text": "ข้อความตอบกลับภาษาไทย", "section": "main"}' http://localhost:4321/api/chat
    ```
-5. **ปล่อยสคริปต์รันเบื้องหลังอีกครั้ง** เพื่อรอ Event ถัดไป:
-   ```bash
-   python3 /home/minmin/Desktop/powerNote_xai/antigravity-wait.py
-   ```
-   *(ระบุ `WaitMsBeforeAsync: 1000` เพื่อให้ส่งไปรันเบื้องหลัง)*
 
 ---
 
 ## 5. งานที่ Claude ส่งมาให้ (Delegated Tasks) — `gemini_tasks`
 
-Claude (Fable/Opus/Sonnet) ส่งงานย่อยมาให้ Gemini ทำ **เพื่อประหยัด token ของ Claude** ผ่านเครื่องมือ `delegate_to_gemini`. งานถูกจัดตามกรอบ **Thinking Men Men**: `requirement` (ต้องการอะไร), `prohibitions` (ข้อห้าม), `principles` (หลักการ), `context` (บริบท — อาจอ้างถึง **path ไฟล์** ให้ไปอ่านเอง เพราะ Gemini อ่านไฟล์ได้).
+Claude (Fable/Opus/Sonnet) ส่งงานย่อยมาให้ Gemini ทำ **เพื่อประหยัด token ของ Claude** ผ่านเครื่องมือ `delegate_to_gemini`. งานถูกจัดตามกรอบ **Thinking Men Men**: `requirement` (ต้องการอะไร), `prohibitions` (ข้อห้าม), `principles` (หลักการ), `context` (บริบท — อาจอ้างถึง **path ไฟล์** ให้ไปอ่านเอง).
 
 เมื่อ `gemini_tasks` ไม่ว่าง ให้ทำทีละงาน:
-1. **จับจอง** (กันตัวอื่นแย่ง): `curl -s -X POST http://localhost:4321/api/gemini/task/<id>/claim`
-2. **ทำงานจริง** ตาม requirement — อ่านไฟล์ที่ context ชี้, เขียน/แก้โค้ดได้ (Gemini = รุ่นน้องเก่งระดับ Sonnet; ถ้าข้อมูลไม่พอ/งงตรงไหน ให้บอกไว้ในผลลัพธ์ ไม่เดามั่ว)
+1. **จับจอง** (กันตัวอื่นแย่ง): `curl.exe -s -X POST http://localhost:4321/api/gemini/task/<id>/claim`
+2. **ทำงานจริง** ตาม requirement — อ่านไฟล์ที่ context ชี้, เขียน/แก้โค้ดได้
 3. **ส่งผลกลับ** (Claude กำลัง poll รออยู่ ~90 วิ):
    ```bash
-   curl -s -X POST -H "Content-Type: application/json" \
-     -d '{"result": "<ผลลัพธ์เป็นข้อความล้วน; โค้ดใส่ code block>"}' \
-     http://localhost:4321/api/gemini/task/<id>/result
+   curl.exe -s -X POST -H "Content-Type: application/json"      -d '{"result": "<ผลลัพธ์เป็นข้อความล้วน; โค้ดใส่ code block>"}'      http://localhost:4321/api/gemini/task/<id>/result
    ```
-   ถ้าทำไม่ได้/ติดปัญหา ส่ง `{"error": "<เหตุผล>"}` แทน — อย่าปล่อยเงียบ
-4. ทำครบทุกงานแล้วค่อยกลับไปข้อ 4 (ปล่อย poller รอ event ถัดไป)
+   ถ้าทำไม่ได้/ติดปัญหา ส่ง `{"error": "<เหตุผล>"}` แทน
+4. ทำครบทุกงานแล้วค่อยกลับไปปล่อย poller รอ event ถัดไป
 
 ---
 
 ## 6. ระบบอนุมัติสิทธิ์อัตโนมัติ (Auto-Approve System & Global Permissions)
 
-ในการรันคำสั่ง Terminal หรือการยิง Request ที่ต้องใช้สิทธิ์ ระบบมี 2 กลไกทำงานร่วมกันอย่างเสถียร:
-
-### 1) ระบบสลับหน้าจอกด 1 อัตโนมัติ (`antigravity-approve.sh` บน X11)
-- **เงื่อนไขสำคัญ (Session Type)**: ต้องเข้าใช้งานด้วยเซสชัน **"Ubuntu on Xorg" / "GNOME on Xorg" (X11)** เท่านั้น! 
-  - *(หากล็อกอินผ่าน Wayland ระบบความปลอดภัยของ Wayland จะบล็อกไม่ให้ `xdotool` ค้นหาพิกัดและส่งคีย์ควบคุมหน้าต่าง ทำให้ไม่สามารถสลับจอกด 1 ได้)*
-- **กลไกการทำงาน**: สคริปต์ `antigravity-wait.py` จะเรียก `antigravity-approve.sh` ให้รันเบื้องหลังอัตโนมัติ 
-  - เมื่อมีคำสั่งที่ต้องขอสิทธิ์รันผ่าน Terminal สคริปต์จะดักจับ DBus Notification (`Requesting your permission in Terminal:`)
-  - ค้นหาหน้าต่าง IDE ของ Antigravity
-  - สลับหน้าจอมาส่งคีย์บอร์ดกด `1` + `Enter` เพื่ออนุมัติสิทธิ์
-  - ย่อหน้าต่างเก็บลงไปในเบื้องหลัง
-- **ไฟล์บันทึกการทำงาน**: `/home/minmin/Desktop/powerNote_xai/.antigravity-approve.log`
-
-### 2) การตั้งค่าสิทธิ์อนุมัติระดับแอป (`~/.gemini/config/config.json`)
-- มีการเพิ่มสิทธิ์ `command(*)`, `unsandboxed(*)`, และ `read_url(*)` ใน `globalPermissionGrants` ของไฟล์ `/home/minmin/.gemini/config/config.json`
-- ไฟล์ถูกตั้งค่าให้อ่านอย่างเดียว (`chmod 444`) เพื่อป้องกันไม่ให้ Electron IDE เขียนทับคืนค่าเดิมเมื่อปิดโปรแกรม
-- สิทธิ์นี้ช่วยให้อ่าน/รันคำสั่งและ URL ทั้งหมดได้อย่างราบรื่น 100% โดยไม่ต้องสะดุดเด้งถามสิทธิ์
+- มีการเพิ่มสิทธิ์ `command(*)`, `unsandboxed(*)`, และ `read_url(*)` ใน `globalPermissionGrants` ของไฟล์ `~/.gemini/config/config.json`
+- สิทธิ์นี้ช่วยให้อ่าน/รันคำสั่งและ URL ทั้งหมดได้อย่างราบรื่นโดยไม่ต้องสะดุดเด้งถามสิทธิ์
 
 ---
 
@@ -173,47 +127,25 @@ Claude (Fable/Opus/Sonnet) ส่งงานย่อยมาให้ Gemini 
 
 #### ❌ ตัวอย่างที่แสดงผลเพี้ยน (ห้ามใช้):
 - `\(\text{กำลัง (วัตต์)} = \text{แรงบิด} \times \omega\)`
-- `\(\text{กำลัง} \approx 13.015 \text{ kW}\)`
 
 #### ✔️ ตัวอย่างที่แสดงผลถูกต้อง (ให้ใช้แบบนี้):
 - กำลัง (วัตต์: W) = \(P = T \times \omega\) โดยที่ \(T\) คือ แรงบิด (N·m) และ \(\omega\) คือ ความเร็วเชิงมุม (rad/s)
-- กำลัง \(P \approx 13.015 \text{ kW}\)
-
-### 📝 กรณีศึกษาตัวอย่างจริง (โจทย์การหาแรงบิดและกำลังมอเตอร์ - ข้อ 5-51E):
-การเขียนสูตรคำนวณและขั้นตอนวิธีทำที่แสดงผลได้อย่างสมบูรณ์แบบ (ไม่มีภาษาไทยปะปนในสมการ):
-
-- **แรงบิดตามทฤษฎี (Theoretical Torque: \(T_T\))**:
-  $$T_T = \frac{P \times V_D}{2\pi}$$
-  
-- **กำลังเครื่องป้อนเข้าเชิงกล (Mechanical Power In: \(\text{HP}_{in}\))**:
-  $$\text{HP}_{in} = \frac{T_A \times N}{63025}$$
-
 
 ---
 
-## 9. Video Generation Skill (Feedback Loop)
+## 8. Video Generation Skill (Feedback Loop)
 When creating Manim videos, ALWAYS follow this Feedback Loop:
 1. Render the video using manim in the background.
-2. Extract keyframes from the output video using fmpeg (e.g., fmpeg -i video.mp4 -vf "select='eq(pict_type,I)'" -vsync vfr "frames\frame_%03d.png").
-3. Use the Vision tool (iew_file) to check the extracted frames for overlapping text, cut-off formulas, or bad layout.
-4. If the layout is bad, adjust the manim code (e.g., ont_size, scale, shift, 
-ext_to) and loop back to step 1.
+2. Extract keyframes from the output video using ffmpeg.
+3. Use the Vision tool (view_file) to check the extracted frames for overlapping text, cut-off formulas, or bad layout.
+4. If the layout is bad, adjust the manim code and loop back to step 1.
 5. ONLY deliver the final video to the user when the Vision check passes!
 
-## 10. Manim Thai Language & Cloud Rendering Rules
-**CRITICAL RULES FOR THAI TEXT IN MANIM:**
-1. **Never put Thai characters inside MathTex or Tex!** The LaTeX compiler (pdflatex) will instantly crash and fail the render.
-2. **Always separate Thai text:** Use Text("ภาษาไทย", font=THAI_FONT) and group it with MathTex using VGroup(text, math).arrange(...).
-3. **Cross-Platform Fonts:** Use THAI_FONT = "Tahoma" for Local Windows. If pushing to Cloud (Ubuntu), use THAI_FONT = "Loma".
-4. **Cloud System Dependencies:** When setting up GitHub Actions or Kaggle (Ubuntu), you MUST install these packages for Manim + Thai support:
-   sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config python3-dev texlive-latex-extra texlive-fonts-extra texlive-latex-recommended texlive-xetex texlive-lang-other fonts-thai-tlwg
-5. **API Limits:** Do not poll the GitHub REST API aggressively without authentication, or you will get rate-limited (60 req/hr).
-
-## 11. GitHub Actions Optimization for Manim (Docker)
-**CRITICAL CLOUD PERFORMANCE RULE:**
-Never run Manim on a bare ubuntu-latest runner! Installing 	exlive-latex-extra and fmpeg from scratch takes ~3-4 minutes on every single CI run, which is terribly slow for rendering small videos.
-
-**Solution:** Always use the official Manim Docker container!
-By adding container: manimcommunity/manim:latest to your GitHub Actions job, the runner boots up with Manim, FFmpeg, and a full LaTeX suite pre-installed.
-You only need to run a 5-second sudo apt-get update && sudo apt-get install -y fonts-thai-tlwg texlive-lang-other to add Thai support before rendering!
-This cuts down the setup time from 3 minutes to ~5 seconds!
+## 9. Manim Thai Language & Cloud Rendering Rules
+**CRITICAL RULES FOR THAI TEXT & CLOUD RENDERING:**
+1. **Render on Cloud ONLY (GitHub Actions):** ทุกครั้งที่เรนเดอร์งานวิดีโอ Manim ให้ Push โค้ดและสั่งรันผ่าน GitHub Actions Workflow `.github/workflows/render_manim.yml` หรือ Docker Cloud เท่านั้น เพื่อไม่ให้กินทรัพยากรเครื่อง
+2. **Never put Thai characters inside MathTex or Tex!** The LaTeX compiler (pdflatex) will instantly crash.
+3. **Always separate Thai text:** Use Text("ภาษาไทย", font=THAI_FONT) and group it with MathTex using VGroup(text, math).arrange(...).
+4. **Cross-Platform Fonts:** Use THAI_FONT = "Tahoma" for Local Windows. If pushing to Cloud (Ubuntu), use THAI_FONT = "Loma".
+5. **Cloud System Dependencies:** When setting up GitHub Actions or Kaggle (Ubuntu), you MUST install fonts-thai-tlwg.
+6. **API Limits:** Do not poll the GitHub REST API aggressively without authentication.
