@@ -4,7 +4,8 @@ eps_ch6_neutral_plane_anim.py — Manim Teaching Animation for EPS Chapter 6
 Scenes:
 1. DCMachineComponents3D (3D Exploded / Assembled View of Stator, Armature, Commutator, Brushes)
 2. NeutralPlane3DView (3D View of Neutral Plane MNP, 3D Coil Rotation & Faraday Induction)
-3. MagneticVectorField2D (Vector Field / Calculus: Main Field, Armature Reaction & Distorted Field)
+3. ArmatureReactionDistortion (สนามแม่เหล็ก 2 สนามรวมกัน -> บิดเบี้ยว -> ระนาบเลื่อน หน้า 2-4)
+4. MagneticVectorField2D (Vector Field / Calculus of Main Field, Armature Reaction & Distorted Field)
 """
 
 import sys
@@ -111,10 +112,7 @@ class DCMachineComponents3D(SafeThreeDScene):
         self.hud(cap4)
         self.play(FadeIn(cap4))
 
-        self.play(
-            self.camera.animate.set_euler_angles(phi=70 * DEGREES, theta=-20 * DEGREES),
-            run_time=4.0
-        )
+        self.move_camera(phi=70 * DEGREES, theta=-20 * DEGREES, run_time=3.5)
         self.wait(2.0)
 
 
@@ -210,16 +208,98 @@ class NeutralPlane3DView(SafeThreeDScene):
         coil_vertical = make_coil(PI / 2)
         self.play(
             Transform(coil, coil_vertical),
-            self.camera.animate.set_euler_angles(phi=60 * DEGREES, theta=-25 * DEGREES),
-            run_time=3.5
+            run_time=2.5
         )
-        self.wait(2.0)
+        self.move_camera(phi=60 * DEGREES, theta=-25 * DEGREES, run_time=2.0)
+        self.wait(1.5)
 
         coil_full = make_coil(5 * PI / 2)
         self.play(
             Transform(coil, coil_full),
-            self.camera.animate.set_euler_angles(phi=70 * DEGREES, theta=-65 * DEGREES),
-            run_time=4.0
+            run_time=3.0
+        )
+        self.move_camera(phi=70 * DEGREES, theta=-65 * DEGREES, run_time=2.5)
+        self.wait(2.0)
+
+
+class ArmatureReactionDistortion(SafeScene):
+    """ทำความเข้าใจหน้า 2-4: ทำไมสนามแม่เหล็กถึงบิดเบี้ยวและระนาบเลื่อนตามทิศหมุน"""
+    def construct(self):
+        t_title = title("อาร์เมเจอร์รีแอคชั่น: สนามแม่เหล็กบิดเบี้ยว & ระนาบเลื่อน (หน้า 2-4)")
+        self.play(FadeIn(t_title))
+
+        # Panel on the right
+        panel = RoundedRectangle(corner_radius=0.18, width=4.6, height=5.6, color="#1E293B", fill_opacity=0.92).move_to([4.7, 0, 0])
+        p_head = Text("ลำดับเหตุผล 4 ขั้น", font_size=18, color=WHITE).move_to([4.7, 2.3, 0])
+
+        s1 = VGroup(
+            Text("1. สนามหลัก (Bf):", font_size=14, color=FIELD),
+            Text("เกิดจากขั้วหลัก N->S แนวนอน", font_size=12, color=GRAYTXT)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.05).move_to([4.7, 1.4, 0])
+
+        s2 = VGroup(
+            Text("2. สนามอาร์เมเจอร์ (Ba):", font_size=14, color=WARN),
+            Text("เกิดจากกระแสโหลด Ia ในแนวตั้งฉาก", font_size=12, color=GRAYTXT)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.05).move_to([4.7, 0.4, 0])
+
+        s3 = VGroup(
+            Text("3. สนามรวมบิดเบี้ยว (Btotal):", font_size=14, color=EMF),
+            Text("เส้นแรงตัดกันไม่ได้ จึงรวมกันเอียงไป", font_size=12, color=GRAYTXT)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.05).move_to([4.7, -0.6, 0])
+
+        s4 = VGroup(
+            Text("4. ระนาบเป็นกลางเลื่อน:", font_size=14, color=OK),
+            Text("เลื่อนตามทิศทางการหมุนของอาร์เมเจอร์", font_size=12, color=GRAYTXT)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.05).move_to([4.7, -1.6, 0])
+
+        self.play(FadeIn(panel), FadeIn(p_head), FadeIn(s1), FadeIn(s2), FadeIn(s3), FadeIn(s4))
+
+        # Visual Stage on Left (x centered around -2.2)
+        cx = -2.2
+
+        # Step 1: Main Field Only (รูป 6-2 ก)
+        v_bf = Arrow(start=[cx - 2.2, 0, 0], end=[cx + 1.2, 0, 0], buff=0, color=FIELD, stroke_width=4)
+        lbl_bf = MathTex(r"\vec{B}_f \text{ (สนามหลัก)}", color=FIELD, font_size=20).next_to(v_bf, UP, buff=0.1)
+
+        mnp_original = DashedLine(start=[cx - 0.5, -2.4, 0], end=[cx - 0.5, 2.4, 0], color=OK, stroke_width=3)
+        lbl_mnp1 = Text("ระนาบเดิม (ตั้งตรง 90°)", font_size=14, color=OK).next_to(mnp_original, UP, buff=0.1)
+
+        cap1 = caption("รูป (ก): มีเฉพาะสนามหลัก Bf -> ระนาบเป็นกลาง MNP ตั้งตรง 90°")
+        self.play(Create(v_bf), FadeIn(lbl_bf), Create(mnp_original), FadeIn(lbl_mnp1), FadeIn(cap1))
+        self.wait(1.5)
+
+        # Step 2: Armature Cross Field (รูป 6-2 ข)
+        v_ba = Arrow(start=[cx - 0.5, 1.6, 0], end=[cx - 0.5, -1.6, 0], buff=0, color=WARN, stroke_width=4)
+        lbl_ba = MathTex(r"\vec{B}_a \text{ (สนามอาร์เมเจอร์)}", color=WARN, font_size=20).next_to(v_ba, RIGHT, buff=0.1)
+
+        cap2 = caption("รูป (ข): เมื่อจ่ายโหลด กระแส Ia สร้างสนาม Ba ตั้งฉาก 90° กับสนามหลัก")
+        self.play(
+            FadeOut(cap1),
+            Create(v_ba),
+            FadeIn(lbl_ba),
+            FadeIn(cap2)
+        )
+        self.wait(1.5)
+
+        # Step 3: Combined Distorted Field & Neutral Plane Shift (รูป 6-2 ค)
+        v_total = Arrow(start=[cx - 2.2, 1.2, 0], end=[cx + 1.2, -1.2, 0], buff=0, color=EMF, stroke_width=5)
+        lbl_total = MathTex(r"\vec{B}_{\text{total}} = \vec{B}_f + \vec{B}_a", color=EMF, font_size=22).next_to(v_total, DOWN, buff=0.15)
+
+        mnp_shifted = Line(start=[cx + 0.6, 2.2, 0], end=[cx - 1.6, -2.2, 0], color="#EC4899", stroke_width=3.5)
+        lbl_mnp2 = Text("ระนาบใหม่ (เอียงตามทิศหมุน)", font_size=14, color="#EC4899").next_to(mnp_shifted, UP, buff=0.1)
+
+        rot_arrow = CurvedArrow(start_point=[cx - 1.8, 1.8, 0], end_point=[cx + 0.8, 1.8, 0], color=YELLOW)
+        lbl_rot = Text("ทิศทางการหมุน", font_size=13, color=YELLOW).next_to(rot_arrow, UP, buff=0.05)
+
+        cap3 = caption("รูป (ค): สนามรวมเอียงไป ทำให้ระนาบเป็นกลางเลื่อนตามทิศการหมุนเสมอ!")
+        self.play(
+            FadeOut(cap2),
+            FadeOut(v_bf), FadeOut(lbl_bf),
+            FadeOut(v_ba), FadeOut(lbl_ba),
+            Create(v_total), FadeIn(lbl_total),
+            Create(mnp_shifted), FadeIn(lbl_mnp2),
+            Create(rot_arrow), FadeIn(lbl_rot),
+            FadeIn(cap3)
         )
         self.wait(3.0)
 
@@ -229,7 +309,6 @@ class MagneticVectorField2D(SafeScene):
         t_title = title("สนามเวกเตอร์แม่เหล็ก (Magnetic Vector Field & StreamLines)")
         self.play(FadeIn(t_title))
 
-        # Vector Field of Main Field: B_f = [2.0, 0, 0]
         def field_main(p):
             return np.array([1.8, 0.0, 0.0])
 
@@ -255,11 +334,9 @@ class MagneticVectorField2D(SafeScene):
         self.play(FadeIn(cap1))
         self.wait(2.0)
 
-        # Vector Field of Distorted Resultant Field (Armature Reaction)
         def field_distorted(p):
             x, y = p[0] + 2.0, p[1]
             r = math.sqrt(x*x + y*y) + 0.1
-            # Main horizontal field + perpendicular cross-field from armature
             bx = 1.8 - 0.4 * y / r
             by = -1.2 + 0.4 * x / r
             return np.array([bx, by, 0.0])
