@@ -21,24 +21,14 @@ on:
         default: '25'
 
 jobs:
-  set-matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - id: set-matrix
-        run: |
-          echo "matrix=${{ github.event.inputs.scenes }}" >> "$GITHUB_OUTPUT"
-
   render-matrix:
-    needs: set-matrix
     runs-on: ubuntu-latest
     container:
       image: manimcommunity/manim:latest
       options: --user root
     strategy:
       matrix:
-        scene: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
+        scene: ${{ fromJSON(github.event.inputs.scenes) }}
       fail-fast: false
     steps:
       - name: Checkout repo
@@ -75,11 +65,10 @@ jobs:
         run: |
           mkdir -p output_merged
           echo "Finding all mp4 files..."
-          find downloaded_scenes -name "*.mp4" | sort > file_list.txt
+          find downloaded_scenes -name "*.mp4" | grep -v "partial_movie_files" | sort > file_list.txt
           echo "Files to merge:"
           cat file_list.txt
           
-          # Create ffmpeg concat demuxer file
           sed "s/^/file '/;s/$/'/" file_list.txt > concat.txt
           echo "Concat manifest:"
           cat concat.txt
