@@ -124,6 +124,17 @@ export default function setupExport({ STATE, view, canvas, world, toast, render,
     }
   }
 
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) return resolve();
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = () => resolve();
+      script.onerror = (e) => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
   // ------------------------------------------------------------------
   // Export PDF
   // ------------------------------------------------------------------
@@ -133,8 +144,13 @@ export default function setupExport({ STATE, view, canvas, world, toast, render,
       return;
     }
     if (typeof window.jspdf === "undefined") {
-      toast("jsPDF ยังโหลดไม่เสร็จ ลองอีกครั้ง");
-      return;
+      toast("กำลังโหลดโมดูล PDF…");
+      try {
+        await loadScript("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js");
+      } catch (e) {
+        toast("โหลด jsPDF ไม่สำเร็จ: " + e.message);
+        return;
+      }
     }
     toast("กำลัง render PDF ความละเอียดสูง…");
     try {

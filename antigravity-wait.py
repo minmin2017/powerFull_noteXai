@@ -113,7 +113,6 @@ while True:
             sys.exit(0)
 
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
-        sys.exit(1)
+        time.sleep(1.0)
 
     time.sleep(0.4)

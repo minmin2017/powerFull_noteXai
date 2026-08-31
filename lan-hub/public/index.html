@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Min's Life & Work Planner (Live Auto-Sync)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+    body { font-family: 'Prompt', 'Plus Jakarta Sans', sans-serif; }
+    .custom-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .time-slot { transition: all 0.15s ease; }
+    .time-slot:hover { transform: scale(1.01); z-index: 10; }
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .live-pulse { animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen w-screen overflow-hidden flex flex-col antialiased select-none">
+
+  <!-- TOP APP HEADER (Fixed Height, flex-shrink-0) -->
+  <header class="flex-shrink-0 bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between shadow-xl flex-wrap gap-2 z-30">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-base shadow-lg shadow-indigo-500/25">
+        ⏰
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm font-bold text-white tracking-wide">Min's Planner</h1>
+          <span id="syncBadge" class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold font-mono flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 live-pulse"></span> Auto-Sync
+          </span>
+        </div>
+        <div class="text-[10px] text-slate-400 font-mono">192.168.1.45:8080</div>
+      </div>
+    </div>
+
+    <!-- Actions & Views -->
+    <div class="flex items-center gap-2">
+      <div class="flex bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs font-semibold">
+        <button onclick="setMainMode('24h')" id="btnMode24h" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white shadow-sm transition flex items-center gap-1">
+          <span>⏰</span> 24 ชม.
+        </button>
+        <button onclick="setMainMode('month')" id="btnModeMonth" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition flex items-center gap-1">
+          <span>📅</span> รายเดือน
+        </button>
+      </div>
+
+      <!-- Toggle Live Chat Button -->
+      <button onclick="toggleChatDrawer()" id="btnChatToggle" class="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-500/25 transition flex items-center gap-1.5">
+        <span>💬</span> แชท Gemini
+      </button>
+    </div>
+  </header>
+
+  <!-- SUB-HEADER 24H (Fixed Height, flex-shrink-0) -->
+  <div id="subHeader24h" class="flex-shrink-0 bg-slate-900/90 border-b border-slate-800 px-4 py-1.5 flex items-center justify-between flex-wrap gap-2 z-20">
+    <div class="flex items-center gap-2 text-xs">
+      <span class="text-slate-400 font-medium">ช่วงเวลา:</span>
+      <button onclick="switchPhase('semester')" id="btnPhaseSem" class="px-2.5 py-1 rounded-lg font-bold bg-indigo-600 text-white shadow transition flex items-center gap-1">
+        <span>🎓</span> 1. เปิดเทอม (ถึง 6 พ.ย.)
+      </button>
+      <button onclick="switchPhase('break')" id="btnPhaseBreak" class="px-2.5 py-1 rounded-lg font-bold bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition flex items-center gap-1">
+        <span>🌴</span> 2. ปิดเทอม 1 เดือน (Amway!)
+      </button>
+    </div>
+    <div class="text-[11px] text-slate-300 flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-0.5 rounded-lg border border-slate-700">
+      <span id="phaseDescIcon">🎓</span>
+      <span id="phaseDescText" class="font-medium">เน้นคลาสเรียน KMITL, สปรินต์โปรเจกต์ช่วงเย็น, และเตรียมสอบ Final</span>
+    </div>
+  </div>
+
+  <!-- SUB-HEADER MONTH (Fixed Height, flex-shrink-0) -->
+  <div id="subHeaderMonth" class="hidden flex-shrink-0 bg-slate-900/80 border-b border-slate-800 px-4 py-1.5 flex items-center justify-between flex-wrap gap-2 text-xs z-20">
+    <div class="flex items-center gap-1.5">
+      <button onclick="changeMonth(-1)" class="p-1 hover:bg-slate-800 rounded text-slate-300">◀</button>
+      <span id="monthCalTitle" class="font-bold text-white px-2">สิงหาคม 2026</span>
+      <button onclick="changeMonth(1)" class="p-1 hover:bg-slate-800 rounded text-slate-300">▶</button>
+    </div>
+    <div class="flex items-center gap-1.5 text-[11px]">
+      <button onclick="setMonth(2026, 7)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">ส.ค.</button>
+      <button onclick="setMonth(2026, 8)" class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">ก.ย. (ทำรถ)</button>
+      <button onclick="setMonth(2026, 9)" class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">ต.ค. (สอบ)</button>
+      <button onclick="setMonth(2026, 10)" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">พ.ย. (Amway)</button>
+    </div>
+  </div>
+
+  <!-- MAIN BODY CONTAINER: flex-1 min-h-0 overflow-hidden -->
+  <div class="flex-1 min-h-0 flex overflow-hidden relative">
+    
+    <!-- LEFT PANE: Scrollable Calendar & Weekend Schedule -->
+    <main class="flex-1 h-full min-h-0 overflow-y-auto custom-scroll bg-slate-950 flex flex-col">
+      
+      <!-- ============================================== -->
+      <!-- 🎯 CURRENT LIFE FOCUS PANEL (Dynamic 3 Pillars) -->
+      <!-- ============================================== -->
+      <div class="p-3.5 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border-b border-slate-800 shadow-xl flex-shrink-0">
+        <div class="flex items-center justify-between mb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🎯</span>
+            <h2 id="focusPanelTitle" class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              สิ่งที่กำลังโฟกัสอยู่ ณ ตอนนี้ (3 เสาหลัก)
+              <span id="focusPhaseBadge" class="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-semibold font-mono">ช่วงเปิดเทอม</span>
+            </h2>
+          </div>
+          <span class="text-[10px] text-slate-400 font-mono">สมดุลชีวิต & ความสำเร็จ</span>
+        </div>
+
+        <!-- 3 Dynamic Focus Pillar Cards -->
+        <div id="focusPillarsContainer" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <!-- Rendered via renderFocusPillars() -->
+        </div>
+      </div>
+
+      <!-- 24-HOUR WEEKLY TIME-BLOCKING GRID -->
+      <div id="view24h" class="flex flex-col">
+        <!-- Weekday Headers (Sticky inside Left Scrollable Area) -->
+        <div class="grid grid-cols-6 text-center text-[11px] font-bold text-slate-400 py-1.5 bg-slate-900 border-b border-slate-800 shadow-sm sticky top-0 z-10 flex-shrink-0">
+          <div class="text-slate-500 font-mono">TIME</div>
+          <div class="text-indigo-300">MON (จ.)</div>
+          <div class="text-indigo-300">TUE (อ.)</div>
+          <div class="text-indigo-300">WED (พ.)</div>
+          <div class="text-indigo-300">THU (พฤ.)</div>
+          <div class="text-indigo-300">FRI (ศ.)</div>
+        </div>
+        
+        <!-- Weekday 24h Grid (Mon - Fri) -->
+        <div id="timeGridBody" class="grid grid-cols-6 divide-x divide-y divide-slate-800/80 min-w-[480px]">
+          <!-- Generated via JS -->
+        </div>
+
+        <!-- DEDICATED WEEKEND SECTION (เสาร์ - อาทิตย์) -->
+        <div class="mt-4 border-t-2 border-emerald-500/40 bg-gradient-to-b from-slate-900 to-slate-950 p-4 shadow-2xl">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">🌴</span>
+              <div>
+                <h2 class="text-sm font-bold text-emerald-400 tracking-wide flex items-center gap-2">
+                  ตารางอิสระเฉพาะวันเสาร์ - อาทิตย์ (Weekend Dedicated Schedule)
+                  <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold">Free Time</span>
+                </h2>
+                <p class="text-[11px] text-slate-400">ไม่มีคลาสเรียน — ลุยโปรเจกต์วิศวะ, ธุรกิจ Amway, สัมมนา Center และพักผ่อน</p>
+              </div>
+            </div>
+            <button onclick="openAddWeekendSlotModal()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-md transition flex items-center gap-1">
+              <span>+ เพิ่มกิจกรรม</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pb-10">
+            <!-- SATURDAY -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-xl">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-amber-400"></span>
+                  <h3 class="text-xs font-bold text-white uppercase tracking-wider">SATURDAY (วันเสาร์)</h3>
+                </div>
+                <span class="text-[10px] text-slate-400 font-mono" id="satSlotCount">4 กิจกรรม</span>
+              </div>
+              <div id="satTimelineList" class="space-y-2 text-xs"></div>
+            </div>
+
+            <!-- SUNDAY -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-xl">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-rose-400"></span>
+                  <h3 class="text-xs font-bold text-white uppercase tracking-wider">SUNDAY (วันอาทิตย์)</h3>
+                </div>
+                <span class="text-[10px] text-slate-400 font-mono" id="sunSlotCount">4 กิจกรรม</span>
+              </div>
+              <div id="sunTimelineList" class="space-y-2 text-xs"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- MONTH VIEW -->
+      <div id="viewMonth" class="hidden flex-1 flex flex-col">
+        <div class="grid grid-cols-7 text-center text-[11px] font-bold text-slate-400 py-1.5 bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+          <div>SUN</div><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div>
+        </div>
+        <div id="monthGridBody" class="grid grid-cols-7 divide-x divide-y divide-slate-800 bg-slate-950"></div>
+      </div>
+
+    </main>
+
+    <!-- RIGHT PANE: LOCKED CHAT DRAWER (h-full, flex-col, overflow-hidden) -->
+    <aside id="chatDrawer" class="w-full sm:w-80 md:w-96 h-full flex flex-col bg-slate-900 border-l border-slate-800 shadow-2xl z-20 flex-shrink-0 overflow-hidden">
+      <!-- Chat Header (flex-shrink-0) -->
+      <div class="p-2.5 bg-slate-850 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-sm font-bold shadow">
+            🤖
+          </div>
+          <div>
+            <div class="text-xs font-bold text-white flex items-center gap-1.5">
+              Gemini Main Chat
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 live-pulse"></span>
+            </div>
+            <div class="text-[10px] text-slate-400 font-mono">ข้อความล่าสุดอยู่ด้านล่างเสมอ</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <button onclick="scrollChatToBottom()" title="เลื่อนลงล่างสุด" class="text-slate-400 hover:text-emerald-400 p-1 rounded-lg hover:bg-slate-800 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+          </button>
+          <button onclick="toggleChatDrawer()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Commands (flex-shrink-0) -->
+      <div class="px-3 py-1 bg-slate-900/90 border-b border-slate-800 flex items-center gap-1.5 overflow-x-auto text-[10px] custom-scroll flex-shrink-0">
+        <button onclick="sendQuickPrompt('ช่วยสรุปตารางงานวันนี้ให้หน่อย')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md text-slate-300 border border-slate-700 whitespace-nowrap">📋 สรุปวันนี้</button>
+        <button onclick="sendQuickPrompt('ช่วยปรับตารางวันเสาร์-อาทิตย์ให้หน่อย')" class="px-2 py-0.5 bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 rounded-md whitespace-nowrap">🌴 ปรับเสาร์-อาทิตย์</button>
+        <button onclick="sendQuickPrompt('มีคำแนะนำการอ่านสอบ Final วิชาไหนก่อน?')" class="px-2 py-0.5 bg-indigo-950/60 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/60 rounded-md whitespace-nowrap">🎓 ถามเรื่องสอบ</button>
+      </div>
+
+      <!-- Messages Stream (flex-1 min-h-0 overflow-y-auto) -->
+      <div id="chatBox" class="flex-1 min-h-0 p-3 space-y-2.5 overflow-y-auto custom-scroll text-xs">
+        <div class="text-center text-slate-500 py-6 text-[11px]">กำลังโหลดข้อความ...</div>
+      </div>
+
+      <!-- Chat Input Area with Voice Mic Button -->
+      <div class="p-2 bg-slate-850 border-t border-slate-800 flex items-center gap-1.5 flex-shrink-0">
+        <!-- Mic Button -->
+        <button id="btnVoiceInput" onclick="toggleVoiceInput()" title="กดเพื่อพูดด้วยเสียงภาษาไทย" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 border border-slate-700 transition flex-shrink-0 active:scale-95 flex items-center justify-center">
+          <svg id="micIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 02-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+          </svg>
+        </button>
+
+        <input type="text" id="mainChatInput" onkeydown="if(event.key==='Enter') submitMainChat()" placeholder="พิมพ์สั่งงาน หรือกดไมค์พูด..." class="flex-1 bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 transition">
+        
+        <button onclick="submitMainChat()" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-md shadow-indigo-600/30 flex items-center gap-1 flex-shrink-0">
+          <span>ส่ง</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </button>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- DETAIL MODAL -->
+  <div id="detailModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div id="modalHeader" class="p-4 bg-indigo-600 text-white flex items-start justify-between">
+        <div>
+          <div id="modalDayTime" class="text-[10px] font-bold tracking-wider uppercase opacity-90">DAY • TIME</div>
+          <h3 id="modalTitle" class="text-base font-bold mt-0.5">ชื่องาน</h3>
+        </div>
+        <button onclick="closeDetailModal()" class="text-white/80 hover:text-white p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="p-4 space-y-3 text-xs text-slate-200">
+        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 space-y-1">
+          <div class="text-slate-400 font-semibold text-[10px] uppercase tracking-wider">คำอธิบาย & แนวทางปฏิบัติ</div>
+          <p id="modalDesc" class="text-slate-200 leading-relaxed whitespace-pre-wrap">รายละเอียด</p>
+        </div>
+      </div>
+      <div class="bg-slate-950 px-4 py-3 border-t border-slate-800 flex justify-end">
+        <button onclick="closeDetailModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let routinesData = {};
+    let eventsData = [];
+    let currentMainMode = '24h';
+    let currentPhase = 'semester';
+    let currentCalMonth = 7;
+    let currentCalYear = 2026;
+    let isChatOpen = true;
+    let lastVersion = 0;
+    let lastMsgCount = 0;
+
+    const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri'];
+    const monthNamesThai = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+
+    async function init() {
+      await reloadAllData();
+      fetchChat();
+      setupLiveSync();
+      setInterval(fetchChat, 2000);
+    }
+
+    async function reloadAllData() {
+      try {
+        const t = Date.now();
+        const [rRes, eRes] = await Promise.all([
+          fetch('/api/routines?t=' + t),
+          fetch('/api/events?t=' + t)
+        ]);
+        routinesData = await rRes.json();
+        eventsData = await eRes.json();
+        render24hGrid();
+        renderWeekendCards();
+        renderFocusPillars();
+        renderMonthGrid();
+        flashSyncBadge();
+      } catch (e) {
+        console.error('Reload data error:', e);
+      }
+    }
+
+    function setupLiveSync() {
+      try {
+        const evtSource = new EventSource('/api/live-sync');
+        evtSource.onmessage = () => reloadAllData();
+      } catch (err) {}
+
+      // Fast auto-reload every 2 seconds unconditionally so any file change renders instantly
+      setInterval(() => {
+        reloadAllData();
+      }, 2000);
+    }
+
+    function flashSyncBadge() {
+      const badge = document.getElementById('syncBadge');
+      if (badge) {
+        badge.className = 'text-[10px] bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-400 font-semibold font-mono flex items-center gap-1 shadow-sm shadow-emerald-500/20';
+        setTimeout(() => {
+          badge.className = 'text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold font-mono flex items-center gap-1';
+        }, 800);
+      }
+    }
+
+    function toggleChatDrawer() {
+      const drawer = document.getElementById('chatDrawer');
+      isChatOpen = !isChatOpen;
+      if (isChatOpen) {
+        drawer.classList.remove('hidden');
+      } else {
+        drawer.classList.add('hidden');
+      }
+    }
+
+    async function fetchChat() {
+      try {
+        const res = await fetch('/api/chat-log?section=main');
+        const data = await res.json();
+        const msgs = data.messages || [];
+        const box = document.getElementById('chatBox');
+        if (msgs.length === 0) {
+          box.innerHTML = '<div class="text-center text-slate-500 py-6 text-[11px]">พิมพ์ข้อความด้านล่างคุยกับ Gemini ได้ทันทีครับ</div>';
+          return;
+        }
+        let html = '';
+        msgs.forEach(m => {
+          const isUser = m.role === 'user';
+          const isGemini = m.role === 'gemini';
+          const roleLabel = isUser ? 'Min' : (isGemini ? 'Gemini 🤖' : 'Claude 🧠');
+          const bg = isUser ? 'bg-indigo-600 text-white ml-auto' : 'bg-slate-800 text-slate-100 mr-auto border border-slate-700/80';
+
+          html += `
+            <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'}">
+              <span class="text-[9px] text-slate-400 mb-0.5 px-1 font-semibold">${roleLabel}</span>
+              <div class="p-2.5 rounded-2xl max-w-[88%] text-[11px] leading-relaxed ${bg} shadow-md whitespace-pre-wrap">
+                ${escapeHtml(m.text || '')}
+              </div>
+            </div>
+          `;
+        });
+        box.innerHTML = html;
+
+        if (msgs.length !== lastMsgCount) {
+          lastMsgCount = msgs.length;
+          scrollChatToBottom();
+        }
+      } catch (e) {}
+    }
+
+    function scrollChatToBottom() {
+      const box = document.getElementById('chatBox');
+      if (box) {
+        box.scrollTop = box.scrollHeight + 1000;
+      }
+    }
+
+    async function submitMainChat() {
+      const inp = document.getElementById('mainChatInput');
+      const text = inp.value.trim();
+      if (!text) return;
+      inp.value = '';
+
+      try {
+        await fetch('/api/send-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, section: 'main' })
+        });
+        setTimeout(fetchChat, 200);
+      } catch (e) {
+        alert('ส่งไม่สำเร็จ: ' + e.message);
+      }
+    }
+
+    function sendQuickPrompt(t) {
+      document.getElementById('mainChatInput').value = t;
+      submitMainChat();
+    }
+
+    function escapeHtml(t) {
+      const div = document.createElement('div');
+      div.textContent = t;
+      return div.innerHTML;
+    }
+
+    function setMainMode(mode) {
+      currentMainMode = mode;
+      document.getElementById('btnMode24h').className = mode === '24h' ? 'px-2.5 py-1 rounded-lg bg-indigo-600 text-white shadow-sm transition flex items-center gap-1' : 'px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition flex items-center gap-1';
+      document.getElementById('btnModeMonth').className = mode === 'month' ? 'px-2.5 py-1 rounded-lg bg-indigo-600 text-white shadow-sm transition flex items-center gap-1' : 'px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition flex items-center gap-1';
+
+      if (mode === '24h') {
+        document.getElementById('view24h').classList.remove('hidden');
+        document.getElementById('subHeader24h').classList.remove('hidden');
+        document.getElementById('viewMonth').classList.add('hidden');
+        document.getElementById('subHeaderMonth').classList.add('hidden');
+      } else {
+        document.getElementById('view24h').classList.add('hidden');
+        document.getElementById('subHeader24h').classList.add('hidden');
+        document.getElementById('viewMonth').classList.remove('hidden');
+        document.getElementById('subHeaderMonth').classList.remove('hidden');
+      }
+    }
+
+    function switchPhase(phase) {
+      currentPhase = phase;
+      const isSem = phase === 'semester';
+      document.getElementById('btnPhaseSem').className = isSem ? 'px-2.5 py-1 rounded-lg font-bold bg-indigo-600 text-white shadow transition flex items-center gap-1' : 'px-2.5 py-1 rounded-lg font-bold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 transition flex items-center gap-1';
+      document.getElementById('btnPhaseBreak').className = !isSem ? 'px-2.5 py-1 rounded-lg font-bold bg-emerald-600 text-white shadow transition flex items-center gap-1' : 'px-2.5 py-1 rounded-lg font-bold bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition flex items-center gap-1';
+
+      const pData = routinesData[phase] || {};
+      document.getElementById('phaseDescIcon').innerText = isSem ? '🎓' : '🌴';
+      document.getElementById('phaseDescText').innerText = pData.desc || '';
+
+      render24hGrid();
+      renderWeekendCards();
+      renderFocusPillars();
+    }
+
+    function render24hGrid() {
+      const container = document.getElementById('timeGridBody');
+      container.innerHTML = '';
+
+      const phaseSlots = (routinesData[currentPhase] && routinesData[currentPhase].slots) || [];
+
+      for (let h = 0; h < 24; h++) {
+        const timeLabel = `${String(h).padStart(2, '0')}:00`;
+
+        const timeCell = document.createElement('div');
+        timeCell.className = 'p-1 bg-slate-900 text-slate-400 font-mono text-[10px] text-center flex items-center justify-center font-semibold border-r border-slate-800';
+        timeCell.innerText = timeLabel;
+        container.appendChild(timeCell);
+
+        weekdays.forEach(day => {
+          const slotCell = document.createElement('div');
+          slotCell.className = 'p-0.5 min-h-[38px] bg-slate-950 flex flex-col justify-center relative hover:bg-slate-900/50 transition';
+
+          const activeSlot = phaseSlots.find(s => {
+            if (s.day !== day) return false;
+            if (s.start <= s.end) return h >= s.start && h < s.end;
+            else return h >= s.start || h < s.end;
+          });
+
+          if (activeSlot) {
+            const block = document.createElement('div');
+            block.className = 'time-slot w-full h-full p-1 rounded text-[10px] leading-tight font-semibold flex items-center gap-1 cursor-pointer truncate shadow-sm';
+            block.style.backgroundColor = activeSlot.color + '25';
+            block.style.borderLeft = `3px solid ${activeSlot.color}`;
+            block.style.color = '#f8fafc';
+
+            block.onclick = () => openDetail(activeSlot.title, `${day.toUpperCase()} • ${activeSlot.start}:00 - ${activeSlot.end}:00`, activeSlot.color);
+            block.innerHTML = `<span class="truncate">${activeSlot.title}</span>`;
+            slotCell.appendChild(block);
+          }
+
+          container.appendChild(slotCell);
+        });
+      }
+    }
+
+    
+    function renderFocusPillars() {
+      const container = document.getElementById('focusPillarsContainer');
+      const badge = document.getElementById('focusPhaseBadge');
+      if (!container) return;
+
+      if (currentPhase === 'semester') {
+        badge.className = 'text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-semibold font-mono';
+        badge.innerText = 'ช่วงเปิดเทอม (วันนี้ - 6 พ.ย.)';
+
+        container.innerHTML = `
+          <!-- Pillar 1: การเรียน KMITL -->
+          <div class="bg-slate-900/90 border border-indigo-500/30 hover:border-indigo-500/60 p-2.5 rounded-xl transition shadow-md">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-1.5 font-bold text-xs text-indigo-400">
+                <span>🎓</span> 1. การเรียน & สอบ Final
+              </div>
+              <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded font-mono font-semibold">KMITL</span>
+            </div>
+            <ul class="text-[11px] text-slate-300 space-y-1">
+              <li class="flex items-center gap-1.5"><span class="text-indigo-400">•</span><span>🚗 1-12 ก.ย.: ทำรถไฟฟ้าพันมอเตอร์</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-indigo-400">•</span><span>⚙️ 13-26 ก.ย.: โปรเจกต์กลไก 30%</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-indigo-400">•</span><span>🏆 เป้าหมาย: เกรด A ทุกรายวิชา</span></li>
+            </ul>
+          </div>
+
+          <!-- Pillar 2: ธุรกิจแอมเวย์ -->
+          <div class="bg-slate-900/90 border border-emerald-500/30 hover:border-emerald-500/60 p-2.5 rounded-xl transition shadow-md">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-1.5 font-bold text-xs text-emerald-400">
+                <span>💼</span> 2. ธุรกิจแอมเวย์ (Amway)
+              </div>
+              <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-semibold">Business</span>
+            </div>
+            <ul class="text-[11px] text-slate-300 space-y-1">
+              <li class="flex items-center gap-1.5"><span class="text-emerald-400">•</span><span>👥 ขยายฐานลูกค้า & Demo สินค้า</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-400">•</span><span>🤝 แชร์แผน OPP & เทรนนิ่งทีมงาน</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-400">•</span><span>🚀 ปิดเทอม พ.ย.: ลุยเต็มสูบ 1 เดือน!</span></li>
+            </ul>
+          </div>
+
+          <!-- Pillar 3: ที่บ้าน & ครอบครัว -->
+          <div class="bg-slate-900/90 border border-amber-500/30 hover:border-amber-500/60 p-2.5 rounded-xl transition shadow-md">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-1.5 font-bold text-xs text-amber-400">
+                <span>🏡</span> 3. ที่บ้าน & ครอบครัว
+              </div>
+              <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">Home & Life</span>
+            </div>
+            <ul class="text-[11px] text-slate-300 space-y-1">
+              <li class="flex items-center gap-1.5"><span class="text-amber-400">•</span><span>👨‍👩‍👧 เวลาคุณภาพกับคนในครอบครัว</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-amber-400">•</span><span>🥗 สุขภาพกาย-ใจแข็งแรง ทานอาหารดี</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-amber-400">•</span><span>🌴 เสาร์: ทำงาน • อาทิตย์: เคลียร์งาน/พัก</span></li>
+            </ul>
+          </div>
+        `;
+      } else {
+        // BREAK PHASE (ปิดเทอม 1 เดือน พฤศจิกายน 69)
+        badge.className = 'text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold font-mono';
+        badge.innerText = 'ช่วงปิดเทอม 1 เดือน (พฤศจิกายน 2569)';
+
+        container.innerHTML = `
+          <!-- Pillar 1: ธุรกิจแอมเวย์ (Main Focus) -->
+          <div class="bg-slate-900/90 border border-emerald-500/40 hover:border-emerald-500/70 p-2.5 rounded-xl transition shadow-md">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-1.5 font-bold text-xs text-emerald-400">
+                <span>💼</span> 1. ธุรกิจแอมเวย์ (Amway Focus)
+              </div>
+              <span class="text-[9px] bg-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">Main Focus</span>
+            </div>
+            <ul class="text-[11px] text-slate-300 space-y-1">
+              <li class="flex items-center gap-1.5"><span class="text-emerald-400">•</span><span>👥 ลุยขยายทีม & Demo สินค้าทุกวัน</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-400">•</span><span>🤝 OPP ขยายธุรกิจ & Coaching พาร์ตเนอร์</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-400">•</span><span>🏆 สร้างยอด Pin & ยอดขายเติบโตก้าวกระโดด</span></li>
+            </ul>
+          </div>
+
+          <!-- Pillar 2: ที่ทำงานบริษัท -->
+          <div class="bg-slate-900/90 border border-blue-500/40 hover:border-blue-500/70 p-2.5 rounded-xl transition shadow-md">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-1.5 font-bold text-xs text-blue-400">
+                <span>🏢</span> 2. ที่ทำงานบริษัท
+              </div>
+              <span class="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono font-semibold">Company</span>
+            </div>
+            <ul class="text-[11px] text-slate-300 space-y-1">
+              <li class="flex items-center gap-1.5"><span class="text-blue-400">•</span><span>💼 บริหารหน้าที่การทำงานอย่างมีประสิทธิภาพ</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-blue-400">•</span><span>📈 พัฒนาทักษะและผลงานประจำวัน</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-blue-400">•</span><span>⏰ จัดสรรเวลาทำงานควบคู่ธุรกิจอย่างลงตัว</span></li>
+            </ul>
+          </div>
+
+          <!-- Pillar 3: กิจกรรมเสริม (ชมรมหุ่นยนต์ Robot & คอนเทนต์) -->
+          <div class="bg-slate-900/90 border border-amber-500/40 hover:border-amber-500/70 p-2.5 rounded-xl transition shadow-md">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-1.5 font-bold text-xs text-amber-400">
+                <span>🤖</span> 3. กิจกรรมเสริม: ชมรม Robot & คลิป
+              </div>
+              <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">Robot Club</span>
+            </div>
+            <ul class="text-[11px] text-slate-300 space-y-1">
+              <li class="flex items-center gap-1.5"><span class="text-amber-400">•</span><span>🛠️ ลุยชมรม Robot: จันทร์-พุธ & เสาร์เย็น</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-amber-400">•</span><span>🎬 ทำคลิป/คอนเทนต์โปรเจกต์หุ่นยนต์</span></li>
+              <li class="flex items-center gap-1.5"><span class="text-amber-400">•</span><span>🧘 วางแผนไม่ให้ตึงเกินไป รักษาสมดุลสุขภาพ</span></li>
+            </ul>
+          </div>
+        `;
+      }
+    }
+
+    function calcSlotDuration(start, end) {
+      if (start <= end) return end - start;
+      return (24 - start) + end;
+    }
+
+    function renderWeekendCards() {
+      const phaseSlots = (routinesData[currentPhase] && routinesData[currentPhase].slots) || [];
+      const satSlots = phaseSlots.filter(s => s.day === 'sat');
+      const sunSlots = phaseSlots.filter(s => s.day === 'sun');
+
+      satSlots.sort((a, b) => a.start - b.start);
+      sunSlots.sort((a, b) => a.start - b.start);
+
+      // Calculate total free hours
+      const satFreeHours = satSlots.filter(s => s.cat === 'routine' || s.title.includes('ว่าง') || s.title.includes('พักผ่อน'))
+                                   .reduce((sum, s) => sum + calcSlotDuration(s.start, s.end), 0);
+      const sunFreeHours = sunSlots.filter(s => s.cat === 'routine' || s.title.includes('ว่าง') || s.title.includes('พักผ่อน'))
+                                   .reduce((sum, s) => sum + calcSlotDuration(s.start, s.end), 0);
+
+      document.getElementById('satSlotCount').innerHTML = `<span class="text-emerald-400 font-bold">ว่าง ${satFreeHours} ชม.</span> • ${satSlots.length} กิจกรรม`;
+      document.getElementById('sunSlotCount').innerHTML = `<span class="text-emerald-400 font-bold">ว่าง ${sunFreeHours} ชม.</span> • ${sunSlots.length} กิจกรรม`;
+
+      const satBox = document.getElementById('satTimelineList');
+      const sunBox = document.getElementById('sunTimelineList');
+
+      satBox.innerHTML = '';
+      sunBox.innerHTML = '';
+
+      satSlots.forEach(s => {
+        satBox.appendChild(createWeekendCardElement(s, 'SATURDAY (เสาร์)'));
+      });
+
+      sunSlots.forEach(s => {
+        sunBox.appendChild(createWeekendCardElement(s, 'SUNDAY (อาทิตย์)'));
+      });
+    }
+
+    function createWeekendCardElement(s, dayLabel) {
+      const duration = calcSlotDuration(s.start, s.end);
+      const item = document.createElement('div');
+      item.className = 'p-2.5 rounded-xl border border-slate-800 bg-slate-950 flex items-center justify-between hover:border-emerald-500/80 transition cursor-pointer shadow-sm group';
+      
+      const timeStr = `${String(s.start).padStart(2, '0')}:00 - ${String(s.end).padStart(2, '0')}:00 น.`;
+      item.onclick = () => openDetail(s.title, `${dayLabel} • ${timeStr} (รวม ${duration} ชม.)`, s.color);
+
+      item.innerHTML = `
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 shadow-inner" style="background-color: ${s.color}25; color: ${s.color}; border: 1px solid ${s.color}50;">
+            ${String(s.start).padStart(2, '0')}
+          </div>
+          <div>
+            <div class="font-bold text-white text-[11px] group-hover:text-emerald-300 transition">${s.title}</div>
+            <div class="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+              <span>🕒 ${timeStr}</span>
+              <span class="px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 font-bold border border-slate-700 font-mono text-[9px]">⏱️ ${duration} ชม.</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col items-end gap-1 flex-shrink-0">
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold font-mono" style="background-color: ${s.color}20; color: ${s.color}; border: 1px solid ${s.color}30;">
+            ${s.cat || 'slot'}
+          </span>
+        </div>
+      `;
+      return item;
+    }
+
+    function renderMonthGrid() {
+      document.getElementById('monthCalTitle').innerText = `${monthNamesThai[currentCalMonth]} ${currentCalYear}`;
+      const grid = document.getElementById('monthGridBody');
+      grid.innerHTML = '';
+
+      const firstDay = new Date(currentCalYear, currentCalMonth, 1).getDay();
+      const daysInMonth = new Date(currentCalYear, currentCalMonth + 1, 0).getDate();
+      const prevMonthDays = new Date(currentCalYear, currentCalMonth, 0).getDate();
+
+      for (let i = firstDay - 1; i >= 0; i--) {
+        const d = prevMonthDays - i;
+        const cell = document.createElement('div');
+        cell.className = 'p-1 bg-slate-900/30 text-slate-600 text-xs min-h-[85px]';
+        cell.innerHTML = `<span>${d}</span>`;
+        grid.appendChild(cell);
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${currentCalYear}-${String(currentCalMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayEvents = eventsData.filter(e => dateStr >= e.startDate && dateStr <= (e.endDate || e.startDate));
+
+        const isToday = (currentCalYear === 2026 && currentCalMonth === 7 && d === 28);
+        const cell = document.createElement('div');
+        cell.className = `p-1 text-xs flex flex-col min-h-[85px] bg-slate-900/70 hover:bg-slate-850 transition ${isToday ? 'border border-indigo-500' : ''}`;
+
+        let html = `
+          <div class="flex justify-between items-center mb-0.5">
+            <span class="font-bold ${isToday ? 'text-indigo-400' : 'text-slate-300'} text-[11px]">${d}</span>
+            ${isToday ? '<span class="text-[8px] bg-indigo-500 text-white font-bold px-1 rounded">วันนี้</span>' : ''}
+          </div>
+          <div class="space-y-0.5 overflow-y-auto max-h-[65px] custom-scroll">
+        `;
+        dayEvents.forEach(ev => {
+          html += `
+            <div class="bg-slate-800 border border-slate-700 rounded p-0.5 px-1 text-[9px] truncate" style="border-left: 2px solid ${ev.color}">
+              ${ev.title}
+            </div>
+          `;
+        });
+        html += `</div>`;
+        cell.innerHTML = html;
+        grid.appendChild(cell);
+      }
+    }
+
+    function changeMonth(delta) {
+      currentCalMonth += delta;
+      if (currentCalMonth < 0) { currentCalMonth = 11; currentCalYear--; }
+      if (currentCalMonth > 11) { currentCalMonth = 0; currentCalYear++; }
+      renderMonthGrid();
+    }
+
+    function setMonth(yr, m) {
+      currentCalYear = yr;
+      currentCalMonth = m;
+      renderMonthGrid();
+    }
+
+    function openDetail(title, dayTime, color) {
+      document.getElementById('modalTitle').innerText = title;
+      document.getElementById('modalDayTime').innerText = dayTime;
+      document.getElementById('modalHeader').style.backgroundColor = color || '#4f46e5';
+      document.getElementById('modalDesc').innerText = `กิจกรรม: ${title}\nเวลา: ${dayTime}\nช่วง: ${currentPhase === 'semester' ? 'เปิดเทอม KMITL' : 'ปิดเทอมลุยธุรกิจ Amway'}`;
+      document.getElementById('detailModal').classList.remove('hidden');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').classList.add('hidden');
+    }
+
+    
+    // ==========================================
+    // VOICE INPUT (SPEECH-TO-TEXT THAI)
+    // ==========================================
+    let recognition = null;
+    let isRecording = false;
+
+    function initSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.warn('Web Speech API not supported in this browser');
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = 'th-TH'; // ภาษาไทย
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        isRecording = true;
+        const btn = document.getElementById('btnVoiceInput');
+        btn.className = 'p-2 rounded-xl bg-rose-600 text-white border border-rose-400 shadow-lg shadow-rose-600/40 animate-pulse flex-shrink-0 flex items-center justify-center';
+        document.getElementById('mainChatInput').placeholder = '🎙️ กำลังฟังเสียงพูดภาษาไทย... (พูดได้เลย)';
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        document.getElementById('mainChatInput').value = transcript;
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        stopVoiceInput();
+      };
+
+      recognition.onend = () => {
+        stopVoiceInput();
+        const text = document.getElementById('mainChatInput').value.trim();
+        if (text) {
+          // Auto-send when finished speaking
+          submitMainChat();
+        }
+      };
+    }
+
+    function toggleVoiceInput() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert('เบราว์เซอร์นี้ไม่รองรับระบบสั่งการด้วยเสียง กรุณาใช้ Google Chrome หรือ Microsoft Edge ครับ');
+        return;
+      }
+
+      if (!recognition) initSpeechRecognition();
+
+      if (isRecording) {
+        recognition.stop();
+      } else {
+        try {
+          recognition.start();
+        } catch (e) {
+          recognition.stop();
+        }
+      }
+    }
+
+    function stopVoiceInput() {
+      isRecording = false;
+      const btn = document.getElementById('btnVoiceInput');
+      if (btn) {
+        btn.className = 'p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 border border-slate-700 transition flex-shrink-0 active:scale-95 flex items-center justify-center';
+      }
+      const inp = document.getElementById('mainChatInput');
+      if (inp && !inp.value) {
+        inp.placeholder = 'พิมพ์สั่งงาน หรือกดไมค์พูด...';
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => { init(); initSpeechRecognition(); });
+  </script>
+</body>
+</html>

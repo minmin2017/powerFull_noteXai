@@ -1,14 +1,14 @@
 :root {
-  --bg: #0f1117;
-  --panel: #161a23;
-  --panel-2: #1d222e;
-  --line: #2a3140;
-  --text: #e7ecf3;
-  --muted: #8b94a7;
-  --accent: #6366f1;
-  --accent-2: #8b5cf6;
-  --danger: #ef4444;
-  --grid: rgba(255, 255, 255, 0.035);
+  --bg: #0f172a;
+  --panel: #1a2436;
+  --panel-2: #23304a;
+  --line: #334155;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --accent: #14b8a6;
+  --accent-2: #06b6d4;
+  --danger: #dc2626;
+  --grid: rgba(45, 212, 191, 0.045);
 }
 
 * {
@@ -20,7 +20,7 @@ body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none; /* no pull-to-refresh / rubber-banding on mobile */
-  font-family: "Sarabun", system-ui, "Segoe UI", sans-serif;
+  font-family: "Inter", "Sarabun", system-ui, "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -33,6 +33,7 @@ body {
 
 /* ===================== Sidebar / chat ===================== */
 #sidebar {
+  position: relative;
   width: 340px;
   min-width: 220px;
   max-width: 75vw;
@@ -42,6 +43,38 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.chat-scroll-bottom {
+  position: absolute;
+  bottom: 85px;
+  right: 16px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+.chat-scroll-bottom:hover {
+  background: var(--panel);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.chat-scroll-bottom[hidden] {
+  display: none !important;
 }
 
 /* Draggable divider to resize the chat panel */
@@ -118,7 +151,7 @@ body.col-resizing {
   height: 9px;
   border-radius: 50%;
   background: #555;
-  box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.5);
 }
 .dot.on {
   background: #22c55e;
@@ -237,7 +270,8 @@ body.col-resizing {
 }
 
 .chat {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
   display: flex;
@@ -255,6 +289,13 @@ body.col-resizing {
 }
 .msg-body {
   white-space: normal;
+}
+.msg-media {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 8px;
+  margin-bottom: 6px;
 }
 .msg-body p {
   margin: 6px 0;
@@ -338,6 +379,7 @@ body.col-resizing {
 
 /* ===================== Voice area ===================== */
 .settings-details {
+  flex: 0 0 auto;
   border-top: 1px solid var(--line);
   background: var(--panel);
 }
@@ -471,34 +513,39 @@ body.col-resizing {
 }
 
 .voice-area {
+  flex: 0 0 auto;
   border-top: 1px solid var(--line);
-  padding: 12px 14px 14px;
+  padding: 10px 12px 12px;
   background: var(--panel);
 }
 .voice-status {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .voice-interim {
-  min-height: 18px;
-  font-size: 13px;
+  min-height: 0;
+  font-size: 12px;
   color: var(--accent-2);
   font-style: italic;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+}
+.voice-interim:empty {
+  display: none;
 }
 .voice-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+  width: 100%;
 }
 /* Mic language toggle — a segmented pill: [ ไทย | EN ], active side highlighted */
 .voice-lang-toggle {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: stretch;
-  padding: 3px;
-  gap: 2px;
+  padding: 2px;
+  gap: 1px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel-2);
@@ -509,8 +556,8 @@ body.col-resizing {
 .voice-lang-toggle .vl-opt {
   display: flex;
   align-items: center;
-  padding: 5px 10px;
-  font-size: 12px;
+  padding: 4px 7px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--muted);
   border-radius: 999px;
@@ -523,9 +570,10 @@ body.col-resizing {
 .voice-lang-toggle.en .vl-en { background: var(--accent); color: #fff; }
 .voice-lang-toggle:hover { border-color: var(--accent); }
 .mic-btn {
-  width: 46px;
-  height: 46px;
-  min-width: 46px;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
   border-radius: 50%;
   border: none;
   background: var(--accent);
@@ -574,13 +622,13 @@ body.gemini-mode::before {
 }
 .mic-cancel {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   border: 2px solid var(--danger);
   background: transparent;
   color: var(--danger);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   display: grid;
@@ -593,29 +641,30 @@ body.gemini-mode::before {
   transform: scale(1.1);
 }
 .text-input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 60px;
   background: var(--panel-2);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 11px 12px;
+  border-radius: 8px;
+  padding: 8px 10px;
   color: var(--text);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
 }
 .text-input:focus {
   border-color: var(--accent);
 }
 .send-btn {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border: none;
   color: white;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 11px 14px;
-  border-radius: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
   transition: transform 0.1s, opacity 0.2s;
@@ -627,15 +676,15 @@ body.gemini-mode::before {
   transform: scale(0.97);
 }
 .video-btn {
-  flex-shrink: 0;
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  border-radius: 10px;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel-2);
   color: var(--text);
-  font-size: 18px;
+  font-size: 15px;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -872,8 +921,8 @@ body.gemini-mode::before {
 #marquee-box {
   position: absolute;
   pointer-events: none;
-  border: 1.5px dashed rgba(99,102,241,0.85);
-  background: rgba(99,102,241,0.08);
+  border: 1.5px dashed rgba(20, 184, 166, 0.85);
+  background: rgba(20, 184, 166, 0.08);
   z-index: 10;
   display: none;
 }
@@ -881,7 +930,7 @@ body.gemini-mode::before {
 #resize-box {
   position: absolute;
   pointer-events: none; /* let the interior pass clicks through; handles re-enable */
-  border: 1px solid rgba(99,102,241,0.9);
+  border: 1px solid rgba(20, 184, 166, 0.9);
   z-index: 11;
 }
 #resize-box[hidden] { display: none; }
@@ -891,7 +940,7 @@ body.gemini-mode::before {
   height: 12px;
   margin: -7px 0 0 -7px; /* center on the corner */
   background: #fff;
-  border: 2px solid #6366f1;
+  border: 2px solid #14b8a6;
   border-radius: 3px;
   pointer-events: auto;
   box-shadow: 0 1px 3px rgba(0,0,0,0.4);
@@ -1063,7 +1112,7 @@ body.gemini-mode::before {
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6);
 }
 .node.selected {
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45), 0 8px 26px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.45), 0 8px 26px rgba(0, 0, 0, 0.5);
 }
 .node.reparent-target {
   box-shadow: 0 0 0 3px rgba(99, 241, 130, 0.7), 0 8px 26px rgba(0, 0, 0, 0.5);
@@ -1071,7 +1120,7 @@ body.gemini-mode::before {
 .reparent-btn { font-size: 11px; }
 /* Portal box */
 .hbox-portal {
-  border: 2px solid #6366f1;
+  border: 2px solid #14b8a6;
   background: #1e1b4b;
   min-height: 60px;
   cursor: default;
@@ -1948,12 +1997,12 @@ body.gemini-mode::before {
   align-items: flex-start;
   transition: border-color 0.12s, background 0.12s;
 }
-.cgrid-cell:hover { border-color: var(--accent); background: rgba(99,102,241,0.08); }
+.cgrid-cell:hover { border-color: var(--accent); background: rgba(20, 184, 166, 0.08); }
 .cgrid-blank { background: transparent; border-color: transparent; cursor: default; }
 .cgrid-blank:hover { background: transparent; border-color: transparent; }
 .cgrid-today {
   border-color: var(--accent);
-  background: rgba(99,102,241,0.12);
+  background: rgba(20, 184, 166, 0.12);
 }
 .cgrid-today .cgrid-num { color: var(--accent); font-weight: 800; }
 .cgrid-num {
@@ -2012,47 +2061,173 @@ body.gemini-mode::before {
 
 /* ===================== Mobile / touch (phones, small tablets) ===================== */
 @media (max-width: 700px) {
-  /* Chat panel becomes a slide-over drawer so it never squeezes the canvas. */
+  /* Hide stage / canvas entirely on mobile (Chat-only mode) */
+  #stage {
+    display: none !important;
+  }
+
+  /* Chat panel becomes permanent full screen app */
   #sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: min(86vw, 360px);
-    max-width: none;
-    z-index: 80;
-    box-shadow: 2px 0 22px rgba(0, 0, 0, 0.55);
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    z-index: 50 !important;
+    box-shadow: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
   }
-  /* No drag-to-resize on touch. */
-  #sidebar-resizer { display: none !important; }
+  #sidebar.collapsed {
+    display: flex !important;
+  }
 
-  /* Re-open button as a floating action button, clear of the toolbar. */
+  /* No drag-to-resize or collapse buttons on mobile */
+  #sidebar-resizer,
+  .sidebar-collapse,
   .sidebar-expand {
-    top: auto;
-    bottom: 16px;
-    left: 14px;
-    width: 48px;
-    height: 48px;
-    font-size: 22px;
-    z-index: 70;
+    display: none !important;
   }
 
-  /* Toolbar scrolls horizontally instead of wrapping into many tall rows. */
-  .toolbar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    justify-content: flex-start;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding: 6px 10px;
+  /* Floating scroll to bottom on mobile */
+  .chat-scroll-bottom {
+    bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+    right: 14px;
+    padding: 7px 16px;
+    font-size: 13px;
   }
-  .toolbar::-webkit-scrollbar { display: none; }
-  .tb-group { flex: 0 0 auto; }
-  .tb-group.right { margin-left: 0; }
-  .map-title { width: 120px; }
 
-  /* Right-side panels become overlay drawers too. */
+  /* Header redesign for native mobile chat feel */
+  .sb-head {
+    padding: 12px 16px;
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .sb-title {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .sb-sub {
+    font-size: 11px;
+    opacity: 0.8;
+  }
+
+  /* Chat tabs & touch targets (min 40px) */
+  .chat-tabs {
+    padding: 6px 10px 0;
+    gap: 6px;
+  }
+  .chat-tab {
+    padding: 8px 12px;
+    font-size: 13px;
+    min-height: 40px;
+  }
+  .chat-tab-add {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    font-size: 16px;
+  }
+  .gemini-handoff {
+    min-height: 40px;
+    padding: 0 10px;
+  }
+
+  /* Voice & input area with safe-area padding */
+  .voice-area {
+    padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .voice-status {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .voice-interim {
+    text-align: center;
+    font-size: 13px;
+  }
+  .voice-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .text-input {
+    order: 1;
+    flex: 1 1 180px;
+    min-height: 42px;
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+  .voice-lang-toggle {
+    order: 2;
+    height: 38px;
+  }
+  .video-btn {
+    order: 3;
+    min-height: 42px;
+    min-width: 42px;
+    font-size: 14px;
+  }
+  .send-btn {
+    order: 4;
+    min-height: 42px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  /* Primary Mic button: Big, centered thumb-friendly target on mobile */
+  .mic-btn {
+    order: 5;
+    width: 68px;
+    height: 68px;
+    min-width: 68px;
+    border-radius: 50%;
+    margin: 4px auto 0;
+    box-shadow: 0 4px 18px rgba(20, 184, 166, 0.45);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: transform 0.12s, box-shadow 0.2s, background 0.2s;
+  }
+  .mic-btn:active {
+    transform: scale(0.94);
+  }
+  .mic-btn svg {
+    width: 32px;
+    height: 32px;
+  }
+  .mic-cancel {
+    order: 6;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+  }
+  .voice-hint {
+    display: none;
+  }
+
+  /* Chat message spacing on mobile */
+  .chat {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+  .msg {
+    max-width: 90%;
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+
+  /* Right-side panels become overlay drawers */
   .cal-panel,
   .obj-panel {
     position: fixed;

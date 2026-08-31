@@ -1,0 +1,287 @@
+{
+  "id": "vid_mt6rm57j",
+  "source": "D:\\Downloads\\Full_clip_AI.mp4",
+  "title": null,
+  "duration_s": 185.85,
+  "frames": [
+    {
+      "t": 23.13,
+      "file": "/uploads/videodigest/vid_mt6rm57j/frame_23.13.jpg"
+    },
+    {
+      "t": 74.43,
+      "file": "/uploads/videodigest/vid_mt6rm57j/frame_74.43.jpg"
+    },
+    {
+      "t": 143.37,
+      "file": "/uploads/videodigest/vid_mt6rm57j/frame_143.37.jpg"
+    },
+    {
+      "t": 179.82,
+      "file": "/uploads/videodigest/vid_mt6rm57j/frame_179.82.jpg"
+    }
+  ],
+  "transcript": [
+    {
+      "start": 0.4,
+      "end": 5.4,
+      "text": "And next, let's discuss about how the preventive maintenance model works."
+    },
+    {
+      "start": 5.4,
+      "end": 12.4,
+      "text": "So, unplanned equipment failure is one of the most expensive problems in manual fetching."
+    },
+    {
+      "start": 12.4,
+      "end": 15.4,
+      "text": "And most of the time, this can be prevented."
+    },
+    {
+      "start": 15.4,
+      "end": 19.4,
+      "text": "Therefore, we build a model that sees a failure before it comes in."
+    },
+    {
+      "start": 19.4,
+      "end": 21.78,
+      "text": "And here's how it works."
+    },
+    {
+      "start": 21.78,
+      "end": 26.38,
+      "text": "This is how we implement with AI."
+    },
+    {
+      "start": 26.38,
+      "end": 28.38,
+      "text": "The pipeline here is simple by design."
+    },
+    {
+      "start": 28.38,
+      "end": 31.38,
+      "text": "We train on historical failure."
+    },
+    {
+      "start": 31.38,
+      "end": 34.38,
+      "text": "We scroll life sensor data in real time,"
+    },
+    {
+      "start": 34.38,
+      "end": 37.38,
+      "text": "and we alert before the machine actually breaks."
+    },
+    {
+      "start": 37.38,
+      "end": 40.38,
+      "text": "This chart is real-scale running."
+    },
+    {
+      "start": 40.38,
+      "end": 43.38,
+      "text": "Five sensors feed the model continuously,"
+    },
+    {
+      "start": 43.38,
+      "end": 47.38,
+      "text": "which are measuring process temperature, air temperature,"
+    },
+    {
+      "start": 47.38,
+      "end": 50.38,
+      "text": "rational speed, torque, and tool wear."
+    },
+    {
+      "start": 50.38,
+      "end": 54.38,
+      "text": "The blue line here is the model's failure probability,"
+    },
+    {
+      "start": 54.38,
+      "end": 57.38,
+      "text": "climbing toward our critical trade hole."
+    },
+    {
+      "start": 57.38,
+      "end": 61.38,
+      "text": "And the gray trace behind it is one engineered feature,"
+    },
+    {
+      "start": 61.38,
+      "end": 63.74,
+      "text": "which is wear torque,"
+    },
+    {
+      "start": 63.74,
+      "end": 67.74,
+      "text": "because that combination is what actually driving the risk gap."
+    },
+    {
+      "start": 67.74,
+      "end": 75.27,
+      "text": "At 80.9%, this machine is telling us it's about to fail."
+    },
+    {
+      "start": 75.27,
+      "end": 79.27,
+      "text": "Next, what material are we using for building this model?"
+    },
+    {
+      "start": 79.27,
+      "end": 83.27,
+      "text": "We build this on the AI-420 data set."
+    },
+    {
+      "start": 83.27,
+      "end": 88.27,
+      "text": "It is 10,000 machine cycles with five life sensor streams"
+    },
+    {
+      "start": 88.27,
+      "end": 91.3,
+      "text": "and five detailed failure modes,"
+    },
+    {
+      "start": 91.3,
+      "end": 94.3,
+      "text": "not just at generally fail or didn't fail levels."
+    },
+    {
+      "start": 94.3,
+      "end": 97.3,
+      "text": "So that is what led us to build a model"
+    },
+    {
+      "start": 97.3,
+      "end": 99.3,
+      "text": "that doesn't just detect a failure,"
+    },
+    {
+      "start": 99.3,
+      "end": 103.58,
+      "text": "but it also anticipates it."
+    },
+    {
+      "start": 103.58,
+      "end": 106.58,
+      "text": "And that gives us operational payoffs,"
+    },
+    {
+      "start": 106.58,
+      "end": 110.58,
+      "text": "which are, first, advanced running."
+    },
+    {
+      "start": 110.58,
+      "end": 114.58,
+      "text": "It gives us minutes to hours of running before a stop."
+    },
+    {
+      "start": 114.58,
+      "end": 118.19,
+      "text": "And next is peer alert."
+    },
+    {
+      "start": 118.19,
+      "end": 121.19,
+      "text": "It is tiered in green, yellow, and red alert"
+    },
+    {
+      "start": 121.19,
+      "end": 124.19,
+      "text": "instead of just a single alarm."
+    },
+    {
+      "start": 124.19,
+      "end": 127.19,
+      "text": "And third is dynamic maintenance."
+    },
+    {
+      "start": 127.19,
+      "end": 131.32,
+      "text": "Tools are replaced only when they are actually needed."
+    },
+    {
+      "start": 131.32,
+      "end": 135.32,
+      "text": "And the last big one is silo unplanned stop."
+    },
+    {
+      "start": 135.32,
+      "end": 138.09,
+      "text": "It turns unplanned crisis maintenance"
+    },
+    {
+      "start": 138.09,
+      "end": 141.09,
+      "text": "into scheduled and budgeted maintenance."
+    },
+    {
+      "start": 141.09,
+      "end": 147.29,
+      "text": "And this is how well it's actually performed."
+    },
+    {
+      "start": 147.29,
+      "end": 150.29,
+      "text": "These are the scores that our model got."
+    },
+    {
+      "start": 150.29,
+      "end": 155.29,
+      "text": "It got 99.7% on ROC-AUC,"
+    },
+    {
+      "start": 155.29,
+      "end": 157.29,
+      "text": "99.3% precision,"
+    },
+    {
+      "start": 157.29,
+      "end": 159.29,
+      "text": "98.2% recall,"
+    },
+    {
+      "start": 159.29,
+      "end": 162.29,
+      "text": "and 98.8% at one score."
+    },
+    {
+      "start": 162.29,
+      "end": 165.32,
+      "text": "We didn't just get lucky on one split,"
+    },
+    {
+      "start": 165.32,
+      "end": 168.32,
+      "text": "but five full-course validation"
+    },
+    {
+      "start": 168.32,
+      "end": 171.32,
+      "text": "held at 99.78%,"
+    },
+    {
+      "start": 171.32,
+      "end": 174.32,
+      "text": "plus or minus 0.21%."
+    },
+    {
+      "start": 174.32,
+      "end": 178.32,
+      "text": "That consistency is the number that matters."
+    },
+    {
+      "start": 178.32,
+      "end": 181.98,
+      "text": "And that's the model."
+    },
+    {
+      "start": 181.98,
+      "end": 184.98,
+      "text": "Now let's watch it catch a failure in real time."
+    }
+  ],
+  "status": "done"
+}

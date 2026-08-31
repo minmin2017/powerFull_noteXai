@@ -55,6 +55,105 @@ function remuxFaststart(srcPath, destPath) {
   });
 }
 
+// Splits a "สอนทีละหน้า" note's markdown into ordered text chunks, one per
+// page marker, matching either heading style Claude has used so far:
+//   "## 📄 หน้า 6 — ..."   (Electrical Power System chapters)
+//   "**หน้า 6-7** — **Title**:"  (Power Electronics / Fluid Power Control notes)
+// Falls back to treating the whole note as one chunk if no markers found.
+function splitNoteIntoPageChunks(noteText) {
+  const lines = noteText.split(/\r?\n/);
+  const markerRe = /^(##\s*.*?หน้า\s*\d|\*\*หน้า[^*]*\*\*)/;
+  const starts = [];
+  lines.forEach((line, i) => {
+    if (markerRe.test(line.trim())) starts.push(i);
+  });
+  if (starts.length === 0) return [noteText.trim()].filter(Boolean);
+  const chunks = [];
+  for (let k = 0; k < starts.length; k++) {
+    const from = starts[k];
+    const to = k + 1 < starts.length ? starts[k + 1] : lines.length;
+    chunks.push(lines.slice(from, to).join("\n"));
+  }
+  return chunks;
+}
+
+// Strips markdown/Obsidian syntax that isn't meant to be read as prose:
+// wiki embeds (images/video/pdf), fenced code blocks (mermaid etc.), and
+// callout admonition markers (keeps the callout's own text).
+function cleanChunkText(raw) {
+  return raw
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!\[\[[^\]]*\]\]/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/^\s*>\s*\[![\w-]+\]\s*/gm, "")
+    .replace(/^\s*>\s?/gm, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Turns a note's page chunks into {start,end,text} segments spanning the
+// full clip duration, each segment's share proportional to its cleaned
+// text length (a denser page gets more on-screen time than a one-liner).
+// Heuristic v1: real narration timing (if these clips ever get voiceover)
+// or manual per-scene review will beat this — it's meant to save Claude
+// from hand-deriving timestamps for silent/no-audio clips, not to replace
+// visual verification for anything that matters (e.g. an exam-prep video
+// someone will study frame-by-frame).
+function buildSegmentsFromNote(noteText, durationS) {
+  const chunks = splitNoteIntoPageChunks(noteText).map(cleanChunkText).filter((t) => t.length > 0);
+  if (chunks.length === 0) return [{ start: 0, end: durationS, text: "(no content parsed from note)" }];
+  const weights = chunks.map((t) => Math.max(t.length, 40));
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  const segments = [];
+  let cursor = 0;
+  chunks.forEach((text, i) => {
+    const isLast = i === chunks.length - 1;
+    const share = isLast ? durationS - cursor : (weights[i] / totalWeight) * durationS;
+    const start = cursor;
+    const end = isLast ? durationS : Math.min(durationS, cursor + share);
+    segments.push({ start: Number(start.toFixed(2)), end: Number(end.toFixed(2)), text });
+    cursor = end;
+  });
+  return segments;
+}
+
+function ffprobeDuration(filePath) {
+  return new Promise((resolve, reject) => {
+    const ff = spawn("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", filePath]);
+    let out = "", err = "";
+    ff.stdout.on("data", (d) => { out += d; });
+    ff.stderr.on("data", (d) => { err += d; });
+    ff.on("close", (code) => {
+      const val = parseFloat(out.trim());
+      if (code === 0 && Number.isFinite(val)) resolve(val);
+      else reject(new Error(`ffprobe failed (code ${code}): ${err.trim()}`));
+    });
+    ff.on("error", reject);
+  });
+}
+
+// Shared by POST /videos and POST /videos/auto: remux the source file into
+// this app's own storage and persist explain.json.
+async function saveVideoRecord({ title, videoPath, segments }) {
+  const id = uid("study");
+  const dir = path.join(DATA_DIR, id);
+  fs.mkdirSync(dir, { recursive: true });
+  const destVideo = path.join(dir, "video.mp4");
+  await remuxFaststart(videoPath, destVideo);
+  const durationS = segments.length ? segments[segments.length - 1].end : 0;
+  const data = {
+    id,
+    title: String(title).trim(),
+    videoFile: path.basename(destVideo),
+    durationS,
+    createdAt: Date.now(),
+    segments,
+  };
+  writeVideo(id, data);
+  return data;
+}
+
 function readVideoIndex() {
   if (!fs.existsSync(DATA_DIR)) return [];
   const out = [];
@@ -93,27 +192,52 @@ app.post("/videos", async (req, res) => {
       return res.status(400).json({ error: "each segment needs {start:number, end:number, text:string}" });
   }
 
-  const id = uid("study");
-  const dir = path.join(DATA_DIR, id);
-  fs.mkdirSync(dir, { recursive: true });
-  const destVideo = path.join(dir, "video.mp4");
   try {
-    await remuxFaststart(videoPath, destVideo);
+    const data = await saveVideoRecord({ title, videoPath, segments });
+    res.json(data);
   } catch (e) {
     return res.status(500).json({ error: "video processing failed", detail: String(e.message || e) });
   }
+});
 
-  const durationS = segments.length ? segments[segments.length - 1].end : 0;
-  const data = {
-    id,
-    title: String(title).trim(),
-    videoFile: path.basename(destVideo),
-    durationS,
-    createdAt: Date.now(),
-    segments,
-  };
-  writeVideo(id, data);
-  res.json(data);
+// POST /videos/auto {title, videoPath, notePath|noteText} — same as POST
+// /videos but derives segments itself from a "สอนทีละหน้า" note instead of
+// requiring the caller (Claude) to hand-author {start,end,text} for every
+// segment. Meant for the common case: a silent Manim clip whose companion
+// note already has the real explanation text, just needs it time-sliced
+// across the clip's duration.
+//
+// IMPORTANT for chapters split into several short clips (the usual pattern
+// here — e.g. one chapter note, four EP-numbered clips): pass `noteText`
+// with just the excerpt covering THAT clip's pages, not notePath to the
+// whole chapter file — otherwise every page in the file gets force-fit into
+// one clip's short duration. notePath (whole file) is for the case where
+// one video covers the entire note. See buildSegmentsFromNote for the
+// timing heuristic and its limits (proportional-to-text-length, not real
+// narration timing — fine for a first pass, not a substitute for watching
+// the clip if precise sync matters).
+app.post("/videos/auto", async (req, res) => {
+  const { title, videoPath, notePath, noteText: rawNoteText } = req.body || {};
+  if (!title || !String(title).trim()) return res.status(400).json({ error: "missing title" });
+  if (!videoPath || !fs.existsSync(videoPath)) return res.status(400).json({ error: "videoPath does not exist" });
+  if (!notePath && !rawNoteText) return res.status(400).json({ error: "provide notePath or noteText" });
+  if (notePath && !fs.existsSync(notePath)) return res.status(400).json({ error: "notePath does not exist" });
+
+  let noteText, durationS;
+  try {
+    noteText = rawNoteText || fs.readFileSync(notePath, "utf8");
+    durationS = await ffprobeDuration(videoPath);
+  } catch (e) {
+    return res.status(500).json({ error: "could not read note or probe video", detail: String(e.message || e) });
+  }
+
+  const segments = buildSegmentsFromNote(noteText, durationS);
+  try {
+    const data = await saveVideoRecord({ title, videoPath, segments });
+    res.json(data);
+  } catch (e) {
+    return res.status(500).json({ error: "video processing failed", detail: String(e.message || e) });
+  }
 });
 
 app.get("/videos", (_req, res) => res.json(readVideoIndex()));

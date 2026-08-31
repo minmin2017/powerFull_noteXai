@@ -798,6 +798,30 @@ server.registerTool(
 );
 
 server.registerTool(
+  "register_video_study_auto",
+  {
+    title: "ลงทะเบียนวิดิโอเข้าแอปติวแบบอัตโนมัติ (ประหยัด token)",
+    description:
+      "Register a finished teaching video into the Video Study App WITHOUT hand-authoring segment timestamps/text yourself — the study-app server derives {start,end,text} segments by splitting the note's own page markers (either '## 📄 หน้า N' or '**หน้า N**' style) and slicing the clip's duration proportionally to each page's text length. Use this instead of a raw POST to /videos + manual segment authoring whenever a companion note already has the real explanation text — it costs a fraction of the tokens. IMPORTANT: if the note covers a whole chapter but this clip only covers PART of it (the usual pattern: one chapter note, several short numbered clips), pass `noteExcerpt` with just that clip's page range copied out, not `notePath` to the whole file — otherwise every page in the file gets force-fit into this one clip's short duration. Pass `notePath` only when one video covers the entire note. This is a v1 heuristic (proportional-to-text-length timing, not verified narration sync) — good enough for a first pass; if Min points out a segment's timing looks off, use edit_video_explanation to fix the text, or re-render with hand-checked timestamps via a direct POST /videos call.",
+    inputSchema: {
+      title: z.string().describe("ชื่อวิดิโอ"),
+      videoPath: z.string().describe("path ไฟล์ .mp4 บนเครื่อง (absolute)"),
+      notePath: z.string().optional().describe("path ไฟล์โน้ตเต็ม (ใช้เมื่อ 1 วิดิโอ = 1 โน้ตทั้งไฟล์)"),
+      noteExcerpt: z.string().optional().describe("ข้อความบางส่วนของโน้ต (ใช้เมื่อโน้ตถูกแบ่งเป็นหลายคลิป — ใส่เฉพาะช่วงหน้าที่คลิปนี้ครอบคลุม)"),
+    },
+  },
+  async ({ title, videoPath, notePath, noteExcerpt }) => {
+    if (!notePath && !noteExcerpt) return fail(new Error("ต้องใส่ notePath หรือ noteExcerpt อย่างใดอย่างหนึ่ง"));
+    try {
+      const v = await studyApi("/videos/auto", "POST", { title, videoPath, notePath, noteText: noteExcerpt });
+      return ok(`ลงทะเบียนแล้ว [${v.id}] "${v.title}" (${v.durationS}s, ${v.segments.length} segments) — เช็คด้วย get_video_study_status ถ้าอยากดูข้อความแต่ละ segment`);
+    } catch (e) {
+      return studyFail(e);
+    }
+  }
+);
+
+server.registerTool(
   "get_video_study_status",
   {
     title: "เช็คสถานะวิดิโอในแอปติว",

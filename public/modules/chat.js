@@ -55,15 +55,25 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
     }
   }
 
+  let lastRenderedChatSignature = null;
+
   function renderChat() {
     renderChatTabs();
     checkForNewClaudeMessages();
     const box = document.getElementById("chat");
+    if (!box) return;
     const active = STATE.activeSection || "main";
     const msgs = (STATE.chat || []).filter((m) => (m.section || "main") === active);
+
+    const signature = active + ":" + msgs.length + ":" + (msgs.length ? msgs[msgs.length - 1].ts + "_" + msgs[msgs.length - 1].text.length : "0");
+    if (signature === lastRenderedChatSignature) {
+      return;
+    }
+    lastRenderedChatSignature = signature;
+
     if (!msgs.length) {
       box.innerHTML =
-        '<div class="chat-empty">ยังไม่มีข้อความในแชทนี้<br>เมื่อ Claude ใช้เครื่องมือ <code>say_to_user</code><br>ข้อความจะมาโผล่ที่นี่ ✨</div>';
+        '<div class="chat-empty">ยังไม่มีข้อความในแชทนี้<br>เมื่อ Claude หรือ Gemini ตอบกลับ<br>ข้อความจะมาโผล่ที่นี่ ✨</div>';
       return;
     }
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
@@ -90,8 +100,18 @@ export default function setupChat({ STATE, api, toast, escapeHtml, localActiveSe
       } else if (role === "gemini") {
         header = '<div class="msg-sender-label">♊ Gemini</div>';
       }
-      
+
       el.innerHTML = `${header}<div class="msg-body">${bodyHtml}</div><span class="ts">${t}</span>`;
+      if (m.media && m.media.url) {
+        const mediaEl = document.createElement(m.media.kind === "video" ? "video" : "img");
+        mediaEl.className = "msg-media";
+        mediaEl.src = m.media.url;
+        if (m.media.kind === "video") {
+          mediaEl.controls = true;
+          mediaEl.playsInline = true;
+        }
+        el.querySelector(".msg-body").prepend(mediaEl);
+      }
       box.appendChild(el);
     }
     // Auto-render KaTeX math equations if available

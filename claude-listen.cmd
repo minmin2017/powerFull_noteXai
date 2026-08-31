@@ -17,7 +17,7 @@ rem spawn `node --watch server.js` and the second one dies on EADDRINUSE.
 set "SERVER_UP="
 for /l %%i in (1,1,15) do (
   if not defined SERVER_UP (
-    curl -s -m 2 -o nul http://localhost:4321/api/state && set "SERVER_UP=1"
+    curl -s -m 2 -o nul http://127.0.0.1:4321/api/state && set "SERVER_UP=1"
     if not defined SERVER_UP timeout /t 1 /nobreak >nul
   )
 )
@@ -28,6 +28,6 @@ if not defined SERVER_UP (
 )
 
 echo Opening Claude Code - listening to chat section: %CHAT_SECTION%
-claude --dangerously-skip-permissions "Read CLAUDE.md. You are bound to chat section '%CHAT_SECTION%' (also in env CHAT_SECTION). Arm a persistent background Monitor that polls ONLY this section: curl -s -G http://localhost:4321/api/inbox --data-urlencode section=%CHAT_SECTION% --data-urlencode drain=true --data-urlencode agent=claude  every ~3s, and act on each message. The agent=claude parameter is REQUIRED - without it the server replies 'who are you?' and returns nothing. Reply ONLY via the say_to_user MCP tool (it auto-targets this section from env). Reply in Thai. Do not drain the shared inbox and do not touch other sections."
+claude --dangerously-skip-permissions "Read CLAUDE.md. You are bound to chat section '%CHAT_SECTION%' (also in env CHAT_SECTION). Arm a persistent background Monitor that polls ONLY this section: curl -s -G http://127.0.0.1:4321/api/inbox --data-urlencode section=%CHAT_SECTION% --data-urlencode drain=true --data-urlencode agent=claude  every ~3s, and act on each message. The agent=claude parameter is REQUIRED - without it the server replies 'who are you?' and returns nothing. Reply ONLY via the say_to_user MCP tool (it auto-targets this section from env). Reply in Thai. Do not drain the shared inbox and do not touch other sections."
 
 endlocal

@@ -8,8 +8,10 @@
 import { WebSocket } from "ws";
 
 const PORT = Number(process.env.PORT) || 4321;
-const BASE = `http://localhost:${PORT}`;
-const WS_URL = `ws://localhost:${PORT}/ws`;
+// 127.0.0.1, not localhost: on this machine "localhost" resolves ::1 first and
+// stalls ~2s against an IPv4-only server before falling back.
+const BASE = `http://127.0.0.1:${PORT}`;
+const WS_URL = `ws://127.0.0.1:${PORT}/ws`;
 const SECTION = (process.argv[2] || process.env.CHAT_SECTION || "").trim();
 const AGENT = (process.env.AGENT || "claude").trim();
 
@@ -84,3 +86,16 @@ function connect() {
 }
 
 connect();
+
+// Heartbeat: touch /api/inbox every 15s even when idle, purely so the server's
+// agentSeen tracker (read by usage-guard.js via /api/agent/status on quota
+// reset, to decide whether to wake this session instead of spawning a new
+// one) sees this Monitor as alive. The drain() call above only fires when a
+// message actually arrives — long quiet periods would otherwise look "dead".
+setInterval(() => {
+  const sec = resolvedSectionId || SECTION;
+  const url = sec
+    ? `${BASE}/api/inbox?section=${encodeURIComponent(sec)}&agent=${AGENT}`
+    : `${BASE}/api/inbox?agent=${AGENT}`;
+  fetch(url).catch(() => {});
+}, 15000);

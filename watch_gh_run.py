@@ -58,7 +58,8 @@ def watch_run(run_id):
                             dst = r"C:\Users\wicha\Desktop\Full_Chapter6_Manim_Lesson.mp4"
                             shutil.copy2(merged_file, dst)
                             try:
-                                os.startfile(dst)
+                                # os.startfile(dst)
+                                pass
                             except Exception:
                                 pass
                             msg_success += f"📺 **เปิดวิดีโอ Full Lesson ให้ดูบนหน้าจอ Windows เรียบร้อยแล้วครับ!** (`{dst}`)"

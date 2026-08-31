@@ -39,3 +39,22 @@ tools/tiaportal-mcp/
 # study-app: ignore video data, keep the directory structure
 study-app/data/*
 !study-app/data/.gitkeep
+
+# mkcert-generated local TLS cert/key — machine-specific, never commit
+certs/*.pem
+
+# real OAuth token for Gmail — secret, never commit
+.gmail_token.pickle
+
+# Manim render cache / extracted-frame scratch output — regenerable, not source
+media/
+frames_part3/
+frames_part3_fixed/
+
+# explicit scratch/throwaway work area — not meant to be versioned
+scratch/
+
+# one-off "send a single message" scripts left at repo root from past sessions —
+# kept on disk for reference, just not versioned (dozens of these, each a
+# throwaway single-purpose script, e.g. send_lambda_h_relation.py)
+send_*.py

@@ -1,0 +1,54 @@
+{
+  "id": "vid_mt6qsm8x",
+  "source": "D:\\Downloads\\1.mov",
+  "title": null,
+  "duration_s": 36.62,
+  "frames": [
+    {
+      "t": 2.83,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_2.83.jpg"
+    },
+    {
+      "t": 8.5,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_8.5.jpg"
+    },
+    {
+      "t": 18.58,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_18.58.jpg"
+    },
+    {
+      "t": 21.21,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_21.21.jpg"
+    },
+    {
+      "t": 26.08,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_26.08.jpg"
+    },
+    {
+      "t": 29.58,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_29.58.jpg"
+    },
+    {
+      "t": 29.67,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_29.67.jpg"
+    },
+    {
+      "t": 29.71,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_29.71.jpg"
+    },
+    {
+      "t": 33.58,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_33.58.jpg"
+    },
+    {
+      "t": 33.63,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_33.63.jpg"
+    },
+    {
+      "t": 33.71,
+      "file": "/uploads/videodigest/vid_mt6qsm8x/frame_33.71.jpg"
+    }
+  ],
+  "transcript": [],
+  "status": "done"
+}

@@ -1,0 +1,153 @@
+{
+  "id": "vid_mt6qslrm",
+  "source": "D:\\Downloads\\Flow mindmap .mp4",
+  "title": null,
+  "duration_s": 137.9,
+  "frames": [
+    {
+      "t": 0.0,
+      "file": "/uploads/videodigest/vid_mt6qslrm/frame_0.jpg"
+    },
+    {
+      "t": 60.0,
+      "file": "/uploads/videodigest/vid_mt6qslrm/frame_60.jpg"
+    },
+    {
+      "t": 120.0,
+      "file": "/uploads/videodigest/vid_mt6qslrm/frame_120.jpg"
+    }
+  ],
+  "transcript": [
+    {
+      "start": 0.34,
+      "end": 7.47,
+      "text": "Today, I would like to introduce the architecture of our predictive maintenance system."
+    },
+    {
+      "start": 7.47,
+      "end": 14.31,
+      "text": "We start with the physical system which consists of industrial equipment such as motor operating"
+    },
+    {
+      "start": 14.31,
+      "end": 16.72,
+      "text": "in real time."
+    },
+    {
+      "start": 16.72,
+      "end": 23.24,
+      "text": "To monitor the machine condition, we use current temperature and vibration sensors."
+    },
+    {
+      "start": 23.24,
+      "end": 27.92,
+      "text": "These sensors are important because they provide the key information needed to detect"
+    },
+    {
+      "start": 27.92,
+      "end": 30.02,
+      "text": "abnormal machine behavior."
+    },
+    {
+      "start": 30.02,
+      "end": 34.58,
+      "text": "The collect data is then sent to the PLC."
+    },
+    {
+      "start": 34.58,
+      "end": 37.9,
+      "text": "The PLC acts as the central controller."
+    },
+    {
+      "start": 37.9,
+      "end": 44.54,
+      "text": "It receives the sensor data, controls the machine and ensure a reliable real-time operation for"
+    },
+    {
+      "start": 44.54,
+      "end": 46.93,
+      "text": "the entire system."
+    },
+    {
+      "start": 46.93,
+      "end": 51.05,
+      "text": "Next, note-late, retrieve the data from the PLC."
+    },
+    {
+      "start": 51.05,
+      "end": 57.21,
+      "text": "We use note-late because it can easily connect different hardware and software platforms"
+    },
+    {
+      "start": 57.21,
+      "end": 61.9,
+      "text": "following data to flow smoothly throughout the system."
+    },
+    {
+      "start": 61.9,
+      "end": 69.3,
+      "text": "At the same time, note-late sends real-time data to Unity where we create a digital twin."
+    },
+    {
+      "start": 69.3,
+      "end": 75.82,
+      "text": "This gives operator a live TD view of the machine, making it easier to monitor its operating"
+    },
+    {
+      "start": 75.82,
+      "end": 78.31,
+      "text": "condition."
+    },
+    {
+      "start": 78.31,
+      "end": 85.85,
+      "text": "The same data is also stored in FACDB, which is optimized for time series data and"
+    },
+    {
+      "start": 85.85,
+      "end": 90.87,
+      "text": "although asked to keep historical records for analysis."
+    },
+    {
+      "start": 90.87,
+      "end": 99.86,
+      "text": "From FACDB, the data has to propose, first, Grafana display in on-a-real-time dashboard"
+    },
+    {
+      "start": 99.86,
+      "end": 103.66,
+      "text": "helping engineer quickly monitor machine performance."
+    },
+    {
+      "start": 103.66,
+      "end": 110.14,
+      "text": "Second, our machine learning model analysis board historical and live data to detect"
+    },
+    {
+      "start": 110.14,
+      "end": 117.54,
+      "text": "abnormal pattern and predict potential equipment failure before they happen."
+    },
+    {
+      "start": 117.54,
+      "end": 123.16,
+      "text": "Finally, the prediction results are sent to the engineering co-pilot."
+    },
+    {
+      "start": 123.16,
+      "end": 129.8,
+      "text": "Instead of showing only raw data, the co-pilot explains alarm, summarizes the machine condition,"
+    },
+    {
+      "start": 129.8,
+      "end": 136.43,
+      "text": "recommends maintenance, actions, and help engineer make faster and better decisions."
+    },
+    {
+      "start": 136.43,
+      "end": 137.35,
+      "text": "Thank you for listening."
+    }
+  ],
+  "status": "done"
+}

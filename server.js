@@ -7,6 +7,7 @@
 import express from "express";
 import { WebSocketServer } from "ws";
 import http from "node:http";
+import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,7 +51,7 @@ function emptyState(title = "My Mind Map") {
     agentListener: "both", // "claude" | "gemini" | "both" (legacy fallback)
     geminiHandoff: { enabled: false }, // UI toggle: let Claude delegate cheap subtasks to Gemini
     geminiTasks: [], // {id,status:'pending'|'running'|'done'|'error',task,result,error,ts}
-    agentSeen: {}, // heartbeat timestamps: { gemini: <ts ms> }
+    agentSeen: {}, // heartbeat timestamps: { gemini: <ts ms>, "claude:<sectionId>": <ts ms> }
   };
 }
 
@@ -629,8 +630,14 @@ function resolveSectionKey(key) {
 // Each entry is tagged with the chat section it belongs to so multiple Claude
 // Code instances (one per section) can each drain only their own messages.
 function addInbox(text, section) {
+  ensureSections();
   const sec = (section && resolveSectionKey(section)) || state.activeSection || "main";
-  const entry = { id: uid("in"), text: String(text ?? ""), ts: Date.now(), section: sec };
+  // Snapshot which agent was listening on this section AT SEND TIME, so a later
+  // switch (e.g. Claude -> Gemini) can't retroactively expose undrained messages
+  // that were typed while the other agent was the listener.
+  const secObj = state.chatSections.find((s) => s.id === sec);
+  const listenerAtSend = secObj ? secObj.agentListener || "both" : "both";
+  const entry = { id: uid("in"), text: String(text ?? ""), ts: Date.now(), section: sec, listenerAtSend };
   state.inbox.push(entry);
   if (state.inbox.length > 200) state.inbox = state.inbox.slice(-200);
   changed();
@@ -671,7 +678,34 @@ function drainImageInbox() {
 const app = express();
 app.use(express.json({ limit: "30mb" })); // pasted images arrive as base64 data URLs
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: "/ws" });
+
+// Optional local-HTTPS listener — phones require a secure context (localhost
+// counts on desktop, a plain-HTTP LAN IP does not) before they'll grant mic
+// access, so getUserMedia silently fails over http://<lan-ip> even though it
+// works fine over http://127.0.0.1. Cert is a self-signed mkcert pair placed
+// at certs/cert.pem + certs/key.pem (see certs/README.md); the HTTP server
+// above keeps working unchanged when the files aren't there.
+const HTTPS_PORT = Number(process.env.HTTPS_PORT) || 4443;
+const CERT_PATH = path.join(__dirname, "certs", "cert.pem");
+const KEY_PATH = path.join(__dirname, "certs", "key.pem");
+let httpsServer = null;
+if (fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH)) {
+  httpsServer = https.createServer(
+    { cert: fs.readFileSync(CERT_PATH), key: fs.readFileSync(KEY_PATH) },
+    app
+  );
+}
+
+// A single WebSocketServer shared by both listeners (noServer mode + manual
+// upgrade routing) so wss.clients — and therefore broadcast() — covers every
+// client regardless of which port/protocol it connected through.
+const wss = new WebSocketServer({ noServer: true });
+function routeUpgrade(request, socket, head) {
+  if (request.url !== "/ws") { socket.destroy(); return; }
+  wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
+}
+server.on("upgrade", routeUpgrade);
+if (httpsServer) httpsServer.on("upgrade", routeUpgrade);
 
 function broadcast() {
   const payload = JSON.stringify({ type: "state", state, projects, activeId, history: historyCounts(), bootId: BOOT_ID });
@@ -1282,14 +1316,33 @@ app.post("/api/agent/heartbeat", (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/agent/status", (_req, res) => {
-  res.json({
+app.get("/api/agent/status", (req, res) => {
+  const resp = {
     gemini: {
       online: geminiOnline(),
       busy: state.geminiTasks.some((t) => t.status === "running"),
     },
     handoff: !!state.geminiHandoff.enabled,
-  });
+  };
+  // Optional: ?section=<id|name> reports whether a live Claude Code session is
+  // still polling/draining THAT section's inbox (stamped in GET /api/inbox
+  // above, both by the curl-poll Monitor and by ws-inbox.js's heartbeat).
+  // usage-guard.js reads this on quota reset to avoid spawning a duplicate
+  // Claude window when the old session is still alive and listening.
+  const { section, withinMs } = req.query;
+  if (section) {
+    ensureSections();
+    const secId = resolveSectionKey(section) || String(section);
+    const win = Number(withinMs) || 90000;
+    const lastSeen = state.agentSeen[`claude:${secId}`] || 0;
+    const age = Date.now() - lastSeen;
+    resp.claude = {
+      online: lastSeen > 0 && age < win,
+      lastSeenMs: lastSeen || null,
+      ageMs: lastSeen ? age : null,
+    };
+  }
+  res.json(resp);
 });
 
 app.post("/api/gemini/handoff", (req, res) => {
@@ -1403,6 +1456,36 @@ app.post("/api/launch-claude", (req, res) => {
     child.on("error", (err) => console.warn("[launch-claude] spawn error:", err.message));
     child.unref();
     res.json({ ok: true, section });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Start the PLC/action step tracker (oCam + F2 click-recorder → SOP guide).
+// See .agents/skills/plc-step-tracker/SKILL.md — separate desktop tool at
+// C:\Users\wicha\Desktop\plc_step_tracker, opened as its own visible cmd
+// window (it's a tkinter GUI + global F2 hotkey, needs a real desktop session).
+let plcTrackerChild = null;
+app.post("/api/plc-tracker/start", (req, res) => {
+  if (plcTrackerChild && !plcTrackerChild.killed) {
+    return res.json({ ok: true, alreadyRunning: true });
+  }
+  const trackerDir = "C:\\Users\\wicha\\Desktop\\plc_step_tracker";
+  const startScript = path.join(trackerDir, "start.cmd");
+  if (!fs.existsSync(startScript)) {
+    return res.status(404).json({ error: "start.cmd not found at " + trackerDir });
+  }
+  try {
+    const child = spawn(
+      "cmd.exe",
+      ["/c", "start", "AI Step Tracker - PLC SOP Guide", "cmd", "/k", startScript],
+      { detached: true, stdio: "ignore", cwd: trackerDir, windowsHide: false }
+    );
+    child.on("error", (err) => console.warn("[plc-tracker] spawn error:", err.message));
+    child.on("exit", () => { plcTrackerChild = null; });
+    child.unref();
+    plcTrackerChild = child;
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1586,13 +1669,15 @@ app.get("/api/inbox", (req, res) => {
     if (!secId) return res.json({ items: [] }); // unknown section → nothing, never drain all
   }
   const match = (m) => {
+    // Use the listener that was active WHEN THE MESSAGE WAS SENT, not the
+    // section's current listener — otherwise switching agentListener (e.g.
+    // Claude -> Gemini) retroactively exposes messages the other agent left
+    // undrained. Old messages saved before this field existed fall back to
+    // "both" (their original behavior).
+    const ml = m.listenerAtSend || "both";
+    if (ml !== "both" && ml !== requester) return false;
     if (secId !== null) return (m.section || "main") === secId;
-    // Cross-section poll (no ?section): enforce each message's OWN section
-    // listener, so an agent can never see/drain messages from a section
-    // reserved for the other agent (guard above only covers one section).
-    const msec = state.chatSections.find((s) => s.id === (m.section || "main"));
-    const ml = msec ? (msec.agentListener || "both") : "both";
-    return ml === "both" || ml === requester;
+    return true;
   };
   const items = state.inbox.filter(match);
   if (drain && items.length) {
@@ -1600,6 +1685,15 @@ app.get("/api/inbox", (req, res) => {
     // ~3s poll triggered a full state broadcast + history snapshot + file write
     state.inbox = state.inbox.filter((m) => !match(m));
     changed();
+  }
+  // Heartbeat (no changed() — same reasoning as /api/agent/heartbeat: this fires
+  // every ~3s from the curl-poll Monitor and would be far too chatty to persist
+  // + broadcast). Lets usage-guard.js ask "is a live Claude session still
+  // polling this section?" via GET /api/agent/status?section=... before
+  // deciding to spawn a brand-new Claude window on quota reset.
+  if (requester) {
+    const liveSecId = secId || resolveSectionKey(state.activeSection) || "main";
+    state.agentSeen[`${requester}:${liveSecId}`] = Date.now();
   }
   res.json({ items });
 });
@@ -1987,6 +2081,29 @@ app.post("/api/video-complete", (req, res) => {
   res.json({ ok: true });
 });
 
+// Launch Native Python GUI Flashcard App
+app.post("/api/flashcard/launch-native", (_req, res) => {
+  try {
+    const script = path.join(__dirname, "flashcard_gui.py");
+    const child = spawn("python", [script], { detached: true, stdio: "ignore" });
+    child.unref();
+    res.json({ ok: true, pid: child.pid });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// One-time mobile setup: open this URL in the phone's browser (plain HTTP is
+// fine here — it's just a public cert, no secret) and it offers to install
+// the local CA as a configuration profile so the phone trusts our HTTPS port.
+app.get("/rootCA.pem", (req, res) => {
+  const p = path.join(__dirname, "certs", "rootCA.pem");
+  if (!fs.existsSync(p)) return res.status(404).send("rootCA.pem not generated yet — see certs/README.md");
+  res.setHeader("Content-Type", "application/x-x509-ca-cert");
+  res.setHeader("Content-Disposition", "attachment; filename=powerfullnote-rootCA.pem");
+  res.send(fs.readFileSync(p));
+});
+
 // Serve uploaded image assets, then the static frontend.
 app.use("/assets", express.static(ASSETS_DIR));
 app.use(express.static(path.join(__dirname, "public")));
@@ -2012,3 +2129,13 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`\n  Open it in Chrome or Edge (needed for Thai voice).`);
   console.log(`  ถ้าเครื่องอื่นเข้าไม่ได้: เปิด Windows Firewall ให้ Node อนุญาต TCP port ${PORT}.`);
 });
+
+if (httpsServer) {
+  httpsServer.listen(HTTPS_PORT, "0.0.0.0", () => {
+    console.log(`\n  HTTPS (สำหรับมือถือ ใช้ไมค์ได้):`);
+    for (const ip of lanIPv4s()) {
+      console.log(`    →  https://${ip}:${HTTPS_PORT}`);
+    }
+    console.log(`  ต้องติดตั้ง certs/rootCA.pem บนมือถือก่อน 1 ครั้ง — ดู certs/README.md`);
+  });
+}

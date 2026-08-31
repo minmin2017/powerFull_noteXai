@@ -8,17 +8,29 @@
  *
  * กลไก 2 จังหวะ:
  *   1) session >= STOP_AT (85%)  → ยิงข้อความเข้า inbox บอก Claude ให้เขียน HANDOFF.md แล้วหยุด
- *   2) โควตารีเซ็ต (percent ตกฮวบ) → POST /api/launch-claude เปิด Claude ใหม่ + บอกให้อ่าน HANDOFF.md ทำต่อ
+ *   2) โควตารีเซ็ต (percent ตกฮวบ) → ยิงข้อความเข้า inbox บอกให้ทำต่อก่อนเสมอ แล้วเช็ค
+ *      ผ่าน GET /api/agent/status?section=... ว่า Claude session เดิม (section เดียวกัน)
+ *      ยัง poll/drain inbox อยู่ไหม (server stamp เวลาไว้ทุกครั้งที่ agent=claude เรียก
+ *      GET /api/inbox — ทั้ง curl-poll ทุก ~3s และ ws-inbox.js heartbeat ทุก ~15s)
+ *      - ยัง listen อยู่        → จบแค่ข้อความ ไม่เปิดหน้าต่างใหม่ (Min ไม่อยากให้ spawn
+ *                                  agent ใหม่ทุกครั้ง — ให้ session เดิมทำต่อ คอนเท็กซ์ไม่หาย)
+ *      - ไม่มีใคร listen / เช็คไม่ได้ → fallback: POST /api/launch-claude เปิด Claude ใหม่
  *
  * ใช้งาน:  node usage-guard.js [section]        (default section = main)
  * หยุด:    Ctrl+C
  */
 
-const BASE     = process.env.PN_BASE || "http://localhost:4321";
+// 127.0.0.1, not localhost: on this machine "localhost" resolves ::1 first and
+// stalls ~2s against an IPv4-only server before falling back.
+const BASE     = process.env.PN_BASE || "http://127.0.0.1:4321";
 const SECTION  = process.argv[2] || process.env.CHAT_SECTION || "main";
 const STOP_AT  = Number(process.env.STOP_AT  || 85);   // % ที่สั่งให้หยุด
 const RESET_AT = Number(process.env.RESET_AT || 20);   // ต่ำกว่านี้ = ถือว่ารีเซ็ตแล้ว
 const EVERY_MS = Number(process.env.EVERY_MS || 60000);
+// ถือว่า session เดิม "ยัง listen อยู่" ถ้า agent=claude poll/drain inbox ของ section
+// นี้มาภายในกี่ ms — ต้องกว้างกว่าจังหวะ poll ที่มีอยู่จริงทุกแบบ (curl ทุก ~3s,
+// ws-inbox.js heartbeat ทุก ~15s) พอให้กัน jitter/เครื่องหน่วงชั่วคราว
+const LIVE_WINDOW_MS = Number(process.env.LIVE_WINDOW_MS || 90000);
 
 let warned = false;   // ยิงคำสั่งหยุดไปแล้วหรือยัง
 let lastPct = null;
@@ -40,6 +52,21 @@ async function jpost(path, body) {
 }
 
 const say = (text) => jpost("/api/inbox", { text, section: SECTION });
+
+// true/false = server answered definitively; null = couldn't tell (server is
+// an older version without /api/agent/status?section=, or unreachable).
+// Callers MUST treat null as "fall back to today's behavior" (spawn a new
+// window) — never as "assume alive", or a truly dead session would never get
+// woken back up.
+async function isClaudeListening() {
+  try {
+    const r = await jget(`/api/agent/status?section=${encodeURIComponent(SECTION)}&withinMs=${LIVE_WINDOW_MS}`);
+    if (r && r.claude && typeof r.claude.online === "boolean") return r.claude.online;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 async function tick() {
   let u;
@@ -85,11 +112,25 @@ async function tick() {
       `3. ทำงานที่ค้างอยู่ต่อจากเดิม แล้วบอก Min ว่ากลับมาแล้ว\n\n` +
       `(ข้อความนี้ยิงอัตโนมัติจาก usage-guard.js)`
     );
-    try {
-      await jpost("/api/launch-claude", { section: SECTION });
-      log("   เปิดหน้าต่าง Claude ใหม่แล้ว");
-    } catch (e) {
-      log("   ⚠️ เปิด Claude ไม่สำเร็จ:", e.message, "— ข้อความยังอยู่ใน inbox");
+    // สำคัญ (คำขอ Min): ถ้า Claude session เดิม (process เดิม, section เดียวกัน)
+    // ยังไม่ตาย — แค่โควตาหมดชั่วคราว — Monitor ของมันจะเห็นข้อความข้างบนเองจาก
+    // การ poll/drain ตามปกติอยู่แล้ว ไม่ต้อง spawn Claude ใหม่มาแย่งคอนเท็กซ์
+    // เปิดหน้าต่างใหม่เฉพาะตอนเช็คแล้วไม่มีใคร listen จริงๆ (fallback)
+    const listening = await isClaudeListening();
+    if (listening === true) {
+      log(`   session เดิมยัง listen section "${SECTION}" อยู่ — ส่งข้อความพอ ไม่เปิดหน้าต่างใหม่`);
+    } else {
+      log(
+        listening === null
+          ? "   เช็คสถานะ session เดิมไม่ได้ (server รุ่นเก่า/ไม่ตอบ) — fallback: เปิดหน้าต่างใหม่"
+          : `   ไม่มีใคร listen section "${SECTION}" อยู่ — เปิดหน้าต่างใหม่`
+      );
+      try {
+        await jpost("/api/launch-claude", { section: SECTION });
+        log("   เปิดหน้าต่าง Claude ใหม่แล้ว");
+      } catch (e) {
+        log("   ⚠️ เปิด Claude ไม่สำเร็จ:", e.message, "— ข้อความยังอยู่ใน inbox");
+      }
     }
   }
 }

@@ -1,0 +1,20 @@
+* Exercise 12 - Non-sinusoidal voltage source with RL series load
+* v(t) = 10 + 20*cos(2*pi*60*t - 25deg) + 30*cos(4*pi*60*t + 20deg)  [V]
+* Load: R = 5 ohm, L = 15 mH  (series)
+* Expected: I0=2A dc, I1=2.65A@-73.5deg (60Hz), I2=2.43A@-46.2deg (120Hz)
+* Expected total power absorbed by load: P = 52.2 W
+
+B1 vin 0 V=10+20*cos(2*pi*60*time-25*pi/180)+30*cos(4*pi*60*time+20*pi/180)
+R1 vin vout 5
+L1 vout 0 15m
+
+.tran 0 60m 0 5u
+.four 60 9 i(L1)
+
+* Auto-plot on run (no schematic to click probes on, so LTSpice needs these):
+.plot tran V(vin)
+.plot tran I(L1)
+.plot tran V(vin)*I(L1)
+
+.backanno
+.end

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PowerNote — Flashcard Studio 🎴</title>
+  
+  <!-- KaTeX for Math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-badge">
+          <span class="logo-icon">🎴</span>
+          <span class="logo-text">Flashcard Studio</span>
+        </div>
+        <div class="deck-selector-wrap">
+          <select id="deckSelect" class="glass-select" title="เลือกชุดการ์ด"></select>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div class="streak-badge" title="ทบทวนต่อเนื่อง">
+          <i class="fa-solid fa-fire fire-icon"></i>
+          <span id="streakCount">1 วัน</span>
+        </div>
+        <div class="due-badge" id="dueBadge" title="การ์ดที่ถึงกำหนดทวน">
+          <i class="fa-regular fa-clock"></i>
+          <span id="dueCount">0 ใบ</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <button id="btnLaunchDesktop" class="btn-icon-label glass-btn" title="เปิดเป็นหน้าต่าง Native Desktop แยกบน Windows">
+          <i class="fa-solid fa-desktop"></i>
+          <span>Desktop Window</span>
+        </button>
+        <button id="btnNewCard" class="btn-icon-label glass-btn accent-btn">
+          <i class="fa-solid fa-plus"></i>
+          <span>เพิ่มการ์ด</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Study Arena -->
+    <main class="study-arena">
+      <!-- Progress Bar -->
+      <div class="progress-section">
+        <div class="progress-track">
+          <div class="progress-fill" id="progressBar" style="width: 0%;"></div>
+        </div>
+        <div class="progress-label">
+          <span id="progressText">การ์ด 0 / 0</span>
+        </div>
+      </div>
+
+      <!-- 3D Card Container -->
+      <div class="card-stage">
+        <div class="card-wrapper" id="cardWrapper">
+          <div class="card-3d" id="flashcard">
+            <!-- Card Front -->
+            <div class="card-face card-front">
+              <div class="card-meta">
+                <span class="tag-badge" id="cardCategory">Engineering</span>
+                <span class="hint-badge"><i class="fa-solid fa-hand-pointer"></i> คลิกหรือกด Space เพื่อดูเฉลย</span>
+              </div>
+              <div class="card-content" id="frontContent">
+                <div class="placeholder-loading">กำลังโหลดการ์ด...</div>
+              </div>
+              <div class="card-footer">
+                <button class="voice-action-btn" id="btnSpeakFront" title="อ่านออกเสียงโจทย์">
+                  <i class="fa-solid fa-volume-high"></i> อ่านโจทย์
+                </button>
+                <button class="voice-action-btn voice-mic-btn" id="btnMicAnswer" title="พูดตอบด้วยเสียง">
+                  <i class="fa-solid fa-microphone"></i> พูดตอบ
+                </button>
+              </div>
+            </div>
+
+            <!-- Card Back -->
+            <div class="card-face card-back">
+              <div class="card-meta">
+                <span class="tag-badge success-tag">เฉลย & คำอธิบาย</span>
+                <span class="hint-badge"><i class="fa-solid fa-rotate-left"></i> คลิกเพื่อพลิกกลับ</span>
+              </div>
+              <div class="card-content" id="backContent"></div>
+              <div class="card-footer">
+                <button class="voice-action-btn" id="btnSpeakBack" title="อ่านออกเสียงเฉลย">
+                  <i class="fa-solid fa-volume-high"></i> อ่านเฉลย
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action & SRS Controls -->
+      <div class="controls-section">
+        <div class="flip-prompt" id="flipPrompt">
+          <button class="btn-flip-main" id="btnFlipMain">
+            <span>พลิกดูเฉลย (Spacebar)</span>
+            <i class="fa-solid fa-rotate"></i>
+          </button>
+        </div>
+
+        <div class="srs-actions" id="srsActions" style="display: none;">
+          <div class="srs-label">ประเมินความแม่นยำเพื่อจัดรอบทวน (SM-2 SRS):</div>
+          <div class="srs-buttons-grid">
+            <button class="srs-btn srs-again" data-rating="1">
+              <span class="srs-title">Again (จำไม่ได้)</span>
+              <span class="srs-sub">&lt; 1 วัน</span>
+              <span class="key-hint">[1]</span>
+            </button>
+            <button class="srs-btn srs-hard" data-rating="2">
+              <span class="srs-title">Hard (ยาก)</span>
+              <span class="srs-sub">1 วัน</span>
+              <span class="key-hint">[2]</span>
+            </button>
+            <button class="srs-btn srs-good" data-rating="3">
+              <span class="srs-title">Good (พอได้)</span>
+              <span class="srs-sub">3 วัน</span>
+              <span class="key-hint">[3]</span>
+            </button>
+            <button class="srs-btn srs-easy" data-rating="4">
+              <span class="srs-title">Easy (แม่นยำ)</span>
+              <span class="srs-sub">7 วัน</span>
+              <span class="key-hint">[4]</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal: Card Creator -->
+    <div class="modal-backdrop" id="cardModal" style="display: none;">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-plus-circle"></i> สร้าง Flashcard ใหม่</h3>
+          <button class="modal-close" id="btnCloseModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>ด้านหน้า (คำถาม / Concept):</label>
+            <textarea id="inpFront" placeholder="พิมพ์คำถาม... รองรับสูตรคณิต เช่น $P = T \omega$" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label>ด้านหลัง (เฉลย / คำอธิบายแบบละเอียด):</label>
+            <textarea id="inpBack" placeholder="พิมพ์เฉลย และคำอธิบาย..." rows="4"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="glass-btn" id="btnCancelCard">ยกเลิก</button>
+          <button class="glass-btn accent-btn" id="btnSaveCard">บันทึกการ์ด</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

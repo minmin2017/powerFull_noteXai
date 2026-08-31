@@ -304,7 +304,7 @@ import setupGitHub from './modules/github.js';
         tagsEl.dataset.key = tagKey;
         tagsEl.innerHTML = nodeTags.map((t) => {
           const def = TAGS.find((x) => x.name === t);
-          return `<span class="node-tag" style="background:${def?.color || "#6366f1"}">${def?.emoji || "🏷"} ${t}</span>`;
+          return `<span class="node-tag" style="background:${def?.color || "#14b8a6"}">${def?.emoji || "🏷"} ${t}</span>`;
         }).join("");
       }
       // collapse toggle
@@ -697,7 +697,7 @@ import setupGitHub from './modules/github.js';
       ectx.beginPath();
       ectx.moveTo(ax, ay);
       ectx.bezierCurveTo(ax + (bx >= ax ? dx : -dx), ay, bx - (bx >= ax ? dx : -dx), by, bx, by);
-      ectx.strokeStyle = n.color || "#6366f1";
+      ectx.strokeStyle = n.color || "#14b8a6";
       ectx.globalAlpha = 0.55;
       ectx.lineWidth = Math.max(1.5, 2.2 * view.scale);
       ectx.stroke();
@@ -768,6 +768,15 @@ import setupGitHub from './modules/github.js';
   function drawFx() {
     if (fxRaf) return;
     fxRaf = requestAnimationFrame(() => { fxRaf = 0; drawFxNow(); });
+  }
+  // Same idea for edges: computeHidden() walks every node's parent chain, so
+  // recomputing it on every raw pointermove while dragging a node (which can
+  // fire far faster than the screen repaints) makes dragging feel laggy on a
+  // large map. Collapse a burst of drag moves into one recompute per frame.
+  let edgesRaf = 0;
+  function scheduleEdges() {
+    if (edgesRaf) return;
+    edgesRaf = requestAnimationFrame(() => { edgesRaf = 0; drawEdges(computeHidden()); });
   }
   // Paint right now, cancelling any frame queued by drawFx(). Used before code
   // that reads the canvas pixels (PNG export) so it can't capture a stale frame.
@@ -840,7 +849,7 @@ import setupGitHub from './modules/github.js';
     }
     if (reparentDrag) {
       fctx.save();
-      fctx.strokeStyle = reparentDrag.targetId ? "rgba(99,241,130,0.9)" : "rgba(99,102,241,0.9)";
+      fctx.strokeStyle = reparentDrag.targetId ? "rgba(99,241,130,0.9)" : "rgba(20, 184, 166, 0.9)";
       fctx.lineWidth = 2;
       fctx.setLineDash([6, 4]);
       fctx.beginPath();
@@ -851,8 +860,8 @@ import setupGitHub from './modules/github.js';
     }
     if (lasso && lasso.pts.length > 1) {
       fctx.save();
-      fctx.strokeStyle = "rgba(99,102,241,0.9)";
-      fctx.fillStyle = "rgba(99,102,241,0.10)";
+      fctx.strokeStyle = "rgba(20, 184, 166, 0.9)";
+      fctx.fillStyle = "rgba(20, 184, 166, 0.10)";
       fctx.lineWidth = 1.5;
       fctx.lineJoin = "round";
       fctx.setLineDash([5, 4]);
@@ -884,10 +893,10 @@ import setupGitHub from './modules/github.js';
     // selection highlight pass
     if (isSel && !off) {
       ctx.save();
-      ctx.strokeStyle = "rgba(99,102,241,0.45)";
+      ctx.strokeStyle = "rgba(20, 184, 166, 0.45)";
       ctx.lineWidth = (d.width * wmul + 8) * view.scale;
       ctx.beginPath();
-      if (pts.length === 1) { ctx.arc(pts[0].x, pts[0].y, (d.width * wmul + 8) * view.scale / 2, 0, Math.PI * 2); ctx.fillStyle = "rgba(99,102,241,0.45)"; ctx.fill(); }
+      if (pts.length === 1) { ctx.arc(pts[0].x, pts[0].y, (d.width * wmul + 8) * view.scale / 2, 0, Math.PI * 2); ctx.fillStyle = "rgba(20, 184, 166, 0.45)"; ctx.fill(); }
       else { ctx.moveTo(pts[0].x, pts[0].y); for (const pt of pts.slice(1)) ctx.lineTo(pt.x, pt.y); ctx.stroke(); }
       ctx.restore();
     }
@@ -1359,7 +1368,7 @@ import setupGitHub from './modules/github.js';
           if (mel) { mel.style.left = mn.x + "px"; mel.style.top = mn.y + "px"; mel.classList.add("dragging"); }
         }
         if (drag.origStrokePoints) strokeDragOffset = { dx, dy };
-        drawEdges(computeHidden());
+        scheduleEdges();
         drawFx();
       } else {
         const n = STATE.nodes.find((x) => x.id === drag.id);
@@ -1373,7 +1382,7 @@ import setupGitHub from './modules/github.js';
             el.classList.add("dragging");
           }
           if (drag.origStrokePoints) strokeDragOffset = { dx, dy };
-          drawEdges(computeHidden());
+          scheduleEdges();
           drawFx();
         }
       }
@@ -2789,11 +2798,26 @@ import setupGitHub from './modules/github.js';
     await api(`/api/boxes/${modalState.boxId}/to-claude`, "POST", { dataUrl, note: $("#box-modal-title").value });
     toast("ส่งลายมือให้ Claude แล้ว ✓ — เดี๋ยว Claude อ่านให้");
   });
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) return resolve();
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = () => resolve();
+      script.onerror = (e) => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
   $("#box-ocr").addEventListener("click", async () => {
     const out = $("#box-ocr-result");
     out.hidden = false;
-    out.textContent = "⏳ กำลังอ่านลายมือ (ไทย+อังกฤษ)… ครั้งแรกอาจโหลดโมเดลสักครู่";
+    out.textContent = "⏳ กำลังโหลด Tesseract OCR…";
     try {
+      if (typeof Tesseract === "undefined") {
+        await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
+      }
+      out.textContent = "⏳ กำลังอ่านลายมือ (ไทย+อังกฤษ)… ครั้งแรกอาจโหลดโมเดลสักครู่";
       const dataUrl = rasterizeModal();
       const { data } = await Tesseract.recognize(dataUrl, "tha+eng");
       const text = (data.text || "").trim();
@@ -2825,6 +2849,28 @@ import setupGitHub from './modules/github.js';
     } catch {
       toast("เปิดแอปติววิดิโอไม่ได้ — เซิร์ฟเวอร์อาจยังไม่พร้อม ลองรออีกสักครู่แล้วกดใหม่");
     }
+  });
+
+  $("#btn-flashcard-mode")?.addEventListener("click", async () => {
+    try {
+      const res = await api("/api/flashcard/launch-native", "POST");
+      if (res && res.ok) {
+        toast("เปิด Flashcard Studio (Native Python Window) เรียบร้อยแล้ว 🎴");
+      } else {
+        throw new Error("Failed");
+      }
+    } catch {
+      toast("เปิด Flashcard Studio ไม่สำเร็จ — เช็คว่า flashcard_gui.py พร้อมทำงาน");
+    }
+  });
+
+  $("#btn-plc-tracker").addEventListener("click", async () => {
+    const r = await api("/api/plc-tracker/start", "POST");
+    if (!r || !r.ok) {
+      toast("เปิด Step Tracker ไม่สำเร็จ — เช็คว่า tracker.py ยังอยู่ที่ C:\\Users\\wicha\\Desktop\\plc_step_tracker");
+      return;
+    }
+    toast(r.alreadyRunning ? "Step Tracker กำลังทำงานอยู่แล้ว (กด F2 เพื่อเริ่ม/หยุดบันทึก)" : "เปิด Step Tracker แล้ว — กด F2 เพื่อเริ่ม/หยุดบันทึก ✓");
   });
 
   $("#btn-add-gallery").addEventListener("click", async () => {
@@ -3152,12 +3198,34 @@ import setupGitHub from './modules/github.js';
   sidebarExpandBtn?.addEventListener("click", () => setSidebarCollapsed(false));
   try {
     const savedCollapsed = localStorage.getItem("sidebarCollapsed");
-    if (savedCollapsed === "1") setSidebarCollapsed(true);
-    // On a phone, start with the chat drawer closed so the canvas is full-screen
-    // (only when the user hasn't set a preference yet).
-    else if (savedCollapsed === null && window.matchMedia("(max-width: 700px)").matches)
+    if (savedCollapsed === "1" && !window.matchMedia("(max-width: 700px)").matches) {
       setSidebarCollapsed(true);
+    }
   } catch {}
+
+  // -------------------------------------------------------------------------
+  // Floating scroll-to-bottom button in chat
+  // -------------------------------------------------------------------------
+  const chatScrollEl = document.getElementById("chat");
+  const chatScrollBottomBtn = document.getElementById("chat-scroll-bottom");
+  if (chatScrollEl && chatScrollBottomBtn) {
+    const updateScrollBottomBtn = () => {
+      const distFromBottom = chatScrollEl.scrollHeight - chatScrollEl.scrollTop - chatScrollEl.clientHeight;
+      if (distFromBottom > 120) {
+        chatScrollBottomBtn.hidden = false;
+      } else {
+        chatScrollBottomBtn.hidden = true;
+      }
+    };
+    chatScrollEl.addEventListener("scroll", updateScrollBottomBtn, { passive: true });
+    chatScrollBottomBtn.addEventListener("click", () => {
+      chatScrollEl.scrollTo({
+        top: chatScrollEl.scrollHeight,
+        behavior: "smooth"
+      });
+      chatScrollBottomBtn.hidden = true;
+    });
+  }
 
   // -------------------------------------------------------------------------
   // Object panel (พาเนล Object ฝั่งขวา) — list every object, delete by hand
