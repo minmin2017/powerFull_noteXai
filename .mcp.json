@@ -6,6 +6,10 @@
       "env": {
         "PORT": "4321"
       }
+    },
+    "run-filtered": {
+      "command": "node",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/mcp-run-filtered.js"]
     }
   }
 }
