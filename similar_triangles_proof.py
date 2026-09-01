@@ -240,7 +240,7 @@ class SimilarTrianglesProof(Scene):
         bg_panel3 = BackgroundRectangle(panel_3, color=BLACK, fill_opacity=0.8, buff=0.2)
         self.play(FadeIn(bg_panel3), FadeIn(panel_3))
         
-        conclude = Text("นี่คือที่มาว่าทำไมอัตราทด ถึงขึ้นอยู่กับจุด P ล้วนๆ!", font_size=24, color=WARN).to_edge(BOTTOM).shift(UP*0.5)
+        conclude = Text("นี่คือที่มาว่าทำไมอัตราทด ถึงขึ้นอยู่กับจุด P ล้วนๆ!", font_size=24, color=WARN).to_edge(DOWN).shift(UP*0.5)
         self.play(Write(conclude))
         
         self.wait(8)
