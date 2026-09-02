@@ -60,7 +60,7 @@ class AngularVelocityRatio(Scene):
         dot_F = Dot(F, color=YELLOW); label_F = Text("F", font="sans-serif", font_size=24, color=YELLOW).next_to(F, RIGHT)
         
         vec_v2 = Arrow(Q, E, buff=0, color=YELLOW); vec_v3 = Arrow(Q, F, buff=0, color=ORANGE)
-        label_v2 = MathTex("v_{Q2}").next_to(E, UP); label_v3 = MathTex("v_{Q3}").next_to(F, DOWN)
+        label_v2 = MathTex(r"v_{Q2}").next_to(E, UP); label_v3 = MathTex(r"v_{Q3}").next_to(F, DOWN)
         
         self.play(Transform(title, Text("ความเร็ว vQ2 และ vQ3 มีภาพฉายบน Contact Normal เท่ากันที่ P", font=THAI_FONT, font_size=28).to_edge(UP)))
         self.play(GrowArrow(vec_v2), GrowArrow(vec_v3), Write(label_v2), Write(label_v3))
@@ -76,7 +76,7 @@ class AngularVelocityRatio(Scene):
         tri_EQP = Polygon(E, Q, P, color=YELLOW, fill_opacity=0.3)
         self.play(FadeIn(tri_AQR), FadeIn(tri_EQP))
         
-        eq1 = MathTex(r"\\Delta AQR \\sim \\Delta EQP \\Rightarrow \\frac{EQ}{PQ} = \\frac{AQ}{AR}").to_corner(UL).shift(DOWN)
+        eq1 = MathTex(r"\Delta AQR \sim \Delta EQP \Rightarrow \frac{EQ}{PQ} = \frac{AQ}{AR}").to_corner(UL).shift(DOWN)
         bg1 = BackgroundRectangle(eq1, color=BLACK, fill_opacity=0.8, buff=0.2)
         self.play(FadeIn(bg1), Write(eq1))
         self.wait(2)
@@ -87,7 +87,7 @@ class AngularVelocityRatio(Scene):
         tri_FQP = Polygon(F, Q, P, color=ORANGE, fill_opacity=0.3)
         self.play(FadeIn(tri_BQS), FadeIn(tri_FQP))
         
-        eq2 = MathTex(r"\\Delta BQS \\sim \\Delta FQP \\Rightarrow \\frac{FQ}{PQ} = \\frac{BQ}{BS}").to_corner(UL).shift(DOWN)
+        eq2 = MathTex(r"\Delta BQS \sim \Delta FQP \Rightarrow \frac{FQ}{PQ} = \frac{BQ}{BS}").to_corner(UL).shift(DOWN)
         bg2 = BackgroundRectangle(eq2, color=BLACK, fill_opacity=0.8, buff=0.2)
         self.play(FadeIn(bg2), Write(eq2))
         self.wait(2)
@@ -95,11 +95,15 @@ class AngularVelocityRatio(Scene):
         self.play(FadeOut(tri_BQS), FadeOut(tri_FQP), FadeOut(bg2), FadeOut(eq2))
         self.play(Transform(title, Text("สรุปอัตราส่วนความเร็วเชิงมุม", font=THAI_FONT, font_size=32).to_edge(UP)))
         
-        conclusion = VGroup(
-            MathTex(r"\\frac{\\omega_2}{\\omega_3} = \\frac{v_{Q2}/AQ}{v_{Q3}/BQ} = \\frac{EQ/AQ}{FQ/BQ} = \\frac{EQ \\cdot BQ}{FQ \\cdot AQ}"),
-            MathTex(r"\\text{แทนค่าจากสามเหลี่ยมคล้าย:} \\quad \\frac{EQ}{AQ} = \\frac{PQ}{AR} \\quad \\text{และ} \\quad \\frac{BQ}{FQ} = \\frac{BS}{PQ}"),
-            MathTex(r"\\therefore \\frac{\\omega_2}{\\omega_3} = \\frac{PQ}{AR} \\cdot \\frac{BS}{PQ} = \\frac{BS}{AR}")
-        ).arrange(DOWN).to_edge(LEFT)
+        eq3 = MathTex(r"\frac{\omega_2}{\omega_3} = \frac{v_{Q2}/AQ}{v_{Q3}/BQ} = \frac{EQ/AQ}{FQ/BQ} = \frac{EQ \cdot BQ}{FQ \cdot AQ}")
+        
+        text_sub = Text("แทนค่าจากสามเหลี่ยมคล้าย:", font=THAI_FONT, font_size=24)
+        eq_sub = MathTex(r"\quad \frac{EQ}{AQ} = \frac{PQ}{AR} \quad \text{and} \quad \frac{BQ}{FQ} = \frac{BS}{PQ}")
+        sub_group = VGroup(text_sub, eq_sub).arrange(RIGHT)
+        
+        eq4 = MathTex(r"\therefore \frac{\omega_2}{\omega_3} = \frac{PQ}{AR} \cdot \frac{BS}{PQ} = \frac{BS}{AR}")
+        
+        conclusion = VGroup(eq3, sub_group, eq4).arrange(DOWN, buff=0.5).to_edge(LEFT)
         bg3 = BackgroundRectangle(conclusion, color=BLACK, fill_opacity=0.8, buff=0.2)
         self.play(FadeIn(bg3), Write(conclusion))
         self.wait(3)
