@@ -47,7 +47,7 @@ class Step1_VelocityA(MovingCameraScene):
         # Show derivation
         eq1 = MathTex(r"v_A = \omega \cdot r_{A/IC}").to_edge(LEFT).shift(UP*1)
         eq2 = MathTex(r"v_A = 6 \cdot 1").next_to(eq1, DOWN, aligned_edge=LEFT)
-        eq3 = MathTex(r"v_A = 6 \text{ cm/s (\leftarrow)}").next_to(eq2, DOWN, aligned_edge=LEFT)
+        eq3 = MathTex(r"v_A = 6 \text{ cm/s } (\leftarrow)").next_to(eq2, DOWN, aligned_edge=LEFT)
         
         self.play(Write(eq1))
         self.wait(1)
