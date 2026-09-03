@@ -33,7 +33,7 @@ class Step1_VelocityA(MovingCameraScene):
         self.play(Create(arc), Write(omega_label))
 
         r_line = DashedLine(C_pos, A_pos, color=YELLOW)
-        r_label = MathTex("1 \text{ cm}").next_to(r_line, RIGHT)
+        r_label = MathTex(r"1 \text{ cm}").next_to(r_line, RIGHT)
         self.play(Create(r_line), Write(r_label))
 
         vA_vec = Arrow(A_pos, A_pos + LEFT*3, buff=0, color=RED)
@@ -77,7 +77,7 @@ class Step2_VelocityB(MovingCameraScene):
         self.wait(2)
 
         omega_label = MathTex(r"\omega_{AB} = 0").scale(1.5).move_to(LEFT*2)
-        v_ans = MathTex(r"v_B = v_A = 6 \text{ cm/s (\leftarrow)}").scale(1.5).next_to(omega_label, DOWN)
+        v_ans = MathTex(r"v_B = v_A = 6 \text{ cm/s } (\leftarrow)").scale(1.5).next_to(omega_label, DOWN)
         
         self.play(Write(omega_label), Write(v_ans))
         self.wait(3)
