@@ -245,8 +245,13 @@ class SimilarTrianglesProof(Scene):
         # safe one gets a theta label - the caption states both are equal.
         ang_P1 = Angle(line_centers, line_nn, quadrant=(1,1), other_angle=True, radius=0.4, color=WARN)
         ang_P2 = Angle(line_centers, line_nn, quadrant=(-1,-1), other_angle=True, radius=0.4, color=WARN)
+        # A pure radial push barely clears the line itself here, since the
+        # angle is tiny (~6 deg) so its bisector runs almost parallel to
+        # both lines - nudge perpendicular to n_dir too so the glyph
+        # doesn't sit stroked-through by the contact-normal line.
+        theta_perp = np.array([-n_dir[1], n_dir[0], 0])
         lbl_theta = MathTex(r"\theta", font_size=26, color=WARN).move_to(
-            P + (ang_P2.point_from_proportion(0.5) - P) * 1.75
+            P + (ang_P2.point_from_proportion(0.5) - P) * 1.75 + theta_perp * 0.22
         )
 
         self.play(Create(ang_P1), Create(ang_P2), FadeIn(lbl_theta))
