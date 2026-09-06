@@ -117,14 +117,20 @@ class SimilarTrianglesProof(Scene):
         # Highlight similarity
         angle_alpha_1 = Angle(line_nn, lineAQ, radius=0.6, color=WARN)
         angle_alpha_2 = Angle(proj_line2, vec_v2, radius=0.6, color=WARN)
-        
+        lbl_alpha_1 = MathTex(r"\alpha", font_size=28, color=WARN).move_to(
+            Angle(line_nn, lineAQ, radius=0.9, color=WARN).point_from_proportion(0.5)
+        )
+        lbl_alpha_2 = MathTex(r"\alpha", font_size=28, color=WARN).move_to(
+            Angle(proj_line2, vec_v2, radius=0.9, color=WARN).point_from_proportion(0.5)
+        )
+
         # The angle between AQ and n-n is same as angle between vQ2 and proj_line2
-        self.play(Create(angle_alpha_1))
-        self.play(Create(angle_alpha_2))
+        self.play(Create(angle_alpha_1), FadeIn(lbl_alpha_1))
+        self.play(Create(angle_alpha_2), FadeIn(lbl_alpha_2))
 
         panel_1 = VGroup(
             Text("1) เนื่องจาก AQ ⊥ vQ2 และ AR ⊥ n-n'", font_size=18, color=WHITE),
-            Text("   ทำให้มุมระหว่างพวกมันมีค่าเท่ากัน (สีส้ม)", font_size=18, color=WARN),
+            Text("   ทำให้มุม α (สีส้ม) ระหว่างพวกมันมีค่าเท่ากัน", font_size=18, color=WARN),
             VGroup(
                 Text("2) ดังนั้น สามเหลี่ยมความเร็ว คล้ายกับ", font_size=18, color=WHITE),
                 MathTex(r"\Delta ARQ", font_size=20, color=GEAR_IN)
@@ -137,7 +143,7 @@ class SimilarTrianglesProof(Scene):
         self.play(FadeIn(bg_panel1), FadeIn(panel_1))
         self.wait(5)
         
-        self.play(FadeOut(bg_panel1), FadeOut(panel_1), FadeOut(txt_pair1), FadeOut(angle_alpha_1), FadeOut(angle_alpha_2), FadeOut(lbl_v2), FadeOut(vec_v2), FadeOut(proj_line2), FadeOut(ra_proj2), FadeOut(ra_v2))
+        self.play(FadeOut(bg_panel1), FadeOut(panel_1), FadeOut(txt_pair1), FadeOut(angle_alpha_1), FadeOut(angle_alpha_2), FadeOut(lbl_alpha_1), FadeOut(lbl_alpha_2), FadeOut(lbl_v2), FadeOut(vec_v2), FadeOut(proj_line2), FadeOut(ra_proj2), FadeOut(ra_v2))
 
         # ---------------------------------------------------------
         # PAIR 2: Velocity VQ3 and Triangle BSQ
@@ -157,11 +163,23 @@ class SimilarTrianglesProof(Scene):
         lbl_v3 = MathTex(r"v_{Q3}", font_size=24, color=GEAR_OUT).next_to(vec_v3.get_end(), UP, buff=0.1)
         ra_v3 = RightAngle(lineBQ, vec_v3, length=0.2, color=GEAR_OUT)
 
-        self.play(GrowArrow(vec_v3), FadeIn(lbl_v3), Create(ra_v3))
-        
+        # Mirror pair 1's angle-marking step: point at the SAME kind of angle (beta) here
+        angle_beta_1 = Angle(line_nn, lineBQ, radius=0.6, color=WARN)
+        lbl_beta_1 = MathTex(r"\beta", font_size=28, color=WARN).move_to(
+            Angle(line_nn, lineBQ, radius=0.9, color=WARN).point_from_proportion(0.5)
+        )
+
+        self.play(GrowArrow(vec_v3), FadeIn(lbl_v3), Create(ra_v3), Create(angle_beta_1), FadeIn(lbl_beta_1))
+
         proj_line3 = DashedLine(v3_end, vn_end, color=GRAYTXT)
         ra_proj3 = RightAngle(line_nn, proj_line3, length=0.2, color=GRAYTXT, quadrant=(1,1))
-        self.play(Create(proj_line3), Create(ra_proj3))
+
+        angle_beta_2 = Angle(proj_line3, vec_v3, radius=0.6, color=WARN)
+        lbl_beta_2 = MathTex(r"\beta", font_size=28, color=WARN).move_to(
+            Angle(proj_line3, vec_v3, radius=0.9, color=WARN).point_from_proportion(0.5)
+        )
+
+        self.play(Create(proj_line3), Create(ra_proj3), Create(angle_beta_2), FadeIn(lbl_beta_2))
 
         # Point S
         BS_vec = B - Q
@@ -176,6 +194,7 @@ class SimilarTrianglesProof(Scene):
 
         panel_2 = VGroup(
             Text("ในทำนองเดียวกัน ชิ้นที่ 3 มีสามเหลี่ยมคล้าย", font_size=18, color=WHITE),
+            Text("มุม β (สีส้ม) เท่ากันด้วยเหตุผลเดียวกับฝั่ง A", font_size=18, color=WARN),
             VGroup(
                 Text("สามเหลี่ยมความเร็ว คล้ายกับ", font_size=18, color=WHITE),
                 MathTex(r"\Delta BSQ", font_size=20, color=GEAR_OUT)
@@ -190,7 +209,7 @@ class SimilarTrianglesProof(Scene):
         self.play(FadeIn(bg_panel2), FadeIn(panel_2))
         self.wait(5)
 
-        self.play(FadeOut(bg_panel2), FadeOut(panel_2), FadeOut(txt_pair2), FadeOut(lbl_v3), FadeOut(vec_v3), FadeOut(proj_line3), FadeOut(ra_proj3), FadeOut(ra_v3), FadeOut(vec_vn), FadeOut(lbl_vn))
+        self.play(FadeOut(bg_panel2), FadeOut(panel_2), FadeOut(txt_pair2), FadeOut(lbl_v3), FadeOut(vec_v3), FadeOut(proj_line3), FadeOut(ra_proj3), FadeOut(ra_v3), FadeOut(vec_vn), FadeOut(lbl_vn), FadeOut(angle_beta_1), FadeOut(angle_beta_2), FadeOut(lbl_beta_1), FadeOut(lbl_beta_2))
 
         # ---------------------------------------------------------
         # PAIR 3: Triangle ARP and BSP (Pitch Point)
@@ -219,8 +238,14 @@ class SimilarTrianglesProof(Scene):
         # Vertically opposite angles at P
         ang_P1 = Angle(line_centers, line_nn, quadrant=(1,-1), other_angle=True, radius=0.4, color=WARN)
         ang_P2 = Angle(line_centers, line_nn, quadrant=(-1,1), other_angle=True, radius=0.4, color=WARN)
-        
-        self.play(Create(ang_P1), Create(ang_P2))
+        lbl_theta_1 = MathTex(r"\theta", font_size=26, color=WARN).move_to(
+            Angle(line_centers, line_nn, quadrant=(1,-1), other_angle=True, radius=0.7, color=WARN).point_from_proportion(0.5)
+        )
+        lbl_theta_2 = MathTex(r"\theta", font_size=26, color=WARN).move_to(
+            Angle(line_centers, line_nn, quadrant=(-1,1), other_angle=True, radius=0.7, color=WARN).point_from_proportion(0.5)
+        )
+
+        self.play(Create(ang_P1), Create(ang_P2), FadeIn(lbl_theta_1), FadeIn(lbl_theta_2))
 
         panel_3 = VGroup(
             VGroup(
@@ -230,7 +255,7 @@ class SimilarTrianglesProof(Scene):
                 MathTex(r"\Delta BSP", font_size=20, color=GEAR_OUT)
             ).arrange(RIGHT, buff=0.1),
             Text("1) มีมุมฉากเหมือนกันที่ R และ S", font_size=18, color=WHITE),
-            Text("2) มุมตรงข้ามที่จุด P เท่ากัน (สีส้ม)", font_size=18, color=WARN),
+            Text("2) มุมตรงข้ามที่จุด P เท่ากัน (θ, สีส้ม)", font_size=18, color=WARN),
             Text("ดัวนั้น สามเหลี่ยมสองรูปนี้คล้ายกัน!", font_size=18, color=OK),
             MathTex(r"\frac{BS}{AR} = \frac{BP}{AP}", font_size=24, color=OK),
             Text("สรุปกฎการขบ:", font_size=20, color=WHITE),
