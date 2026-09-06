@@ -140,10 +140,13 @@ class SimilarTrianglesProof(Scene):
         ).arrange(DOWN, aligned_edge=LEFT).to_corner(DR)
         
         bg_panel1 = BackgroundRectangle(panel_1, color=BLACK, fill_opacity=0.8, buff=0.2)
-        self.play(FadeIn(bg_panel1), FadeIn(panel_1))
+        # Leader line: the calculation box sits far from the diagram, so
+        # point it back at the vertex (Q) the whole calculation is about.
+        pointer_1 = DashedLine(panel_1.get_corner(UL), Q, color=WARN, stroke_width=1.5, dash_length=0.1)
+        self.play(FadeIn(bg_panel1), FadeIn(panel_1), Create(pointer_1))
         self.wait(5)
-        
-        self.play(FadeOut(bg_panel1), FadeOut(panel_1), FadeOut(txt_pair1), FadeOut(angle_alpha_1), FadeOut(angle_alpha_2), FadeOut(lbl_alpha_1), FadeOut(lbl_alpha_2), FadeOut(lbl_v2), FadeOut(vec_v2), FadeOut(proj_line2), FadeOut(ra_proj2), FadeOut(ra_v2))
+
+        self.play(FadeOut(bg_panel1), FadeOut(panel_1), FadeOut(pointer_1), FadeOut(txt_pair1), FadeOut(angle_alpha_1), FadeOut(angle_alpha_2), FadeOut(lbl_alpha_1), FadeOut(lbl_alpha_2), FadeOut(lbl_v2), FadeOut(vec_v2), FadeOut(proj_line2), FadeOut(ra_proj2), FadeOut(ra_v2))
 
         # ---------------------------------------------------------
         # PAIR 2: Velocity VQ3 and Triangle BSQ
@@ -206,10 +209,11 @@ class SimilarTrianglesProof(Scene):
         ).arrange(DOWN, aligned_edge=LEFT).to_corner(DR)
 
         bg_panel2 = BackgroundRectangle(panel_2, color=BLACK, fill_opacity=0.8, buff=0.2)
-        self.play(FadeIn(bg_panel2), FadeIn(panel_2))
+        pointer_2 = DashedLine(panel_2.get_corner(UL), Q, color=WARN, stroke_width=1.5, dash_length=0.1)
+        self.play(FadeIn(bg_panel2), FadeIn(panel_2), Create(pointer_2))
         self.wait(5)
 
-        self.play(FadeOut(bg_panel2), FadeOut(panel_2), FadeOut(txt_pair2), FadeOut(lbl_v3), FadeOut(vec_v3), FadeOut(proj_line3), FadeOut(ra_proj3), FadeOut(ra_v3), FadeOut(vec_vn), FadeOut(lbl_vn), FadeOut(angle_beta_1), FadeOut(angle_beta_2), FadeOut(lbl_beta_1), FadeOut(lbl_beta_2))
+        self.play(FadeOut(bg_panel2), FadeOut(panel_2), FadeOut(pointer_2), FadeOut(txt_pair2), FadeOut(lbl_v3), FadeOut(vec_v3), FadeOut(proj_line3), FadeOut(ra_proj3), FadeOut(ra_v3), FadeOut(vec_vn), FadeOut(lbl_vn), FadeOut(angle_beta_1), FadeOut(angle_beta_2), FadeOut(lbl_beta_1), FadeOut(lbl_beta_2))
 
         # ---------------------------------------------------------
         # PAIR 3: Triangle ARP and BSP (Pitch Point)
@@ -272,8 +276,9 @@ class SimilarTrianglesProof(Scene):
         ).arrange(DOWN, aligned_edge=LEFT).to_corner(DL)
 
         bg_panel3 = BackgroundRectangle(panel_3, color=BLACK, fill_opacity=0.8, buff=0.2)
-        self.play(FadeIn(bg_panel3), FadeIn(panel_3))
-        
+        pointer_3 = DashedLine(panel_3.get_corner(UR), P, color=WARN, stroke_width=1.5, dash_length=0.1)
+        self.play(FadeIn(bg_panel3), FadeIn(panel_3), Create(pointer_3))
+
         conclude = Text("นี่คือที่มาว่าทำไมอัตราทด ถึงขึ้นอยู่กับจุด P ล้วนๆ!", font_size=24, color=WARN).to_edge(DOWN).shift(UP*0.5)
         self.play(Write(conclude))
         
