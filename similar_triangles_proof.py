@@ -236,16 +236,20 @@ class SimilarTrianglesProof(Scene):
         self.play(FadeIn(tri_ARP), FadeIn(tri_BSP))
 
         # Vertically opposite angles at P
-        ang_P1 = Angle(line_centers, line_nn, quadrant=(1,-1), other_angle=True, radius=0.4, color=WARN)
-        ang_P2 = Angle(line_centers, line_nn, quadrant=(-1,1), other_angle=True, radius=0.4, color=WARN)
-        lbl_theta_1 = MathTex(r"\theta", font_size=26, color=WARN).move_to(
-            Angle(line_centers, line_nn, quadrant=(1,-1), other_angle=True, radius=0.7, color=WARN).point_from_proportion(0.5)
-        )
-        lbl_theta_2 = MathTex(r"\theta", font_size=26, color=WARN).move_to(
-            Angle(line_centers, line_nn, quadrant=(-1,1), other_angle=True, radius=0.7, color=WARN).point_from_proportion(0.5)
+        # NOTE: quadrant=(1,-1)/(-1,1) here actually draws the ~174 degree
+        # reflex angle, not the small ~6 degree vertical angle matching
+        # alpha/beta's scale (verified numerically) - (1,1)/(-1,-1) is the
+        # correct small-angle pair. (-1,-1) points down-left (safe, away
+        # from the title band); (1,1) points up-right (would collide with
+        # the title since P sits right at the top edge here), so only the
+        # safe one gets a theta label - the caption states both are equal.
+        ang_P1 = Angle(line_centers, line_nn, quadrant=(1,1), other_angle=True, radius=0.4, color=WARN)
+        ang_P2 = Angle(line_centers, line_nn, quadrant=(-1,-1), other_angle=True, radius=0.4, color=WARN)
+        lbl_theta = MathTex(r"\theta", font_size=26, color=WARN).move_to(
+            P + (ang_P2.point_from_proportion(0.5) - P) * 1.75
         )
 
-        self.play(Create(ang_P1), Create(ang_P2), FadeIn(lbl_theta_1), FadeIn(lbl_theta_2))
+        self.play(Create(ang_P1), Create(ang_P2), FadeIn(lbl_theta))
 
         panel_3 = VGroup(
             VGroup(
