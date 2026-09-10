@@ -424,20 +424,18 @@ class AeroRadialLesson(SafeThreeDScene):
     def beat_s9_firing_order_720(self):
         """S9: 720-degree firing order (1-3-5-7-2-4-6) with rear-view and odd-per-row caveat."""
         t = self.hud(title("S9: ลำดับการจุดระเบิด 720°: 1-3-5-7-2-4-6 (FAA Convention)"))
-        c = self.hud(caption("เครื่องยนต์ 4 จังหวะหมุน 2 รอบ (720°) ต่อวัฏจักร -> ก้าวทีละ 2 ตำแหน่งในวงแหวน เพื่อช่วงจุดระเบิดที่สม่ำเสมอ"))
+        c = self.hud(fit_width(caption("เครื่องยนต์ 4 จังหวะหมุน 2 รอบ (720°) ต่อวัฏจักร -> ก้าวทีละ 2 ตำแหน่งในวงแหวน เพื่อช่วงจุดระเบิดที่สม่ำเสมอ"), 13.0))
 
         # Shift cylinder circle to the right to leave ample space for left HUD
         rad_center = np.array([1.8, 0.0, 0])
         angles = [90 - i * (360 / 7) for i in range(7)]
         cyl_nodes = VGroup()
+        cyl_labels = VGroup()
         for i, ang in enumerate(angles):
             rad = ang * DEGREES
             pos = rad_center + np.array([1.9 * np.cos(rad), 1.9 * np.sin(rad), 0])
-            node = VGroup(
-                Circle(radius=0.40, color=METAL, fill_opacity=0.4),
-                self.hud(Text(str(i + 1), font_size=19, color=WHITE).move_to(pos))
-            ).move_to(pos)
-            cyl_nodes.add(node)
+            cyl_nodes.add(Circle(radius=0.40, color=METAL, fill_opacity=0.4).move_to(pos))
+            cyl_labels.add(self.hud(Text(str(i + 1), font_size=19, color=WHITE).move_to(pos)))
 
         hud_convention = self.hud(VGroup(
             Text("FAA Standard Convention:", font_size=18, color=C_VERIFIED),
@@ -469,7 +467,7 @@ class AeroRadialLesson(SafeThreeDScene):
         crank_hub = Dot(rad_center, color=C_MASTER, radius=0.09)
 
         self.play(FadeIn(t), FadeIn(c))
-        self.play(Create(cyl_nodes), FadeIn(hud_convention), FadeIn(seq_text), FadeIn(angle_hud), FadeIn(crank_hub), Create(crank_indicator))
+        self.play(Create(cyl_nodes), FadeIn(cyl_labels), FadeIn(hud_convention), FadeIn(seq_text), FadeIn(angle_hud), FadeIn(crank_hub), Create(crank_indicator))
 
         # Flash sequence: 1 -> 3 -> 5 -> 7 -> 2 -> 4 -> 6
         fire_order = [0, 2, 4, 6, 1, 3, 5]
@@ -486,7 +484,7 @@ class AeroRadialLesson(SafeThreeDScene):
         self.wait(1.5)
         crank_indicator.clear_updaters()
         angle_value.clear_updaters()
-        self.play(FadeOut(cyl_nodes), FadeOut(hud_convention), FadeOut(seq_text), FadeOut(angle_hud), FadeOut(crank_indicator), FadeOut(crank_hub), FadeOut(t), FadeOut(c))
+        self.play(FadeOut(cyl_nodes), FadeOut(cyl_labels), FadeOut(hud_convention), FadeOut(seq_text), FadeOut(angle_hud), FadeOut(crank_indicator), FadeOut(crank_hub), FadeOut(t), FadeOut(c))
 
     def beat_s10_throttle_to_lift_integration(self):
         """S10: Throttle-to-lift causal integration closing the loop."""
