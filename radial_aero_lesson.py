@@ -106,9 +106,11 @@ class AeroRadialLesson(SafeThreeDScene):
         lbl_w = self.hud(Text("Weight (น้ำหนัก)", font_size=19, color=METAL).move_to([-0.4, -2.6, 0]))
 
         box_hud = self.hud(VGroup(
-            Text("สมดุลการบินระดับ (Cruise):  Thrust ≈ Drag  |  Lift ≈ Weight", font_size=19, color=C_VERIFIED),
-            Text("แกนแรงตั้งฉากกันชัดเจน: เครื่องยนต์ไม่ได้ยกตัวตรงๆ", font_size=17, color=WHITE)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UL).shift(DOWN * 0.75 + RIGHT * 0.2))
+            Text("สมดุลการบินระดับ (Cruise)", font_size=18, color=C_VERIFIED),
+            Text("Thrust ≈ Drag", font_size=21, color=C_THRUST),
+            Text("Lift ≈ Weight", font_size=21, color=C_LIFT),
+            Text("แกนแรงตั้งฉากกัน: เครื่องยนต์ไม่ได้ยกตัวตรงๆ", font_size=16, color=WHITE)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.10).to_corner(UL).shift(DOWN * 0.70 + RIGHT * 0.2))
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(plane), FadeIn(box_hud))
@@ -297,10 +299,19 @@ class AeroRadialLesson(SafeThreeDScene):
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UL).shift(DOWN * 0.9))
 
         self.play(FadeIn(t), FadeIn(c))
-        self.play(Create(cyl), Create(piston), Create(crank_arm), Create(con_rod), FadeIn(hud_strokes))
-        self.play(FadeIn(fire_flash), Create(force_piston), FadeIn(lbl_force))
-        self.play(Create(torque_arc), FadeIn(lbl_torque))
-        self.wait(2.2)
+        self.play(Create(cyl), Create(piston), Create(crank_arm), Create(con_rod), FadeIn(hud_strokes), run_time=1.0)
+        self.wait(0.8)
+        self.play(FadeIn(fire_flash), Create(force_piston), FadeIn(lbl_force), run_time=0.7)
+        self.play(Create(torque_arc), FadeIn(lbl_torque), run_time=0.7)
+        # Make the power stroke unmistakable while keeping the crank/rod diagram visible.
+        self.play(
+            piston.animate.shift(DOWN * 0.45),
+            fire_flash.animate.shift(DOWN * 0.45),
+            force_piston.animate.shift(DOWN * 0.45),
+            run_time=0.8,
+            rate_func=there_and_back,
+        )
+        self.wait(1.5)
 
         self.play(FadeOut(cyl), FadeOut(piston), FadeOut(crank_arm), FadeOut(con_rod), FadeOut(fire_flash),
                   FadeOut(force_piston), FadeOut(lbl_force), FadeOut(torque_arc), FadeOut(lbl_torque),
@@ -386,17 +397,23 @@ class AeroRadialLesson(SafeThreeDScene):
         ))
 
         rod_pivot = np.array([0.0, -0.9, 0])
-        rod_length = 1.25
+        rod_length = 1.65
+
+        def rod_endpoint():
+            beta = 0.50 * np.sin(phase.get_value())
+            return rod_pivot + rod_length * np.array([np.cos(beta), np.sin(beta), 0])
+
         rocking_rod = always_redraw(lambda: Line(
             rod_pivot,
-            rod_pivot + rod_length * np.array([
-                np.cos(0.28 * np.sin(phase.get_value())),
-                np.sin(0.28 * np.sin(phase.get_value())), 0
-            ]),
+            rod_endpoint(),
             color=C_MASTER, stroke_width=7
         ))
-        rod_pivot_dot = Dot(rod_pivot, color=C_MASTER, radius=0.10)
-        rod_label = self.hud(Text("Master Rod rocking (schematic)", font_size=18, color=C_MASTER).move_to([0.0, 0.65, 0]))
+        rod_pivot_dot = Dot(rod_pivot, color=C_MASTER, radius=0.14)
+        rod_endpoint_dot = always_redraw(lambda: Dot(rod_endpoint(), color=C_MASTER, radius=0.13))
+        beta_arc = Arc(radius=0.72, start_angle=-0.50, angle=1.0, arc_center=rod_pivot,
+                       color=WARN, stroke_width=3)
+        rod_label = self.hud(Text("Master Rod: β(t) rocking", font_size=21, color=C_MASTER).move_to([0.0, 0.65, 0]))
+        beta_label = self.hud(Text("β(t): มุมแกว่งของ Master Rod", font_size=17, color=WARN).move_to([0.0, -1.55, 0]))
 
         box_schematic = self.hud(VGroup(
             Text("ข้อสังเกตทางกลไก (Kinematic Fact):", font_size=18, color=WARN),
@@ -407,19 +424,22 @@ class AeroRadialLesson(SafeThreeDScene):
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(crank_circle), FadeIn(lbl_crank), Create(knuckle_ellipse), FadeIn(lbl_knuckle))
-        self.play(FadeIn(crank_dot, knuckle_dot, rod_pivot_dot), Create(rocking_rod), FadeIn(rod_label))
+        self.play(FadeIn(crank_dot, knuckle_dot, rod_pivot_dot, rod_endpoint_dot), Create(rocking_rod),
+                  Create(beta_arc), FadeIn(rod_label), FadeIn(beta_label))
         self.play(FadeIn(box_schematic))
-        self.play(phase.animate.set_value(TAU), run_time=2.4, rate_func=linear)
+        self.play(phase.animate.set_value(TAU), run_time=3.2, rate_func=linear)
         self.wait(0.8)
 
         # Stop live geometry before removing it; this keeps the updater lifecycle clean.
         crank_dot.clear_updaters()
         knuckle_dot.clear_updaters()
         rocking_rod.clear_updaters()
+        rod_endpoint_dot.clear_updaters()
         self.play(FadeOut(crank_dot), FadeOut(knuckle_dot), FadeOut(rocking_rod), FadeOut(rod_pivot_dot),
+                  FadeOut(rod_endpoint_dot), FadeOut(beta_arc),
                   FadeOut(crank_circle), FadeOut(knuckle_ellipse),
                   FadeOut(lbl_crank), FadeOut(lbl_knuckle), FadeOut(box_schematic),
-                  FadeOut(rod_label), FadeOut(t), FadeOut(c))
+                  FadeOut(rod_label), FadeOut(beta_label), FadeOut(t), FadeOut(c))
 
     def beat_s9_firing_order_720(self):
         """S9: 720-degree firing order (1-3-5-7-2-4-6) with rear-view and odd-per-row caveat."""
@@ -522,10 +542,10 @@ class AeroRadialLesson(SafeThreeDScene):
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.2).move_to([3.0, 0, 0]))
 
         self.play(FadeIn(t), FadeIn(c))
-        for box in chain_boxes:
-            self.play(FadeIn(box, run_time=0.25))
-
-        self.play(FadeIn(conclusion_card))
+        # Reveal the complete causal chain as one proof shot, then hold it before the takeaway.
+        self.play(*[FadeIn(box) for box in chain_boxes], run_time=1.0)
+        self.wait(0.8)
+        self.play(FadeIn(conclusion_card), run_time=0.8)
         self.wait(3.0)
 
         self.play(FadeOut(chain_boxes), FadeOut(conclusion_card), FadeOut(t), FadeOut(c))
