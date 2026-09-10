@@ -21,6 +21,8 @@ def notify_chat(msg):
 def watch_run(run_id):
     print(f"Starting auto-watcher for GitHub Actions Run #{run_id}...")
     start_time = time.time()
+    desktop_dir = os.path.join(os.path.expanduser("~"), "Desktop")
+    notified = False
     
     while True:
         try:
@@ -47,24 +49,17 @@ def watch_run(run_id):
                         
                         merged_file = None
                         for root, dirs, files in os.walk(out_dir):
-                            for f in files:
-                                if f.endswith('.mp4'):
-                                    merged_file = os.path.join(root, f)
-                                    break
-                            if merged_file:
-                                break
-                                
-                        if merged_file:
-                            dst = r"C:\Users\wicha\Desktop\Full_Chapter6_Manim_Lesson.mp4"
-                            shutil.copy2(merged_file, dst)
-                            try:
-                                # os.startfile(dst)
-                                pass
-                            except Exception:
-                                pass
-                            msg_success += f"📺 **เปิดวิดีโอ Full Lesson ให้ดูบนหน้าจอ Windows เรียบร้อยแล้วครับ!** (`{dst}`)"
+                            for filename in files:
+                                if filename.endswith(".mp4") and "partial" not in root:
+                                    src_file = os.path.join(root, filename)
+                                    dest_file = os.path.join(desktop_dir, filename)
+                                    shutil.copy2(src_file, dest_file)
+                                    print(f"Copied {filename} to Desktop")
+                                    
+                                    if not notified:
+                                        notify_chat(f"🎉 **Cloud Run #{run_id} เรนเดอร์เสร็จสมบูรณ์ 1080p 60fps!**\nวิดีโอถูกโหลดมาไว้ที่หน้า Desktop ในชื่อ `{filename}` แล้วครับ เปิดดูได้เลย! 🎬")
+                                        notified = True
                         
-                        notify_chat(msg_success)
                         break
                     else:
                         log_res = subprocess.run(

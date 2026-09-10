@@ -83,7 +83,7 @@ class AeroRadialLesson(SafeThreeDScene):
         t = self.hud(title("S1: แรงทั้งสี่บนเครื่องบิน — เครื่องยนต์ไม่ได้ยกเครื่องบินโดยตรง"))
         c = self.hud(caption("เครื่องยนต์สร้าง Thrust ขับเคลื่อนไปข้างหน้า | ปีกเปลี่ยนกระแสลมให้เป็น Lift ยกเครื่องบิน"))
 
-        # Schematic airplane fuselage & wing (2.5D planar)
+        # Schematic airplane fuselage & wing (2.5D planar) shifted down for clear headroom
         body = Polygon(
             [-2.5, -0.2, 0], [-1.0, -0.25, 0], [1.5, -0.2, 0], [2.2, 0.0, 0],
             [2.0, 0.4, 0], [1.3, 0.25, 0], [-2.0, 0.2, 0], [-2.5, 0.6, 0],
@@ -92,23 +92,23 @@ class AeroRadialLesson(SafeThreeDScene):
         wing_stub = Polygon([-0.4, -0.15, 0], [0.6, -0.15, 0], [0.3, 0.25, 0], [-0.3, 0.25, 0],
                             color=WHITE, fill_opacity=0.8, stroke_width=2)
         prop_disk = Ellipse(width=0.3, height=1.6, color=C_THRUST, stroke_width=3).move_to([2.2, 0.1, 0])
-        plane = VGroup(body, wing_stub, prop_disk).move_to([-0.5, 0, 0])
+        plane = VGroup(body, wing_stub, prop_disk).move_to([-0.5, -0.35, 0])
 
-        # Orthogonal Force Vectors
-        f_thrust = arrow3([1.7, 0.1, 0], [3.5, 0.1, 0], color=C_THRUST, thickness=0.035)
-        f_drag = arrow3([-3.0, 0.1, 0], [-4.4, 0.1, 0], color=GRAYTXT, thickness=0.03)
-        f_lift = arrow3([-0.4, 0.25, 0], [-0.4, 2.3, 0], color=C_LIFT, thickness=0.04)
-        f_weight = arrow3([-0.4, -0.25, 0], [-0.4, -2.2, 0], color=METAL, thickness=0.035)
+        # Orthogonal Force Vectors with ample margins
+        f_thrust = arrow3([1.7, -0.25, 0], [3.5, -0.25, 0], color=C_THRUST, thickness=0.035)
+        f_drag = arrow3([-3.0, -0.25, 0], [-4.6, -0.25, 0], color=GRAYTXT, thickness=0.03)
+        f_lift = arrow3([-0.4, -0.1, 0], [-0.4, 1.55, 0], color=C_LIFT, thickness=0.04)
+        f_weight = arrow3([-0.4, -0.6, 0], [-0.4, -2.35, 0], color=METAL, thickness=0.035)
 
-        lbl_t = self.hud(Text("Thrust (แรงขับจากเครื่องยนต์)", font_size=20, color=C_THRUST).move_to([2.7, 0.5, 0]))
-        lbl_d = self.hud(Text("Drag (แรงต้าน)", font_size=19, color=GRAYTXT).move_to([-3.7, 0.45, 0]))
-        lbl_l = self.hud(Text("Lift (แรงยกจากปีก)", font_size=20, color=C_LIFT).move_to([-0.4, 2.55, 0]))
-        lbl_w = self.hud(Text("Weight (น้ำหนัก)", font_size=19, color=METAL).move_to([-0.4, -2.45, 0]))
+        lbl_t = self.hud(Text("Thrust (แรงขับ)", font_size=20, color=C_THRUST).move_to([3.4, 0.15, 0]))
+        lbl_d = self.hud(Text("Drag (แรงต้าน)", font_size=19, color=GRAYTXT).move_to([-4.0, 0.15, 0]))
+        lbl_l = self.hud(Text("Lift (แรงยก)", font_size=20, color=C_LIFT).move_to([-0.4, 1.85, 0]))
+        lbl_w = self.hud(Text("Weight (น้ำหนัก)", font_size=19, color=METAL).move_to([-0.4, -2.6, 0]))
 
         box_hud = self.hud(VGroup(
-            Text("สมดุลการบินระดับ (Cruise):  Thrust ≈ Drag  |  Lift ≈ Weight", font_size=21, color=C_VERIFIED),
-            Text("แกนแรงตั้งฉากกันชัดเจน: เครื่องยนต์ไม่ได้ยกตัวตรงๆ", font_size=19, color=WHITE)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.15).to_corner(UL).shift(DOWN * 0.8))
+            Text("สมดุลการบินระดับ (Cruise):  Thrust ≈ Drag  |  Lift ≈ Weight", font_size=19, color=C_VERIFIED),
+            Text("แกนแรงตั้งฉากกันชัดเจน: เครื่องยนต์ไม่ได้ยกตัวตรงๆ", font_size=17, color=WHITE)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UL).shift(DOWN * 0.75 + RIGHT * 0.2))
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(plane), FadeIn(box_hud))
@@ -134,24 +134,24 @@ class AeroRadialLesson(SafeThreeDScene):
             [1.5, 0.35, 0], [2.2, 0.0, 0], [1.2, -0.15, 0],
             [-0.5, -0.20, 0], [-1.8, -0.15, 0]
         ]
-        foil = Polygon(*foil_pts, color=WHITE, fill_opacity=0.85, stroke_width=2.5).move_to([-0.5, 0, 0])
-        chord = DashedLine([-2.7, 0, 0], [1.7, 0, 0], color=GRAYTXT, stroke_width=2)
+        foil = Polygon(*foil_pts, color=WHITE, fill_opacity=0.85, stroke_width=2.5).move_to([-0.5, -0.2, 0])
+        chord = DashedLine([-2.7, -0.2, 0], [1.7, -0.2, 0], color=GRAYTXT, stroke_width=2)
 
         wind_stream = VGroup(*[
             arrow3([-5.0, y, 0], [-2.8, y, 0], color=C_THRUST, thickness=0.025)
-            for y in np.linspace(-1.2, 1.2, 5)
+            for y in np.linspace(-1.4, 1.0, 5)
         ])
-        lbl_v = self.hud(Text("V_inf (ลมสัมพัทธ์จากการเคลื่อนที่ไปข้างหน้า)", font_size=20, color=C_THRUST).move_to([-3.8, 1.6, 0]))
+        lbl_v = self.hud(Text("V_inf (ลมสัมพัทธ์จากการเคลื่อนที่ไปข้างหน้า)", font_size=20, color=C_THRUST).move_to([-3.6, 1.5, 0]))
 
-        aoa_arc = Arc(radius=1.2, start_angle=0, angle=12 * DEGREES, arc_center=[-2.7, 0, 0], color=WARN)
-        lbl_aoa = self.hud(Text("alpha = มุมระหว่าง chord กับ V_inf", font_size=20, color=WARN).next_to(aoa_arc, UR, buff=0.15))
+        aoa_arc = Arc(radius=1.2, start_angle=0, angle=12 * DEGREES, arc_center=[-2.7, -0.2, 0], color=WARN)
+        lbl_aoa = self.hud(Text("alpha = มุมระหว่าง chord กับ V_inf", font_size=19, color=WARN).next_to(aoa_arc, UP, buff=0.45).shift(RIGHT * 0.3))
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(foil), Create(chord))
         self.play(Create(wind_stream), FadeIn(lbl_v))
         # Rotate airfoil slightly to show angle of attack
-        self.play(foil.animate.rotate(8 * DEGREES, about_point=np.array([-0.5, 0, 0])),
-                  chord.animate.rotate(8 * DEGREES, about_point=np.array([-0.5, 0, 0])),
+        self.play(foil.animate.rotate(8 * DEGREES, about_point=np.array([-0.5, -0.2, 0])),
+                  chord.animate.rotate(8 * DEGREES, about_point=np.array([-0.5, -0.2, 0])),
                   Create(aoa_arc), FadeIn(lbl_aoa))
         self.wait(2.0)
 
@@ -168,28 +168,31 @@ class AeroRadialLesson(SafeThreeDScene):
             [1.5, 0.35, 0], [2.2, 0.0, 0], [1.2, -0.15, 0],
             [-0.5, -0.20, 0], [-1.8, -0.15, 0],
             color=WHITE, fill_opacity=0.85, stroke_width=2.5
-        ).move_to([-0.8, 0, 0]).rotate(8 * DEGREES)
+        ).move_to([-0.8, -0.2, 0]).rotate(8 * DEGREES)
 
-        # Upper curved streamlines with downward wake
-        upper_stream = CurvedArrow(np.array([-4.5, 0.8, 0]), np.array([3.0, -0.8, 0]),
-                                   angle=-0.45, color=C_THRUST, stroke_width=3.5)
-        lower_stream = CurvedArrow(np.array([-4.5, -0.6, 0]), np.array([3.0, -1.6, 0]),
-                                   angle=-0.30, color=C_THRUST, stroke_width=3.5)
+        # Upper curved streamlines cleanly over upper surface
+        upper_pts = [np.array([-4.5, 0.8, 0]), np.array([-1.5, 1.15, 0]), np.array([0.5, 0.9, 0]), np.array([3.0, -0.7, 0])]
+        upper_stream = CubicBezier(*upper_pts, color=C_THRUST, stroke_width=3.5)
+        upper_tip = arrow3([2.8, -0.6, 0], [3.2, -0.78, 0], color=C_THRUST, thickness=0.03)
+        upper_group = VGroup(upper_stream, upper_tip)
 
-        downwash_vec = arrow3([1.8, -0.6, 0], [2.6, -1.9, 0], color=WARN, thickness=0.035)
-        lbl_downwash = self.hud(Text("Downwash (โมเมนตัมอากาศพุ่งลง)", font_size=19, color=WARN).move_to([3.0, -2.15, 0]))
+        lower_stream = CurvedArrow(np.array([-4.5, -0.7, 0]), np.array([3.0, -1.7, 0]),
+                                   angle=-0.25, color=C_THRUST, stroke_width=3.5)
 
-        lift_reaction = arrow3([-0.6, 0.3, 0], [-0.6, 2.3, 0], color=C_LIFT, thickness=0.04)
-        lbl_reaction = self.hud(Text("Lift = m_dot * Delta_V_y (Newton's 3rd Law)", font_size=20, color=C_LIFT).move_to([-0.6, 2.55, 0]))
+        downwash_vec = arrow3([1.8, -0.7, 0], [2.6, -2.0, 0], color=WARN, thickness=0.035)
+        lbl_downwash = self.hud(Text("Downwash (โมเมนตัมอากาศพุ่งลง)", font_size=19, color=WARN).move_to([3.0, -2.25, 0]))
+
+        lift_reaction = arrow3([-0.6, 0.1, 0], [-0.6, 2.0, 0], color=C_LIFT, thickness=0.04)
+        lbl_reaction = self.hud(Text("Lift = m_dot * Delta_V_y (Newton's 3rd Law)", font_size=20, color=C_LIFT).move_to([-0.6, 2.3, 0]))
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(foil))
-        self.play(Create(upper_stream), Create(lower_stream))
+        self.play(Create(upper_group), Create(lower_stream))
         self.play(Create(downwash_vec), FadeIn(lbl_downwash))
         self.play(Create(lift_reaction), FadeIn(lbl_reaction))
         self.wait(2.0)
 
-        self.play(FadeOut(upper_stream), FadeOut(lower_stream), FadeOut(downwash_vec), FadeOut(lbl_downwash),
+        self.play(FadeOut(upper_group), FadeOut(lower_stream), FadeOut(downwash_vec), FadeOut(lbl_downwash),
                   FadeOut(lift_reaction), FadeOut(lbl_reaction), FadeOut(foil), FadeOut(t), FadeOut(c))
 
     def beat_s4_pressure_and_myth_debunk(self):
@@ -197,30 +200,31 @@ class AeroRadialLesson(SafeThreeDScene):
         t = self.hud(title("S4: ความดันบนผิวปีก และ หักล้างมายาคติ Equal Transit Time"))
         c = self.hud(caption("ความโค้งของกระแสลมทำให้เกิดแรงดูด (Suction) ด้านบน — อากาศบนถึงขอบหลังก่อนด้านล่าง"))
 
+        # Physical airfoil shifted to the left half to separate from text box on right
         foil = Polygon(
             [-2.2, 0.0, 0], [-1.5, 0.55, 0], [0.0, 0.65, 0],
             [1.5, 0.35, 0], [2.2, 0.0, 0], [1.2, -0.15, 0],
             [-0.5, -0.20, 0], [-1.8, -0.15, 0],
             color=WHITE, fill_opacity=0.85, stroke_width=2.5
-        ).move_to([-1.2, -0.2, 0]).rotate(7 * DEGREES)
+        ).move_to([-2.8, -0.4, 0]).rotate(7 * DEGREES)
 
-        # Suction arrows pointing outward/upward from top surface
+        # Suction arrows on top of airfoil in left quadrant
         suction_arrows = VGroup(*[
-            arrow3([-1.2 + x, 0.4 + 0.1 * np.cos(x), 0], [-1.2 + x, 1.4 + 0.1 * np.cos(x), 0],
+            arrow3([-2.8 + x, 0.15 + 0.08 * np.cos(x), 0], [-2.8 + x, 1.1 + 0.08 * np.cos(x), 0],
                    color=C_THRUST, thickness=0.03)
-            for x in np.linspace(-1.2, 1.2, 5)
+            for x in np.linspace(-1.1, 1.1, 5)
         ])
-        lbl_suction = self.hud(Text("แรงดูดด้านบน (Suction Peak: dp/dn = rho * v^2 / R)", font_size=19, color=C_THRUST).move_to([-1.2, 1.8, 0]))
+        lbl_suction = self.hud(Text("แรงดูดด้านบน (Suction Peak)\ndp/dn = rho * v^2 / R", font_size=18, color=C_THRUST).move_to([-2.8, 1.65, 0]))
 
-        # Myth Busting HUD Box
+        # Myth Busting HUD Box placed cleanly on the right half
         box_debunk = self.hud(VGroup(
             Text("X มายาคติที่ผิด: อากาศบน-ล่างต้องเดินทางถึงขอบหลังพร้อมกัน (Equal Transit Time)",
-                 font_size=18, color=WARN),
+                 font_size=17, color=WARN),
             Text("✓ ความจริงตาม NASA: อากาศด้านบนถูกเร่งจนถึงขอบหลังก่อนด้านล่างอย่างมาก",
-                 font_size=18, color=C_VERIFIED),
+                 font_size=17, color=C_VERIFIED),
             Text("Bernoulli และ Newton คือสองวิธีมองแรงเดียวกัน ไม่ใช่ทฤษฎีคู่แข่ง",
-                 font_size=18, color=WHITE)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.15).to_corner(UR).shift(DOWN * 0.9 + LEFT * 0.3))
+                 font_size=17, color=WHITE)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.18).move_to([2.7, 0.35, 0]))
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(foil), Create(suction_arrows), FadeIn(lbl_suction))
@@ -241,15 +245,15 @@ class AeroRadialLesson(SafeThreeDScene):
             Text("เมื่อ rho, S และ C_L คงที่: V เพิ่ม 2 เท่า -> L เพิ่ม 4 เท่า", font_size=18, color=C_LIFT),
             Text("rho = ความหนาแน่นอากาศ  |  V = ความเร็วลมสัมพัทธ์  |  S = พื้นที่ปีก  |  C_L = สัมประสิทธิ์แรงยก",
                  font_size=18, color=GRAYTXT)
-        ).arrange(DOWN, buff=0.2).move_to([0, 1.2, 0]))
+        ).arrange(DOWN, buff=0.18).move_to([0, 1.45, 0]))
 
-        # V^2 Demonstration Dashboard
-        dash_box = RoundedRectangle(width=8.5, height=2.4, corner_radius=0.15, color=METAL, stroke_width=2).move_to([0, -1.2, 0])
-        bar_base = Rectangle(width=2.0, height=0.4, color=C_THRUST, fill_opacity=0.8).move_to([-2.5, -1.0, 0])
-        lbl_v1 = self.hud(Text("ความเร็ว V = 100 km/h  ->  แรงยก L = 1.0x", font_size=19, color=WHITE).next_to(bar_base, UP, buff=0.12))
+        # V^2 Demonstration Dashboard - enlarged width so text stays inside
+        dash_box = RoundedRectangle(width=9.8, height=2.6, corner_radius=0.15, color=METAL, stroke_width=2).move_to([0, -1.3, 0])
+        bar_base = Rectangle(width=2.2, height=0.35, color=C_THRUST, fill_opacity=0.8).move_to([-1.2, -0.95, 0])
+        lbl_v1 = self.hud(Text("ความเร็ว V = 100 km/h  ->  แรงยก L = 1.0x", font_size=18, color=WHITE).next_to(bar_base, UP, buff=0.12))
 
-        bar_double = Rectangle(width=4.0, height=0.4, color=C_THRUST, fill_opacity=0.8).move_to([-1.5, -1.8, 0])
-        lbl_v2 = self.hud(Text("ความเร็ว V = 200 km/h (2x) ->  แรงยก L = 4.0x (4 เท่า)", font_size=19, color=C_LIFT).next_to(bar_double, UP, buff=0.12))
+        bar_double = Rectangle(width=4.4, height=0.35, color=C_THRUST, fill_opacity=0.8).move_to([-0.1, -1.9, 0])
+        lbl_v2 = self.hud(Text("ความเร็ว V = 200 km/h (2x) ->  แรงยก L = 4.0x (4 เท่า)", font_size=18, color=C_LIFT).next_to(bar_double, UP, buff=0.12))
 
         dash_group = VGroup(dash_box, bar_base, bar_double)
 
@@ -280,7 +284,7 @@ class AeroRadialLesson(SafeThreeDScene):
 
         fire_flash = Star(n=8, outer_radius=0.6, inner_radius=0.25, color=C_FIRE, fill_opacity=0.9).move_to([0, 1.8, 0])
         force_piston = arrow3([0, 1.5, 0], [0, 0.4, 0], color=C_FIRE, thickness=0.045)
-        lbl_force = self.hud(Text("แรงดันก๊าซเผาไหม้ (Combustion Force)", font_size=19, color=C_FIRE).move_to([2.6, 1.3, 0]))
+        lbl_force = self.hud(Text("แรงดันก๊าซเผาไหม้\n(Combustion Force)", font_size=18, color=C_FIRE).move_to([2.9, 1.3, 0]))
 
         torque_arc = CurvedArrow(np.array([0.6, -1.9, 0]), np.array([-0.4, -2.1, 0]),
                                  angle=-1.5, color=C_MASTER, stroke_width=4)
@@ -307,46 +311,41 @@ class AeroRadialLesson(SafeThreeDScene):
         t = self.hud(title("S7: สถาปัตยกรรม 7 สูบแถวเดียว: Master Rod และ Articulating Rods"))
         c = self.hud(caption("สูบ 1 ใช้ Master Rod จับเพลาข้อเหวี่ยงเดี่ยวโดยตรง | สูบ 2-7 ต่อยึดผ่าน Knuckle Pins"))
 
-        # Crankcase outline
-        case = Circle(radius=2.6, color=METAL, stroke_width=2.5)
-        hub = Circle(radius=0.7, color=C_MASTER, fill_opacity=0.3, stroke_width=2.5)
+        # Shift radial engine group to the right to leave clean space for HUD on left
+        rad_center = np.array([1.6, 0.0, 0])
+        case = Circle(radius=2.4, color=METAL, stroke_width=2.5).move_to(rad_center)
+        hub = Circle(radius=0.65, color=C_MASTER, fill_opacity=0.3, stroke_width=2.5).move_to(rad_center)
 
-        # 7 radial cylinder guides & pistons
         pistons = VGroup()
         rods = VGroup()
         labels = VGroup()
 
-        # Angles for 7 cylinders: #1 at 90 deg (top), clockwise numbering
         angles = [90 - i * (360 / 7) for i in range(7)]
 
         for idx, ang in enumerate(angles):
             rad = ang * DEGREES
-            cyl_center = np.array([2.3 * np.cos(rad), 2.3 * np.sin(rad), 0])
-            p = RoundedRectangle(width=0.45, height=0.3, corner_radius=0.05,
+            cyl_center = rad_center + np.array([2.1 * np.cos(rad), 2.1 * np.sin(rad), 0])
+            p = RoundedRectangle(width=0.42, height=0.28, corner_radius=0.05,
                                  color=WHITE, fill_opacity=0.7).move_to(cyl_center)
             pistons.add(p)
 
-            # Numbering label
             lbl = self.hud(Text(str(idx + 1), font_size=18, color=C_MASTER if idx == 0 else WHITE).move_to(
-                np.array([2.8 * np.cos(rad), 2.8 * np.sin(rad), 0])
+                rad_center + np.array([2.55 * np.cos(rad), 2.55 * np.sin(rad), 0])
             ))
             labels.add(lbl)
 
-            # Connecting rods
             if idx == 0:
-                # Master rod (Gold)
-                r = line3([0, 0, 0], cyl_center, color=C_MASTER, thickness=0.055)
+                r = line3(rad_center, cyl_center, color=C_MASTER, thickness=0.055)
             else:
-                # Articulating link rod (Light Blue)
-                pin_pos = np.array([0.5 * np.cos(rad), 0.5 * np.sin(rad), 0])
+                pin_pos = rad_center + np.array([0.45 * np.cos(rad), 0.45 * np.sin(rad), 0])
                 r = line3(pin_pos, cyl_center, color=C_LINK, thickness=0.035)
             rods.add(r)
 
         hud_info = self.hud(VGroup(
-            Text("1 Master Rod (สีทอง - สูบ 1 ด้านบนสุด)", font_size=19, color=C_MASTER),
-            Text("6 Articulating Rods (สีฟ้า - สูบ 2 ถึง 7)", font_size=19, color=C_LINK),
-            Text("ทั้งหมดขับเคลื่อนเพลาข้อเหวี่ยงชุดเดียว (Single Crank Throw)", font_size=18, color=WHITE)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UL).shift(DOWN * 0.85))
+            Text("1 Master Rod (สีทอง - สูบ 1 ด้านบน)", font_size=18, color=C_MASTER),
+            Text("6 Articulating Rods (สีฟ้า - สูบ 2 ถึง 7)", font_size=18, color=C_LINK),
+            Text("ขับเคลื่อนเพลาข้อเหวี่ยงชุดเดียว\n(Single Crank Throw)", font_size=17, color=WHITE)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.14).to_corner(UL).shift(DOWN * 0.85 + RIGHT * 0.2))
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(case), Create(hub), FadeIn(hud_info))
@@ -362,11 +361,9 @@ class AeroRadialLesson(SafeThreeDScene):
         t = self.hud(title("S8: วิถี Knuckle Pin รูปวงรี (Schematic Kinematics — Not to Scale)"))
         c = self.hud(caption("เมื่อ Master Rod แกว่ง จุดยึด Knuckle Pin จะวิ่งเป็นวงรี ไม่ใช่วงกลมสมบูรณ์"))
 
-        # Schematic geometry comparison.  The motion is intentionally generic:
-        # no W670-specific beta(theta), offsets, or eccentricity are asserted.
         phase = ValueTracker(0.0)
-        crank_center = np.array([-3.2, -0.25, 0])
-        ellipse_center = np.array([3.0, -0.25, 0])
+        crank_center = np.array([-3.2, -0.2, 0])
+        ellipse_center = np.array([3.0, -0.2, 0])
         crank_radius = 1.35
         ellipse_a, ellipse_b = 1.45, 0.95
 
@@ -388,9 +385,7 @@ class AeroRadialLesson(SafeThreeDScene):
             ]), color=C_LINK, radius=0.09
         ))
 
-        # A small rocking-rod inset makes the causal mechanism visible while
-        # remaining explicitly schematic rather than pretending to be W670 CAD.
-        rod_pivot = np.array([0.0, -1.0, 0])
+        rod_pivot = np.array([0.0, -0.9, 0])
         rod_length = 1.25
         rocking_rod = always_redraw(lambda: Line(
             rod_pivot,
@@ -404,11 +399,11 @@ class AeroRadialLesson(SafeThreeDScene):
         rod_label = self.hud(Text("Master Rod rocking (schematic)", font_size=18, color=C_MASTER).move_to([0.0, 0.65, 0]))
 
         box_schematic = self.hud(VGroup(
-            Text("ข้อสังเกตทางกลไก (Kinematic Fact):", font_size=19, color=WARN),
-            Text("1. จุดหมุน Knuckle Pins ไม่ได้อยู่ที่ศูนย์กลางเพลา จึงเกิดการแกว่งแบบรี", font_size=18, color=WHITE),
-            Text("2. ส่งผลให้ระยะชัก (Stroke) ของแต่ละสูบแตกต่างกันเล็กน้อย", font_size=18, color=WHITE),
+            Text("ข้อสังเกตทางกลไก (Kinematic Fact):", font_size=18, color=WARN),
+            Text("1. จุดหมุน Knuckle Pins ไม่ได้อยู่ที่ศูนย์กลางเพลา จึงเกิดการแกว่งแบบรี", font_size=17, color=WHITE),
+            Text("2. ส่งผลให้ระยะชัก (Stroke) ของแต่ละสูบแตกต่างกันเล็กน้อย", font_size=17, color=WHITE),
             Text("* แผนภาพแสดงเชิงหลักการทั่วไป (Schematic) ไม่เจาะจงสัดส่วนเครื่องยนต์ W670", font_size=16, color=GRAYTXT)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(DL).shift(UP * 0.4 + RIGHT * 0.5))
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.11).to_corner(DL).shift(UP * 0.7 + RIGHT * 0.5))
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(crank_circle), FadeIn(lbl_crank), Create(knuckle_ellipse), FadeIn(lbl_knuckle))
@@ -427,46 +422,47 @@ class AeroRadialLesson(SafeThreeDScene):
         t = self.hud(title("S9: ลำดับการจุดระเบิด 720°: 1-3-5-7-2-4-6 (FAA Convention)"))
         c = self.hud(caption("เครื่องยนต์ 4 จังหวะหมุน 2 รอบ (720°) ต่อวัฏจักร -> ก้าวทีละ 2 ตำแหน่งในวงแหวน เพื่อช่วงจุดระเบิดที่สม่ำเสมอ"))
 
-        # Cylinder circle
+        # Shift cylinder circle to the right to leave ample space for left HUD
+        rad_center = np.array([1.8, 0.0, 0])
         angles = [90 - i * (360 / 7) for i in range(7)]
         cyl_nodes = VGroup()
         for i, ang in enumerate(angles):
             rad = ang * DEGREES
-            pos = np.array([2.2 * np.cos(rad), 2.2 * np.sin(rad), 0])
+            pos = rad_center + np.array([1.9 * np.cos(rad), 1.9 * np.sin(rad), 0])
             node = VGroup(
-                Circle(radius=0.45, color=METAL, fill_opacity=0.4),
-                self.hud(Text(str(i + 1), font_size=20, color=WHITE).move_to(pos))
+                Circle(radius=0.40, color=METAL, fill_opacity=0.4),
+                self.hud(Text(str(i + 1), font_size=19, color=WHITE).move_to(pos))
             ).move_to(pos)
             cyl_nodes.add(node)
 
         hud_convention = self.hud(VGroup(
-            Text("FAA Standard Convention:", font_size=19, color=C_VERIFIED),
-            Text("- มองจากด้านหลังเครื่องยนต์ (Rear View)", font_size=17, color=WHITE),
-            Text("- สูบ 1 อยู่บนสุด (Top Center)", font_size=17, color=WHITE),
-            Text("- นับหมายเลขตามเข็มนาฬิกา (Clockwise)", font_size=17, color=WHITE),
-            Text("- ช่วงห่างการจุดระเบิด: Delta_theta = 720° / 7 = 102.86°", font_size=17, color=C_MASTER),
-            Text("- ต้องเป็นเลขคี่ต่อแถว (Odd per row) จึงจะก้าว +2 แล้ววนครบทุกสูบ", font_size=17, color=WARN),
-            Text("- N=7: +2 วนครบ | N=6: +2 วนซ้ำเพียงครึ่งหนึ่ง", font_size=16, color=GRAYTXT)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1).to_corner(UL).shift(DOWN * 0.8))
+            Text("FAA Standard Convention:", font_size=18, color=C_VERIFIED),
+            Text("- มองจากด้านหลังเครื่องยนต์ (Rear View)", font_size=16, color=WHITE),
+            Text("- สูบ 1 อยู่บนสุด (Top Center)", font_size=16, color=WHITE),
+            Text("- นับหมายเลขตามเข็มนาฬิกา (Clockwise)", font_size=16, color=WHITE),
+            Text("- ช่วงห่างการจุดระเบิด: Delta_theta = 720° / 7 = 102.86°", font_size=16, color=C_MASTER),
+            Text("- ต้องเป็นเลขคี่ต่อแถว (Odd per row) จึงจะก้าว +2 แล้ววนครบทุกสูบ", font_size=16, color=WARN),
+            Text("- N=7: +2 วนครบ | N=6: +2 วนซ้ำเพียงครึ่งหนึ่ง", font_size=15, color=GRAYTXT)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1).to_corner(UL).shift(DOWN * 0.85 + RIGHT * 0.2))
 
-        seq_text = self.hud(Text("ลำดับการจุดระเบิด: 1 -> 3 -> 5 -> 7 -> 2 -> 4 -> 6", font_size=24, color=C_FIRE).to_corner(DR).shift(UP * 0.5 + LEFT * 0.5))
+        seq_text = self.hud(Text("ลำดับการจุดระเบิด: 1 -> 3 -> 5 -> 7 -> 2 -> 4 -> 6", font_size=21, color=C_FIRE).move_to([1.8, 2.55, 0]))
         crank_angle = ValueTracker(0.0)
-        angle_value = DecimalNumber(0, num_decimal_places=0, font_size=22, color=C_MASTER)
+        angle_value = DecimalNumber(0, num_decimal_places=0, font_size=21, color=C_MASTER)
         angle_value.add_updater(lambda m: m.set_value(crank_angle.get_value()))
         angle_hud = self.hud(VGroup(
-            Text("Crank angle:", font_size=19, color=WHITE), angle_value,
-            Text("° / 720°", font_size=19, color=GRAYTXT)
-        ).arrange(RIGHT, buff=0.12).to_corner(DR).shift(DOWN * 0.25 + LEFT * 0.6))
-        crank_center = np.array([0.0, 0.0, 0.0])
+            Text("Crank angle:", font_size=18, color=WHITE), angle_value,
+            Text("° / 720°", font_size=18, color=GRAYTXT)
+        ).arrange(RIGHT, buff=0.12).move_to([1.8, -2.45, 0]))
+
         crank_indicator = always_redraw(lambda: Line(
-            crank_center,
-            crank_center + 1.35 * np.array([
+            rad_center,
+            rad_center + 1.2 * np.array([
                 np.cos((crank_angle.get_value() % 360) * DEGREES),
                 np.sin((crank_angle.get_value() % 360) * DEGREES), 0
             ]),
             color=C_MASTER, stroke_width=5
         ))
-        crank_hub = Dot(crank_center, color=C_MASTER, radius=0.10)
+        crank_hub = Dot(rad_center, color=C_MASTER, radius=0.09)
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(cyl_nodes), FadeIn(hud_convention), FadeIn(seq_text), FadeIn(angle_hud), FadeIn(crank_hub), Create(crank_indicator))
@@ -474,7 +470,7 @@ class AeroRadialLesson(SafeThreeDScene):
         # Flash sequence: 1 -> 3 -> 5 -> 7 -> 2 -> 4 -> 6
         fire_order = [0, 2, 4, 6, 1, 3, 5]
         for step, cyl_idx in enumerate(fire_order, start=1):
-            flash = Circle(radius=0.55, color=C_FIRE, stroke_width=4).move_to(cyl_nodes[cyl_idx].get_center())
+            flash = Circle(radius=0.50, color=C_FIRE, stroke_width=4).move_to(cyl_nodes[cyl_idx].get_center())
             self.play(
                 crank_angle.animate.set_value(step * 720 / 7),
                 FadeIn(flash),
