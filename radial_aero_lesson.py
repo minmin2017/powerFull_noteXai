@@ -23,7 +23,7 @@ import numpy as np
 from manim import *
 
 from mlib import (
-    SafeThreeDScene, arrow3, line3, title, caption, fit_width,
+    SafeThreeDScene, arrow3, line3, title, caption, fit_width, live_row,
     CURRENT, FIELD, FORCE, METAL, GRAYTXT, WARN, OK, WHITE, TITLE_Y, CAP_Y,
     THAI_FONT
 )
@@ -449,12 +449,13 @@ class AeroRadialLesson(SafeThreeDScene):
 
         seq_text = self.hud(Text("ลำดับการจุดระเบิด: 1 -> 3 -> 5 -> 7 -> 2 -> 4 -> 6", font_size=21, color=C_FIRE).move_to([1.8, 2.55, 0]))
         crank_angle = ValueTracker(0.0)
-        angle_value = DecimalNumber(0, num_decimal_places=0, font_size=21, color=C_MASTER)
-        angle_value.add_updater(lambda m: m.set_value(crank_angle.get_value()))
-        angle_hud = self.hud(VGroup(
-            Text("Crank angle:", font_size=18, color=WHITE), angle_value,
-            Text("° / 720°", font_size=18, color=GRAYTXT)
-        ).arrange(RIGHT, buff=0.12).move_to([1.8, -2.45, 0]))
+        angle_hud = self.hud(live_row(
+            "Crank angle:", "° / 720°", crank_angle.get_value,
+            [1.8, -2.45, 0], decimals=0,
+            num_color=C_MASTER, label_color=WHITE, unit_color=GRAYTXT,
+            label_size=18, num_size=21, unit_size=18, buff=0.12
+        ))
+        angle_value = angle_hud[1]
 
         crank_indicator = always_redraw(lambda: Line(
             rad_center,
