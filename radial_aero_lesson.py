@@ -412,6 +412,10 @@ class AeroRadialLesson(SafeThreeDScene):
         self.play(phase.animate.set_value(TAU), run_time=2.4, rate_func=linear)
         self.wait(0.8)
 
+        # Stop live geometry before removing it; this keeps the updater lifecycle clean.
+        crank_dot.clear_updaters()
+        knuckle_dot.clear_updaters()
+        rocking_rod.clear_updaters()
         self.play(FadeOut(crank_dot), FadeOut(knuckle_dot), FadeOut(rocking_rod), FadeOut(rod_pivot_dot),
                   FadeOut(crank_circle), FadeOut(knuckle_ellipse),
                   FadeOut(lbl_crank), FadeOut(lbl_knuckle), FadeOut(box_schematic),
@@ -480,6 +484,8 @@ class AeroRadialLesson(SafeThreeDScene):
             self.play(FadeOut(flash, run_time=0.12))
 
         self.wait(1.5)
+        crank_indicator.clear_updaters()
+        angle_value.clear_updaters()
         self.play(FadeOut(cyl_nodes), FadeOut(hud_convention), FadeOut(seq_text), FadeOut(angle_hud), FadeOut(crank_indicator), FadeOut(crank_hub), FadeOut(t), FadeOut(c))
 
     def beat_s10_throttle_to_lift_integration(self):
