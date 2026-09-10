@@ -218,13 +218,13 @@ class AeroRadialLesson(SafeThreeDScene):
 
         # Myth Busting HUD Box placed cleanly on the right half
         box_debunk = self.hud(VGroup(
-            Text("X มายาคติที่ผิด: อากาศบน-ล่างต้องเดินทางถึงขอบหลังพร้อมกัน (Equal Transit Time)",
+            Text("X มายาคติที่ผิด: อากาศบน-ล่าง\nต้องเดินทางถึงขอบหลังพร้อมกัน (Equal Transit Time)",
                  font_size=17, color=WARN),
             Text("✓ ความจริงตาม NASA: อากาศด้านบนถูกเร่งจนถึงขอบหลังก่อนด้านล่างอย่างมาก",
                  font_size=17, color=C_VERIFIED),
             Text("Bernoulli และ Newton คือสองวิธีมองแรงเดียวกัน ไม่ใช่ทฤษฎีคู่แข่ง",
                  font_size=17, color=WHITE)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.18).move_to([2.7, 0.35, 0]))
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.18).move_to([3.1, 0.35, 0]))
 
         self.play(FadeIn(t), FadeIn(c))
         self.play(Create(foil), Create(suction_arrows), FadeIn(lbl_suction))
@@ -362,8 +362,8 @@ class AeroRadialLesson(SafeThreeDScene):
         c = self.hud(caption("เมื่อ Master Rod แกว่ง จุดยึด Knuckle Pin จะวิ่งเป็นวงรี ไม่ใช่วงกลมสมบูรณ์"))
 
         phase = ValueTracker(0.0)
-        crank_center = np.array([-3.2, -0.2, 0])
-        ellipse_center = np.array([3.0, -0.2, 0])
+        crank_center = np.array([-3.2, 0.05, 0])
+        ellipse_center = np.array([3.0, 0.05, 0])
         crank_radius = 1.35
         ellipse_a, ellipse_b = 1.45, 0.95
 
