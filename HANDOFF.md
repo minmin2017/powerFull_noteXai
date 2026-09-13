@@ -196,8 +196,31 @@ font fallback (ขึ้น warning ทุกเฟรม, แสดงเป็
 **เมนูใหม่ครบชุดสำหรับคลิป A:**
 `Add A-Clip Zone Cameras` → `Attach A-Clip Shot Switcher` → `Render A_LineOverview ZONES (80s, 720p)`
 + `Cleanup Zone Sequence RenderTexture` (ใช้เทคนิค shared-RenderTexture เดียวกับ B multicam)
-**กำลังเรนเดอร์ 80s อยู่ตอนเขียนอัปเดตนี้** — เช็คไฟล์ `A_LineOverview_ZONES_*.mp4` ที่
-`Recordings/` แล้วตรวจด้วยการดึงเฟรมก่อนเชื่อว่าใช้ได้ (ตามบทเรียนสำคัญที่สุดของคืนนี้)
+
+### 🔴 บั๊กสำคัญที่เจอ+แก้: กล้อง 2 ระบบแย่งกันคุม (CameraDirector vs TimedShotSwitcher)
+
+**เรนเดอร์รอบแรกได้ไฟล์ที่ดูเหมือนถูกต้องทุกอย่าง (80.03s, h264, ขนาดปกติ) แต่ดึงเฟรมตรวจแล้วพบว่า
+t=55s กับ t=68s โชว์ `ControlCam_Close` ทั้งคู่ ทั้งที่ช่วง 48-60s ต้องเป็น `EndOfLineCam`**
+— โซน EndOfLine หายไปทั้งช่วง 12 วินาที
+
+**สาเหตุจริง:** `CameraDirector` (ระบบสลับกล้องของคลิป B ตามสถานะ) กับ `TimedShotSwitcher`
+(ระบบสลับกล้องของคลิป A ตามเวลา) **อยู่บน GameObject `Cell` เดียวกันและทำงานพร้อมกัน**
+เพราะ `ChangeoverSequencer` วนลูปอยู่ตลอดไม่ว่าจะเรนเดอร์คลิปไหน → พอ state วนกลับมา S1/S8
+(ซึ่งผมเพิ่ง map ไป `ControlCam_Close` เอง!) `CameraDirector.LateUpdate()` จะบังคับเปิด
+`ControlCam_Close` ทุกเฟรม **และ LateUpdate ทำงานหลัง Update เสมอ → ทับคำสั่งของ
+TimedShotSwitcher ถาวรตั้งแต่จุดนั้นไปจนจบ**
+
+**ทางแก้:** ตั้ง `CameraDirector.autoSwitchOnState = false` ตลอดช่วงเรนเดอร์คลิป A แล้วคืนค่า
+ในเมนู cleanup (ใช้ toggle ที่มีอยู่แล้วในคลาส ไม่ต้องลบ component)
+
+**✅ ยืนยันหลังแก้ด้วยการดึงเฟรมครบทุกโซน:** t=5 Infeed · t=25 Filling · t=42 Capping ·
+**t=53 EndOfLine (จุดที่เคยพัง — ตอนนี้เห็น checkweigher/reject/labeler/outfeed ถูกต้อง)** ·
+t=70 ControlCam_Close → ไฟล์: `Recordings/A_LineOverview_ZONES_25690914_063523.mp4`
+(commit `6194a92`, push แล้ว, แนบกระดานแล้ว)
+
+> **บทเรียนต่อยอด:** ระบบสลับกล้องหลายตัวในซีนเดียวกันจะแย่งกันเงียบๆ โดยไม่มี error ใดๆ —
+> ffprobe ผ่าน, ไฟล์เปิดได้, ความยาวถูกต้องเป๊ะ แต่เนื้อภาพผิด **ต้องดึงเฟรมตรวจทุกช่วงเวลาสำคัญ
+> เสมอ ไม่ใช่แค่ต้นคลิป** (ถ้าตรวจแค่ t=5 กับ t=25 จะไม่มีทางเจอบั๊กนี้เลย)
 
 ### ขั้นตอนถัดไปที่แนะนำ (เรียงตามลำดับ)
 1. **ตรวจ `A_LineOverview_ZONES_*.mp4`** ด้วย ffprobe + ดึงเฟรมทุกโซน (ประมาณ t=12,30,55,70,85)
