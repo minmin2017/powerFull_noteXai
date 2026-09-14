@@ -93,10 +93,33 @@ Min: *"จากภาพจะเห็นว่ามีหลายขั้�
 | **5** | **PLC สั่งงาน** — animation ว่า PLC สั่ง VFD → VFD ปรับความเร็วสายพาน, PLC สั่ง Servo → เลื่อนตำแหน่งราง/ความสูงหัวจ่าย | Unity |
 | **6** | **Verify and start** — ตรวจยืนยันแล้วเริ่มผลิต | Unity |
 
+### 2.1 วิเคราะห์: อะไรมีแล้ว อะไรต้องสร้างใหม่
+
+**ข่าวดี — `ChangeoverSequencer.cs` มี state ที่ครอบคลุมขั้น 4-6 อยู่แล้ว** ไม่ต้องเขียนใหม่:
+
+| ขั้นที่ Min ขอ | state ที่มีอยู่แล้ว | ต้องทำอะไรเพิ่ม |
+|---|---|---|
+| 4. Servo homing to home | **S6_RetractNozzleToHome** | ✅ มีแล้ว แค่เพิ่มป้าย/glow ให้ชัด |
+| 4. Auto positioning (ปรับราง) | **S7_AdjustRailWidth** | ✅ มีแล้ว (+ glow + ตัวเลข mm สด) |
+| 6. Verify | **S8_ConfirmInPosition** | ✅ มีแล้ว (HMI checklist) |
+| 6. Start | **S9_FirstArticleCheck → S10_ResumeProduction** | ✅ มีแล้ว |
+
+**ส่วนที่ยังไม่มี ต้องสร้างใหม่ (นี่คืองานจริงของการขยายคลิป):**
+
+| ขั้น | สิ่งที่ต้องสร้าง | หมายเหตุ |
+|---|---|---|
+| **2. เลือก Recipe** | โมเมนต์ "กดเลือกบนจอ HMI" — ตอนนี้ `DeltaHMIDisplay.cs` แสดงแค่ข้อความนิ่งๆ `RECIPE: 250ml → 500ml` ต้องทำเป็น **2 สเต็ป**: หน้าจอเลือก (มีปุ่ม 250/500/1000ml) → กด → หน้าจอยืนยัน "RECIPE LOADED" | Min อยากได้ **ภาพประกอบขนาดขวดแต่ละ recipe** บนหน้าจอด้วย จะได้เห็นว่าต่างกันยังไง |
+| **3. Loading parameter** | animation ตอนค่า 5 พารามิเตอร์ไหลเข้าระบบ (rail width / nozzle height / conveyor speed / fill volume / fill profile) | ทำเป็นลิสต์ที่ทยอยติ๊กเขียวทีละตัว หรือตัวเลขวิ่งขึ้น |
+| **5. PLC สั่งงาน** | **visualize เส้นทางคำสั่ง**: PLC → VFD (Modbus RTU) → สายพานปรับความเร็ว / PLC → Servo (Pulse Train) → รางเลื่อน+หัวฉีดขยับ | นี่คือขั้นที่ทำให้กรรมการเห็นว่า "อุปกรณ์ 4 ตัวคุยกันจริง" ไม่ใช่แค่ของตั้งโชว์ — **ควรใช้เวลามากที่สุด** |
+
 **ของที่มีอยู่แล้วใช้ต่อได้:**
-- `ChangeoverSequencer.cs` มี state S1-S10 ครบ (ขั้น 4-6 แมปกับ S6/S7/S8/S9/S10 ได้เลย)
-- `MotionHighlightController.cs` ทำ glow + ตัวเลข mm สดแล้ว
-- `DeltaHMIDisplay.cs` มีหน้าจอ HMI แสดง recipe/checklist อยู่แล้ว (ขั้น 2 ต่อยอดจากตัวนี้)
+- `ChangeoverSequencer.cs` — state machine S1-S10 (ตารางข้างบน)
+- `MotionHighlightController.cs` — glow + ตัวเลข mm สด (ลอกแพทเทิร์นไปใช้กับขั้น 5 ได้)
+- `DeltaHMIDisplay.cs` — หน้าจอ HMI (ขั้น 2 ต่อยอดจากตัวนี้)
+- `Assets\ReferenceImages\*.jpg` — รูปสินค้าจริง (ใส่ตอนตัดต่อ)
+
+**โครงเวลาที่เสนอ (~90s):** pre-roll ใหม่ ~25s (ขั้น 2-3) + ลำดับเดิม S1-S10 ~45s (ขั้น 4,6 +
+เพิ่ม visualize ขั้น 5 ระหว่างทาง) + flow overview ตัดหัวด้วย hyperframe ~15s (ขั้น 1)
 
 ---
 
