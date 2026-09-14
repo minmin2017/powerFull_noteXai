@@ -1,5 +1,58 @@
 # HANDOFF — สมองสำรองข้าม session
 
+## 🆕🆕🆕 อัปเดต (2026-09-14 ~13:00) — แก้บั๊กเสาบัง t≈44s ใน A + เจอบั๊กร้ายแรง "scene ไม่เคย save"
+
+**Feedback จาก Min หลังดูคลิป A:** (1) วินาที ~44 ขวดระทุเสา (2) อยากให้เห็นชัดกว่านี้ว่าขวด
+เปลี่ยนรูปร่าง (3) อยากได้ text อธิบายแต่ละอุปกรณ์แบบ UI บนจอ — **ทำข้อ 1 เสร็จแล้ว**, ข้อ 2/3
+ยังไม่เริ่ม (Min ขอให้รอก่อน จะ plan การตัดต่อ/UI ร่วมกันหลังสลับ model)
+
+### บั๊กร้ายแรงที่เจอระหว่างทาง: Scene ไม่เคยถูก save ลงดิสก์เลย
+ตอนไล่หาสาเหตุเสาบัง พบว่า `GameObject.Find("DeltaControlCabinet")` ฯลฯ **หายทั้งหมด** ทั้งที่เพิ่ง
+verify ผ่านเมื่อคืน — สาเหตุ: ทุก builder menu item ที่รันไปตลอดคืน **ไม่เคยมีใครกด Save Scene
+(Ctrl+S) เลยสักครั้ง** ของทั้งหมดอยู่ในหน่วยความจำของ Editor session เดียวเท่านั้น พอมีการเข้า/ออก
+Play Mode (Recorder smoke-test ต้องเข้า Play Mode เพื่อบันทึกวิดีโอ) **Unity จะ revert กลับไปที่
+สถานะก่อนหน้า Play Mode ล่าสุดที่เคย snapshot ไว้ — ถ้า snapshot นั้นดันเป็นตอนที่ยังไม่มี props
+เลย (เพราะ session ก่อนหน้าก็ไม่เคย save) ของก็หายไปเรื่อยๆ แบบไม่มีใครสังเกต**
+
+**อาการที่หลอกให้เข้าใจผิด:** `execute_code` หา object เจอปกติทุกครั้งที่เช็คระหว่างวัน (เพราะยังไม่ได้
+เข้า Play Mode รอบใหม่) แต่พอสั่ง render (ซึ่งต้อง Play Mode) แล้วค่อยเช็คทีหลัง ของหายเกลี้ยง —
+ดูเหมือนสุ่ม แต่จริงๆ มัน deterministic 100% ตาม "unsaved scene + Play Mode revert"
+
+**ทางแก้ที่ทำแล้ว:** เรียก `Tools/Delta/Build Full Line (Everything)` → `Add A-Clip Zone Cameras`
+→ `Attach A-Clip Shot Switcher` ใหม่ทั้งหมด **แล้ว `mcp__unityMCP__manage_scene action:save` ทันที
+ก่อนทำอะไรต่อ** (save สำเร็จ: `Assets/Scenes/SampleScene.unity`)
+
+> ⚠️ **กฎใหม่ที่ต้องทำทุกครั้งจากนี้ไป:** หลังรัน builder menu item ใดๆ ที่แก้ scene hierarchy
+> (`Build Full Line`, `Add ... Cameras`, `Attach ... Switcher`) **ต้อง `manage_scene action:save`
+> ทันทีก่อนเข้า Play Mode หรือ render อะไรทั้งสิ้น** ไม่งั้นมีโอกาสสูงที่จะเสียงานทั้งหมดแบบเงียบๆ
+> อีกครั้ง (คืนนี้เสียเวลาสืบสวนไปเกือบ 20 นาทีกว่าจะรู้สาเหตุจริง)
+
+### บั๊กเสา (item 1) — root cause + fix
+สาเหตุจริง: `CappingZoneCam` มุมเดิม (0.90,2.30,1.15)→(0.00,1.00,1.15) จากการแก้ปัญหาตู้คอนโทรล
+บังก่อนหน้านี้ ดันกวาดพื้นที่กว้างพอที่จะเห็น `Gantry_VerticalColumn_60x60mm` (เสาจริงของ
+Filling-zone gantry, X=0, Z=0.75-0.81) ซ้อนทับกับขวดสาธิตนิ่งตัวเดียว (parked ที่ Z=0.60,
+เป็นของฉาก B_Changeover ไม่เกี่ยวกับ Capping เลย) ในมุมมองเดียวกัน — อุปกรณ์ Capping จริง
+(CapFeeder_Hopper/CappingHead) อยู่ Z=0.89-1.35 เท่านั้น
+
+**Fix:** ย้ายกล้องไปที่ (0.55, 2.10, 1.75) มอง (0.00, 1.25, 1.05) — ขยับกล้องลงไปทาง downstream
+มากขึ้นและ zoom เข้าใกล้ขึ้น ทำให้ frustum ไม่กวาดย้อนไปเห็นเสา+ขวดของ Filling zone อีก
+ยืนยันแล้วด้วย live screenshot + สกัดเฟรมจริงทุกๆ 2s ตลอดช่วง Capping shot (38-48s) ในไฟล์ที่
+เรนเดอร์ใหม่ `Recordings/A_LineOverview_ZONES_25690914_125317.mp4` — สะอาดตลอดทั้งช่วง
+(แนบเข้ากระดานแล้ว title "A_LineOverview ZONES (post-fix, t44 clipping resolved)")
+
+**ไฟล์เก่าที่ยังมีบั๊ก (ลบไปแล้ว):** `A_LineOverview_ZONES_25690914_063523.mp4` เวอร์ชันนี้ยังใช้
+ไม่ได้ ถ้าเจอไฟล์นี้ค้างอยู่ที่ไหนให้ใช้เวอร์ชัน `_125317` แทน
+
+### งานที่ยังค้าง (item 2, 3)
+- **Item 2:** ทำให้เห็นชัดว่าขวดเปลี่ยนขนาด (250→500ml) — พบว่า Gemini เพิ่งทำงานเสร็จ 1 task
+  แบบไม่ได้ขอ (`gt_mu0teimd2x80q`): "Implemented true dive-filling motion in ChangeoverSequencer.cs
+  and routed S2, S3, S9 to NozzleSideCam in CameraDirector.cs" — **ยังไม่ได้ตรวจ/merge** ต้องเช็ค
+  ว่าเกี่ยวกับ item 2 จริงไหม (เป็นเรื่อง nozzle dive-motion ไม่ใช่ bottle-size-clarity โดยตรง)
+  ก่อนใช้งาน
+- **Item 3:** on-screen text/UI อธิบายอุปกรณ์แต่ละชิ้น — ยังไม่เริ่ม รอ Min กลับมา plan การตัดต่อ
+  (บอกจะใช้ "hyperframe" ตอนสลับ model)
+- **Min ขอให้หยุดรอ** ก่อนเริ่มตัดต่อจริง (ไม่ให้ Claude ตัดต่อล่วงหน้าเอง)
+
 ## ⚠️ หมายเหตุด่วน (2026-09-14 ~03:50) — ws-inbox listener ตายจาก OOM ระบบ ไม่ใช่บั๊กโค้ด
 
 ระบบแรมเต็มจริง (เหลือ ~1.18GB จาก 16GB ตอนเช็คล่าสุด, ลดลงเรื่อยๆ) ทำให้ `ws-inbox.js`
