@@ -1,5 +1,40 @@
 # HANDOFF — สมองสำรองข้าม session
 
+## 🆕🆕🆕🆕🆕🆕 อัปเดต (2026-09-14 ~18:20) — บั๊กเสาจริง+nozzle height แก้แล้ว + พบ Codex ทำงานคู่ขนาน
+
+**สรุปสั้น:** Min รายงานว่าเสายังบัง+ขวดทะลุ (ทั้งที่ก่อนหน้านี้บอกว่าแก้แล้ว) — ตรวจแล้วพบว่า
+การแก้ก่อนหน้าเป็นแค่ "ขยับกล้องหนี" ไม่ใช่แก้ปัญหาจริง เสา (`Gantry_VerticalColumn`) ทับกับราง
+`GuideRail_Left/Right` ในพิกัด 3D จริง (ยืนยันด้วย `Renderer.bounds.Intersects()` = true) — พบว่า
+`CellBuilder.cs` มีโค้ดแก้ไว้แล้ว (ย้ายไป X=-0.28) แต่ scene ไม่เคยรัน Build ซ้ำ แก้โดย rebuild ทั้ง
+chain ใหม่ ยืนยัน intersects=false แล้ว
+
+ระหว่างทางเจอเพิ่ม 2 บั๊ก: (1) glow highlight effect เบลดข้ามไปโผล่ในคลิป A ผิดจังหวะ เพราะ
+ChangeoverSequencer วิ่งวนตลอดไม่ว่าจะอัดคลิปไหน — แก้ด้วยการปิด component ตอนอัด A เหมือน
+แพทเทิร์น `CameraDirector.autoSwitchOnState` (2) `CurrentNozzleHeightMm` รายงานค่าผิด (1123mm
+แทนที่จะเป็น ~165-240mm ตามสเปกจริง) เพราะใช้ world Y ตรงๆ ไม่ได้ลบ `BeltSurfaceY` ก่อน — แก้แล้ว
+ยืนยันตัวเลขออกมา 228mm ตรงสเปก
+
+ไฟล์ FINAL ล่าสุดจริง: `A_LineOverview_FINAL_v2.mp4` (90.57s), `B_Changeover_FINAL_v4.mp4` (45.03s)
+— commit แล้ว (`dd0fb6d`)
+
+**⚠️ พบสำคัญ: Codex กำลังทำงานคู่ขนานในเครื่อง Unity Editor เดียวกันจริง** (ไม่ใช่แค่ผ่าน git
+worktree) — เจอ commit `bfb7415` ของ Codex วางแทรกอยู่, เจอ component
+`HardwareIntroManualRecorder` enabled อยู่บน `Cell` ที่ไปขัดจังหวะ render ของ Claude เอง (ทำให้
+B_Changeover ตัวหนึ่งสั้นผิดปกติ 12s ก่อนจะรู้สาเหตุ), และเจอไฟล์วิดีโอที่ Codex สร้างไว้แล้วใน
+`Recordings\` ตรงกับงานที่ Min เพิ่งขอ (`C_HardwareIntro_FINAL.mp4`, `Recipe_UI_Overlay.mp4`,
+`B_Changeover_VIBE5_PRO_90s.mp4` ฯลฯ) — **Codex ทำงานคืบหน้าไปมากแล้วก่อนที่ brief จะเขียนเสร็จด้วยซ้ำ**
+รายละเอียดเต็ม + คำเตือนเรื่อง coordination อยู่ใน `CODEX_BRIEF_DELTA_ACADEMY.md` หัวข้อ caution บนสุด
+
+**ตรวจ `C_HardwareIntro_FINAL.mp4` ของ Codex แล้วพบบั๊ก:** มีกล่อง "T" สี่เหลี่ยมใหญ่ค้างทับจอ
+(TMP font/glyph บั๊ก) ทับ label ที่เขียนถูกต้อง ("HMI DOP-100WS / One-Touch Changeover & CIP
+Verification") — เจอว่า TMP fallback font asset ถูกแก้ไขอยู่ (น่าจะเกี่ยวกับบั๊กนี้) **ไม่ได้ commit
+ทับให้** เพราะกลัวไปขัดงานที่ Codex กำลังแก้อยู่
+
+**การตัดสินใจ:** หยุดแตะ Unity Editor ต่อจากจุดนี้ เพื่อไม่ให้ชนกับ Codex ที่กำลังทำงานอยู่จริง —
+รายงาน Min ให้ทราบสถานะและปล่อยให้ Codex ทำงานต่อ (Min เป็นคนคุมว่าจะให้ agent ไหนทำอะไรต่อ)
+
+---
+
 ## 🆕🆕🆕🆕🆕 อัปเดต (2026-09-14 ~13:55) — ตัดต่อเสร็จจริง + highlight effect เสร็จ = พร้อมส่งจริง
 
 **สถานะสุดท้าย: 2 คลิปพร้อมส่งจริงแล้ว**
