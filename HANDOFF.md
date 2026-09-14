@@ -1,5 +1,33 @@
 # HANDOFF — สมองสำรองข้าม session
 
+## 🆕🆕🆕🆕🆕 อัปเดต (2026-09-14 ~13:55) — ตัดต่อเสร็จจริง + highlight effect เสร็จ = พร้อมส่งจริง
+
+**สถานะสุดท้าย: 2 คลิปพร้อมส่งจริงแล้ว**
+
+| ไฟล์สุดท้าย (path เต็ม) | ยาว | เนื้อหา |
+|---|---|---|
+| `D:\unity_project\delta_academy\Recordings\A_LineOverview_FINAL.mp4` | 90.57s | traveling+zones ต่อกัน + section title 6 อัน (Gemini ทำ, ตรวจซ้ำโดย Claude แล้ว) |
+| `D:\unity_project\delta_academy\Recordings\B_Changeover_FINAL_v2.mp4` | 45.03s | dive-fill + motion highlight glow + callout text 2 จุด (Claude ทำ ประกอบจากงาน Gemini) |
+
+ทั้งคู่แนบเข้ากระดาน powerfull_note แล้ว ชื่อ "...FINAL (ready to submit)"
+
+**Feedback ใหม่ระหว่างทาง (หลัง Min ดู B):** "รางยืด ตำแหน่งเปลี่ยน ต้องใช้ตาสังเกตมากเกินไป
+ถ้ามี highlight or holograms บอกจะสังเกตได้ดีมาก" — **แก้แล้ว**: เพิ่ม
+`Assets/Scripts/MotionHighlightController.cs` ทำ pulsing cyan emissive glow บนราง/หัวฉีด
+ตอนขยับจริง (S6/S7/S9) + ตัวเลข mm สดลอยข้างๆ — เมนู `Tools/Delta/Attach Motion Highlights`
+
+**⚠️ กับดักสำคัญที่เจอ:** ระบบ overlay เดิม (`TelemetryOverlayController`+`LeaderLineOverlay`)
+ที่มีอยู่แล้วตั้งแต่ตอนต้นคืน **ใช้ Screen Space - Overlay canvas ซึ่ง Recorder (RenderTexture-based)
+ไม่จับภาพเลย** — เพิ่งมาเจอตอนนี้ ถ้าจะทำ overlay/label อะไรเพิ่มในอนาคต **ต้องใช้ world-space
+TextMeshPro เท่านั้น** (แบบที่ ZoneLabelsBuilder/CappingZoneBuilder/MotionHighlightController ใช้)
+ห้ามใช้ Canvas UI แบบ Screen Space - Overlay อีกเด็ดขาดสำหรับอะไรก็ตามที่ต้องเรนเดอร์ลงคลิปจริง
+
+**เรื่องที่ยังพักไว้ (item B1 — ยืดคลิป B เป็น 90s):** ยังไม่ทำ รอ Min ตอบว่า 90s เป็นข้อกำหนดจริง
+ของการแข่งไหม หรือใช้ 45s ได้เลย — แผนเต็มอยู่ที่ `DELTA_EDIT_PLAN.md` §งาน B1
+
+**งานที่เหลือทั้งหมดตอนนี้เป็นงานนอก Unity/ffmpeg** — รอ Min ตัดสินใจเรื่องความยาว B แล้วค่อยทำต่อ
+ถ้าจำเป็น หรือถ้า Min พอใจกับ 2 ไฟล์ FINAL นี้แล้ว ก็ถือว่าจบงาน Unity ทั้งหมด
+
 ## 🆕🆕🆕🆕 อัปเดต (2026-09-14 ~13:30) — ทั้ง 3 items เสร็จแล้ว + คลิป FINAL แนบกระดานแล้ว
 
 **สถานะ: item 1, 2, 3 ที่ Min ขอเสร็จหมดแล้ว** (ก่อนหน้านี้ item 2/3 ถูกพักไว้ พอ Min สั่ง "ต่อเลย"
