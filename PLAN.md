@@ -102,14 +102,20 @@ Min: *"จากภาพจะเห็นว่ามีหลายขั้�
 
 ## 3. รูปถ่ายอุปกรณ์จริง (ใช้ทั้งคลิป C และ B ขั้น 2)
 
-**สถานะ: โหลดได้ 1 จาก 4 แล้ว** เก็บที่ `D:\unity_project\delta_academy\Assets\ReferenceImages\`
+**สถานะ: ✅ มีครบทั้ง 5 รูปแล้ว** (โหลดไว้ตั้งแต่ 2026-09-13 19:25 — ตรวจแล้วเป็นภาพทางการ Delta
+พื้นหลังขาว คุณภาพดี ใช้ได้เลย) เก็บที่ `D:\unity_project\delta_academy\Assets\ReferenceImages\`
 
-| รุ่น | สถานะ | แหล่ง |
+| รุ่น | ไฟล์ | ขนาด |
 |---|---|---|
-| **PLC AS320T-B** | ✅ `AS320T-B.jpg` (500×500) | https://deltaacdrives.com/wp-content/uploads/Delta-AS-Series-AS320T-B-Front.jpg |
-| HMI DOP-100WS/103WQ | ⬜ ยังไม่มี | industrialautomation.delta-emea.com (หมวด HMI DOP-100) |
-| VFD MS300 | ⬜ ยังไม่มี | deltaacdrives.com/delta-vfd-ms300-micro-drive/ (รูป lazy-load, curl โดน 403 ต้องเปิดเบราว์เซอร์) |
-| SERVO ASD-A3 | ⬜ ยังไม่มี | deltaww.com (หมวด Servo ASDA-A3) |
+| PLC AS320T-B | ✅ `AS320T-B_front.jpg` | 22 KB |
+| HMI DOP-100WS | ✅ `DOP-100WS_front.jpg` | 111 KB |
+| VFD MS300 | ✅ `MS300_front.jpg` | 104 KB |
+| SERVO ASD-A3 | ✅ `ASD-A3_front.jpg` | 170 KB |
+| PSU CliQ-M | ✅ `CliQ-M_front.jpg` | 1.2 MB |
+
+> ⚠️ **แปลว่าบั๊กกล่อง "T" ไม่ได้เกิดจาก "ไม่มีรูป"** — รูปมีครบและใช้ได้ปกติ ปัญหาอยู่ที่
+> **วิธีเอารูปไปแปะบนแผ่นการ์ด 3D** (material/shader ตั้งไม่ถูก หรือ texture import setting ผิด
+> หรือ material reference หลุด) → ยิ่งยืนยันว่าไม่ควรทำเป็นแผ่น 3D ในฉากตั้งแต่แรก ให้ใส่ตอนตัดต่อแทน
 
 **วิธีใช้:** ใส่ตอน**ตัดต่อ** เป็น**กรอบเล็กมุมขวาบน + เส้นโยง**ไปหาอุปกรณ์ 3D ในฉาก
 (**ห้ามทำเป็นแผ่น 3D ในฉาก Unity** — นั่นคือสาเหตุบั๊กกล่อง "T")
