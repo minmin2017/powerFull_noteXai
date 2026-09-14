@@ -1,5 +1,43 @@
 # HANDOFF — สมองสำรองข้าม session
 
+## 🆕🆕🆕🆕 อัปเดต (2026-09-14 ~13:30) — ทั้ง 3 items เสร็จแล้ว + คลิป FINAL แนบกระดานแล้ว
+
+**สถานะ: item 1, 2, 3 ที่ Min ขอเสร็จหมดแล้ว** (ก่อนหน้านี้ item 2/3 ถูกพักไว้ พอ Min สั่ง "ต่อเลย"
+หลังสลับ model เป็น Opus 5 เลยทำต่อจนจบ):
+
+1. **เสาบัง t≈44s (A_LineOverview)** — แก้แล้ว ดูหัวข้อด้านล่าง
+2. **ทำให้ชัดว่าขวดเปลี่ยนขนาด** — เพิ่ม world-space label "250ml → 500ml" ใกล้หัวฉีด อ่านค่าสด
+   จาก `ChangeoverSequencer.initialRecipeIndex/targetRecipeIndex` เลย (ไม่มีวันเพี้ยนจาก recipe จริง)
+3. **Text อธิบายอุปกรณ์แต่ละโซน** — เพิ่มให้ Infeed Zone (Unscrambler/Star Wheel/Sensor/Stopper)
+   และ Filling Zone (Product Tank/Pump/Flow Meter/Anti-Drip Valve) ผ่านไฟล์ใหม่
+   `Assets/Editor/ZoneLabelsBuilder.cs` (Capping/EndOfLine มี label อยู่แล้วจากก่อนหน้านี้)
+
+**บั๊ก 2 ตัวที่เจอ+แก้ระหว่างทำ label (ยืนยันด้วย live screenshot ก่อน lock):**
+- fontSize 0.032 (ใช้ค่าเดิมจาก CappingZoneBuilder) เล็กเกินไปจนมองไม่เห็นที่ระยะกล้อง
+  Infeed/Filling (ไกลกว่า Capping ~2 เท่า) → ขยับเป็น 0.085 (equipment) / 0.11 (recipe callout)
+- localRotation Y=+90 ทำให้ตัวอักษรกลับด้าน (mirror) เมื่อมองจากกล้องโซนพวกนี้ → แก้เป็น Y=-90
+
+**เรนเดอร์ final ที่ verify แล้วจริง (สกัดเฟรมดูตรงๆ ทั้งคู่):**
+- `Recordings/A_LineOverview_ZONES_25690914_132308.mp4` (80.03s) — เสาไม่บัง + label ทุกโซนขึ้นจริง
+- `Recordings/B_Changeover_MULTICAM_25690914_132124.mp4` (45.03s) — มี dive-fill motion ของ Gemini
+  (ดูหัวข้อด้านล่าง) รวมเข้าด้วยแล้ว
+- ทั้งคู่แนบเข้ากระดาน powerfull_note แล้ว: "A_LineOverview FINAL (post-fix + labels)",
+  "B_Changeover FINAL (dive-fill motion + recipe callout)"
+- Commit แล้วที่ `D:\unity_project\delta_academy` (2 commits: fix camera+scene, feat zone labels)
+
+**งานของ Gemini ที่เจอค้างอยู่ระหว่างทาง (ไม่ได้ขอ แต่ตรวจแล้วดี เลย merge):**
+`ChangeoverSequencer.cs`/`CameraDirector.cs` — ทำ "true dive-filling motion" (หัวฉีดจุ่มลงในขวดจริง
+แล้วลอยตามระดับน้ำที่เติมขึ้นเรื่อยๆ แทนที่จะลอยนิ่งจุดเดียว) + route กล้อง S2/S3/S9 ไป NozzleSideCam
+ให้เห็นมุมข้างชัดๆ — ตรวจ diff แล้วสมเหตุสมผล ไม่กระทบ interlock logic เดิม
+
+**บล็อกอยู่ 1 จุด (ต้อง Min ทำเอง):** พยายามให้ Gemini ส่งอีเมลสรุปงานให้ Min (ผ่าน
+`.gmail_token.pickle`) แต่ **token OAuth หมดอายุตั้งแต่ 2026-08-25** (invalid_grant) — ทั้ง Claude
+และ Gemini ส่งไม่ได้ ต้อง Min re-auth Gmail เองก่อน (เปิด browser login ยืนยันตัวตน Google ใหม่)
+Gemini เตรียมสคริปต์ไว้รอแล้วที่ `scratch/send_delta_academy_notification.py`
+
+**งานถัดไป:** Min บอกจะ plan การตัดต่อวิดีโอร่วมกัน (จะใช้ "hyperframe") — Unity-side content
+งานนี้ถือว่าเสร็จแล้วสำหรับตอนนี้ ที่เหลือเป็นงานตัดต่อนอก Unity
+
 ## 🆕🆕🆕 อัปเดต (2026-09-14 ~13:00) — แก้บั๊กเสาบัง t≈44s ใน A + เจอบั๊กร้ายแรง "scene ไม่เคย save"
 
 **Feedback จาก Min หลังดูคลิป A:** (1) วินาที ~44 ขวดระทุเสา (2) อยากให้เห็นชัดกว่านี้ว่าขวด
