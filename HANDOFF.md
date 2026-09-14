@@ -1,5 +1,21 @@
 # HANDOFF — สมองสำรองข้าม session
 
+## 🆕🆕🆕🆕🆕🆕🆕 อัปเดต (2026-09-14 ~19:10) — Clip C (Hardware Intro 50s) เรนเดอร์+ตรวจเฟรมสำเร็จ 100%
+
+**สรุปสถานะ Clip C:**
+- **ไฟล์ผลลัพธ์:**
+  - Raw: `D:\unity_project\delta_academy\Recordings\C_HardwareIntro_RAW_v4_25690914_190159.mp4` (50.03s, 1280x720, 30fps, 20.2MB)
+  - Titled: `D:\unity_project\delta_academy\Recordings\C_HardwareIntro_v4_TITLED.mp4` (50.03s, 1280x720, 30fps, 8.08MB)
+- **การแก้ปัญหา Gizmo T-Box:** สาเหตุเกิดจาก 3D Gizmo Icon ของ TextMeshPro ใน GameView โดน ScreenCapture บันทึกติดมา แก้โดยใช้ RenderTexture recorder pipeline ร่วมกับปิด Gizmo/Annotation icon size = 0 ใน `RecorderSmokeTest.cs`
+- **เนื้อหา 6 ช็อตตาม Storyboard §1-§3:**
+  - Shot 0 (0-5s): เปิดประตูตู้คอนโทรล Main Control Cabinet
+  - Shot 1 (5-14s): PLC Delta AS320T-B โกลว์แสง Cyan
+  - Shot 2 (14-23s): HMI Delta DOP-100WS / 103WQ โกลว์แสง Cyan
+  - Shot 3 (23-32s): VFD Delta MS300 โกลว์แสง Cyan
+  - Shot 4 (32-43s): Servo Delta ASD-A3 (x2) + ราง Axis X และแกนหัวฉีด Axis Z โกลว์แสง Cyan พร้อมกัน
+  - Shot 5 (43-50s): ภาพรวมระบบ Delta Automation Ecosystem ตู้เปิดกว้าง
+- **ส่งมอบ:** บันทึกผลเข้า Task Queue (`gt_mu16siilbts1n`) และสะกิด Claude ผ่าน `/api/inbox` แล้วเรียบร้อย
+
 ## 🆕🆕🆕🆕🆕🆕 อัปเดต (2026-09-14 ~18:20) — บั๊กเสาจริง+nozzle height แก้แล้ว + พบ Codex ทำงานคู่ขนาน
 
 **สรุปสั้น:** Min รายงานว่าเสายังบัง+ขวดทะลุ (ทั้งที่ก่อนหน้านี้บอกว่าแก้แล้ว) — ตรวจแล้วพบว่า
